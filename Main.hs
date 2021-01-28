@@ -2,7 +2,7 @@
 
 module Main where
 
-import Control.Applicative (Alternative (empty, (<|>), many))
+import Control.Applicative (Alternative (empty, (<|>), many), optional)
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 
 type Code = [(Char, Int, Int)]
@@ -39,7 +39,7 @@ data VarDecl
   deriving (Show)
 
 data FunDecl
-  = FunDecl String (Maybe FArgs) (Maybe FunType) [VarDecl] [Stmt]
+  = FunDecl String [String] [Type] [VarDecl] [Stmt]
   deriving (Show)
 
 data RetType
@@ -47,18 +47,15 @@ data RetType
   | Void
   deriving (Show)
 
-data FunType
-  = FunType (Maybe FTypes) RetType
-  deriving (Show)
-
-data FTypes
-  = FTypes Type (Maybe FTypes)
-  deriving (Show)
+-- data FTypes
+--   = FTypes Type (Maybe FTypes)
+--   deriving (Show)
 
 data Type
   = TypeBasic BasicType
-  | TypeTuple (Type, Type)
-  | TypeArray [Type]
+  | TypeTuple Type Type
+  | TypeArray Type
+  | TypeID String
   deriving (Show)
 
 data BasicType
@@ -67,20 +64,16 @@ data BasicType
   | CharType
   deriving (Show)
 
-data FArgs
-  = FArgs (Maybe FArgs) String
-  deriving (Show)
-
 data Stmt
   = StmtIf ExpRec [Stmt] (Maybe [Stmt])
-  | StmtWhile Exp [Stmt]
-  | StmtField String FieldRec ExpRec
+  | StmtWhile ExpRec [Stmt]
+  | StmtField String Field ExpRec
   | StmtFunCall FunCall
   | StmtReturn (Maybe ExpRec)
   deriving (Show)
 
 data ExpRec
-  = Exp
+  = ExpRec Exp
   | ExpRecOp2 Exp Op2 ExpRec
   | ExpRecOp1 Op1 ExpRec
   | ExpRecBrackets ExpRec
@@ -88,34 +81,26 @@ data ExpRec
   deriving (Show)
 
 data Exp
-  = ExpField String FieldRec
+  = ExpField String Field
   | ExpChar Char
   | ExpBool Bool
   | ExpFunCall FunCall
   | ExpEmptyList
   deriving (Show)
 
-newtype FieldRec
-  = FieldRec (Maybe Field)
-  deriving (Show)
-
-data Field
-  = Field FieldRec FieldFun
+newtype Field
+  = Field [FieldFun]
   deriving (Show)
 
 data FieldFun
-  = Hd
-  | Tl
-  | Fst
-  | Snd
+  = Head
+  | Tail
+  | First
+  | Second
   deriving (Show)
 
 data FunCall
-  = FunCall String (Maybe ActArgs)
-  deriving (Show)
-
-data ActArgs
-  = ActArgs ExpRec (Maybe ActArgs)
+  = FunCall String [ExpRec]
   deriving (Show)
 
 data Op2
@@ -146,15 +131,24 @@ fst3 (a, _, _) = a
 ws :: Parser String
 ws = spanP isSpace
 
+w :: Parser a -> Parser a
+w p = ws *> p <* ws
+
+c :: Char -> Parser Char
+c x = w (charP x)
+
 charP :: Char -> Parser Char
-charP x = Parser $ \case
-  (y, l, c) : xs
-    | y == x -> Right (xs, x)
-    | otherwise -> Left ("Found " ++ [y] ++ ", but expected " ++ [x], l, c)
-  [] -> Left ("Unexpected EOF", 0, 0)
+charP x = charP' (==x)
 
 stringP :: String -> Parser String
 stringP = traverse charP
+
+charP' :: (Char -> Bool) -> Parser Char
+charP' p = Parser $ \case
+  (y, l, c) : xs
+    | p y -> Right (xs, y)
+    | otherwise -> Left ("Error", l, c)
+  [] -> Left ("Unexpected EOF", 0, 0)
 
 spanP :: (Char -> Bool) -> Parser String
 spanP p = Parser $ \code -> let (token, rest) = span (p . fst3) code in Right (rest, map fst3 token)
@@ -173,7 +167,7 @@ sepBy :: Parser a -> Parser b -> Parser [b]
 sepBy sep e = sepBy1 sep e <|> pure []
 
 splP :: Parser SPL
-splP = undefined
+splP = SPL <$> sepBy1 (charP ';') declP
 
 declP :: Parser Decl
 declP = declVarDeclP <|> declFunDeclP
@@ -185,21 +179,21 @@ declFunDeclP :: Parser Decl
 declFunDeclP = DeclFunDecl <$> funDeclP
 
 funDeclP :: Parser FunDecl
-funDeclP = FunDecl <$> idP <*> fArgsP <*> funTypeP <*> v <*> s
+funDeclP = FunDecl <$> idP <*> sepBy (charP ',') idP <*> sepBy (stringP "->") typeP <*> v <*> s
   where
     v = sepBy sep varDeclP
     s = sepBy1 sep stmtP
-    sep = ws *> charP ';' <* ws
+    sep = c ';'
 
 varDeclP :: Parser VarDecl
 varDeclP = varDeclVarP <|> varDeclTypeP
 
 -- Not sure if ws before strinP "var" is required
 varDeclVarP :: Parser VarDecl
-varDeclVarP = VarDeclVar <$> (stringP "var" *> ws *> idP <* ws <* charP '=' <* ws) <*> expRecP
+varDeclVarP = VarDeclVar <$> (stringP "var" *> w idP <* charP '=' <* ws) <*> expRecP
 
 varDeclTypeP :: Parser VarDecl
-varDeclTypeP = VarDeclType <$> typeP <*> (ws *> idP <* ws <* charP '=' <* ws) <*> expRecP
+varDeclTypeP = VarDeclType <$> typeP <*> (w idP <* charP '=' <* ws) <*> expRecP
 
 retTypeP :: Parser RetType
 retTypeP = voidP <|> retTypeTypeP
@@ -210,35 +204,114 @@ voidP = Void <$ stringP "Void"
 retTypeTypeP :: Parser RetType
 retTypeTypeP = RetTypeType <$> typeP
 
-expRecP :: Parser ExpRec
-expRecP = undefined
-
-typeP :: Parser Type
-typeP = undefined
-
-stmtP :: Parser Stmt
-stmtP = undefined
-
-fArgsP :: Parser (Maybe FArgs)
-fArgsP = undefined
-
-funTypeP :: Parser (Maybe FunType)
-funTypeP = undefined
-
 idP :: Parser String
 idP = (++) <$> spanP isAlpha <*> spanP (\c -> isAlphaNum c || c == '_')
 
 intP :: Parser Int
-intP = (read <$> digitP) <|> ((*(-1)) . read <$> (charP '-' *> digitP)) 
+intP = read <$> digitP <|> (*(-1)) . read <$> (charP '-' *> digitP)
 
 digitP :: Parser String
 digitP = notNull $ spanP isDigit
 
 op1P :: Parser Op1
-op1P = (Not <$ charP '!') <|> (Min <$ charP '-')
+op1P = Not <$ charP '!' <|> Min <$ charP '-'
 
 op2P :: Parser Op2
-op2P = (Plus <$ charP '+') <|> (Minus <$ charP '-') <|> (Product <$ charP '*') <|> (Division <$ charP '/') <|> (Modulo <$ charP '%') <|> (Eq <$ stringP "==") <|> (Smaller <$ charP '<') <|> (Greater <$ charP '>') <|> (Plus <$ charP '+') <|> (Leq <$ stringP "<=") <|> (Geq <$ stringP ">=") <|> (Plus <$ charP '+') <|> (Neq <$ stringP "!=") <|> (And <$ stringP "&&") <|> (Or <$ stringP "||") <|> (Cons <$ charP ':')
+op2P =  Plus <$ charP '+'
+    <|> Minus <$ charP '-'
+    <|> Product <$ charP '*'
+    <|> Division <$ charP '/'
+    <|> Modulo <$ charP '%'
+    <|> Eq <$ stringP "=="
+    <|> Leq <$ stringP "<="
+    <|> Geq <$ stringP ">="
+    <|> Smaller <$ charP '<'
+    <|> Greater <$ charP '>'
+    <|> Neq <$ stringP "!="
+    <|> And <$ stringP "&&"
+    <|> Or <$ stringP "||"
+    <|> Cons <$ charP ':'
+
+funCallP :: Parser FunCall
+funCallP = FunCall <$> idP <*> (c '(' *> sepBy (charP ',') expRecP <* c ')')
+
+fieldFunP :: Parser FieldFun
+fieldFunP = Head <$ stringP "hd" <|> Tail <$ stringP "tl" <|> First <$ stringP "fst" <|> Second <$ stringP "snd"
+
+fieldP :: Parser Field
+fieldP = Field <$> many (c '.' *> fieldFunP)
+
+expCharP :: Parser Exp
+expCharP = ExpChar <$> (charP '\'' *> charP' isAlpha <* charP '\'')
+
+expBoolP :: Parser Exp
+expBoolP = ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
+
+expFunCall :: Parser Exp
+expFunCall = ExpFunCall <$> funCallP
+
+expEmptyListP :: Parser Exp
+expEmptyListP = ExpEmptyList <$ stringP "[]"
+
+expP :: Parser Exp
+expP = expCharP <|> expBoolP <|> expFunCall <|> expEmptyListP 
+
+expRecOp2P :: Parser ExpRec
+expRecOp2P = ExpRecOp2 <$> expP <*> w op2P <*> expRecP
+
+expRecOp1P :: Parser ExpRec
+expRecOp1P = ExpRecOp1 <$> (op1P <* ws) <*> expRecP 
+
+expRecBracketsP :: Parser ExpRec
+expRecBracketsP = ExpRecBrackets <$> (charP '(' *> w expRecP <* charP ')')
+
+expRecTupleP :: Parser ExpRec
+expRecTupleP = curry ExpRecTuple <$> (charP '(' *> w expRecP <* charP ',') <*> (w expRecP <* charP ')')
+
+expRecP :: Parser ExpRec
+expRecP = expRecOp2P <|> expRecOp1P <|> expRecBracketsP <|> expRecTupleP
+
+stmtIfP :: Parser Stmt
+stmtIfP = (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP <|> (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (stringP "else" *> stmtsP)
+
+conditionP :: String -> Parser ExpRec
+conditionP s = stringP s *> c '(' *> expRecP <* c ')'
+
+stmtsP :: Parser [Stmt]
+stmtsP = c '{' *> sepBy (w $ charP ';') stmtP <* c '}'
+
+stmtWhileP :: Parser Stmt
+stmtWhileP = StmtWhile <$> conditionP "while" <*> stmtsP 
+
+stmtFieldP :: Parser Stmt
+stmtFieldP = StmtField <$> idP <*> fieldP <*> (c '=' *> expRecP)
+
+stmtFunCallP :: Parser Stmt
+stmtFunCallP = StmtFunCall <$> funCallP 
+
+stmtReturnP :: Parser Stmt
+stmtReturnP = StmtReturn Nothing <$ stringP "return" <|> StmtReturn . pure <$> (stringP "return" *> ws *> expRecP)
+
+stmtP :: Parser Stmt
+stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtFunCallP <|> stmtReturnP
+
+basicTypeP :: Parser BasicType
+basicTypeP = IntType <$ stringP "Int" <|> BoolType <$ stringP "Bool" <|> CharType <$ stringP "Char"
+
+-- mFunTypeP :: Parser (Maybe FunType)
+-- mFunTypeP = optional (w (stringP "::") *> funTypeP)
+
+-- funTypeP :: Parser FunType
+-- funTypeP = sepBy (stringP "->") retTypeP
+
+typeTupleP :: Parser Type
+typeTupleP = TypeTuple <$> (c '(' *> typeP <* c ',') <*> typeP <* c ')'  
+
+typeArrayP :: Parser Type
+typeArrayP = TypeArray <$> (c '[' *> typeP <* c ']')
+
+typeP :: Parser Type
+typeP = TypeBasic <$> basicTypeP <|> typeTupleP <|> typeArrayP <|> TypeID <$> idP
 
 result :: Either Error (Code, a) -> String
 result (Right _) = "Parsed succesfully"
@@ -246,6 +319,9 @@ result (Left (e, l, c)) = "Error: \"" ++ e ++ "\". Line: " ++ show l ++ ", Chara
 
 code :: String -> Code
 code s = [(a, b, c) | (b, d) <- zip [1 ..] $ lines s, (c, a) <- zip [1 ..] d]
+
+parseFile :: FilePath -> IO String
+parseFile f = result . parse splP . code <$> readFile f
 
 main :: IO String
 main = getLine >>= readFile . result . parse splP . code
