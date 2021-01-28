@@ -317,10 +317,10 @@ result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character
 code :: String -> Code
 code s = [(a, b, c) | (b, d) <- zip [1 ..] $ lines s, (c, a) <- zip [1 ..] d]
 
-parseFileP :: Show a => Parser a -> FilePath -> IO String
-parseFileP p f = result . parse p . code <$> readFile f
+parseFileP :: Show a => Parser a -> FilePath -> IO ()
+parseFileP p f = readFile f >>= putStrLn . result . parse p . code
 
-parseFile :: FilePath -> IO String
+parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP
 
 main :: IO String

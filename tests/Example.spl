@@ -1,0 +1,37 @@
+/*
+	Length
+   of
+   months
+*/
+
+[Int] dcLengthOfMonth = 0 : 31 : 28 : 31 : 30 : 31 : 30 : 31 : 31 : 30 : 31 : 30 : 31 : [];
+
+getIndex (idx, list) :: Int [a] -> a
+{
+	while (idx > 0) {
+		list = list.tl;
+	}
+	return list.hd;
+}
+
+
+//Calculates in which month the given Int is. 1=January, 2=February, .., 12=December
+month(dayOfYear)::Int -> Int{Int tempDay = dayOfYear;Int month = 0;
+
+
+
+	
+    			 // unuseful comment
+	
+    while(month < 12)
+    {
+						if(tempDay > getIndex(month, dcLengthOfMonth))
+	{
+    	                tempDay = tempDay - - - - - getIndex(month, dcLengthOfMonth);
+        }
+	else {return month + 1;}
+
+       month = month + 1;
+	}
+return month + 1;
+}

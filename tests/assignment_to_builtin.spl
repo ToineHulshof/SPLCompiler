@@ -1,0 +1,13 @@
+// Do you allow this program?
+
+blaat(x) :: [a] -> Bool
+{
+  return True;
+}
+
+f()
+{
+  // This tries to assign to the built-in function isEmpty.
+  // Adapt this line if your isEmpty is called differently.
+  isEmpty = blaat;
+}

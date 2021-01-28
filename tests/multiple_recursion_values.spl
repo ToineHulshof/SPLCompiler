@@ -1,0 +1,24 @@
+// Do you allow this?
+// Explain why or why not.
+
+var ones = 1:ones;
+
+var flip = 0:flop;
+var flop = 1:flip;
+
+// What about this?
+var flup = (flap.hd):flup;
+var flap = (flup.hd):flap;
+
+
+
+// For testing
+take(n, list)
+{
+  if( n <= 0 )
+    return [];
+  else
+    return list.hd : take(n-1, list.tl);
+}
+
+main() { print(take(10,flip)); }

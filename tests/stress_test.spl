@@ -1,0 +1,8 @@
+// Uncomment lines one by one. How far can you take your compiler?
+
+f0(x) { return (x, x); }
+f1(x) { return f0(f0(x)); }
+// f2(x) { return f1(f1(x)); }
+// f3(x) { return f2(f2(x)); }
+// f4(x) { return f3(f3(x)); }
+// f5(x) { return f4(f4(x)); }

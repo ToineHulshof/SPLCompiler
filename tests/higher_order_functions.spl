@@ -1,0 +1,38 @@
+// Depending on your design decisions this might or might not compile.
+// In our course we don't require higher-order functions.
+// In fact, our grammar doesn't even allow function types in type signatures.
+// Anyway, this could be an idea for assignment 4.
+
+map(f, list)
+// This doesn't parse according to our grammar
+// :: (a -> b) [a] -> [b]
+{
+  if( isEmpty(list) )
+    return [];
+  else
+    return f(list.hd) : map(f, list.tl);
+}
+
+foldl(f, z, list)
+{
+  if( isEmpty(list) )
+    return z;
+  else
+    return foldl(f, f(z, list.hd), list.tl);
+}
+
+// Some operators wrapped in a function.
+plus(x, y) { return x + y; }
+and(b, c) { return b && c; }
+ge18(x) { return x >= 18; }
+
+// Sums all the elements of an Int list.
+sum(list) { return foldl(plus, 0, list); }
+
+// Checks whether all elements in a list of Booleans are True
+all(list) { return foldl(and, True, list); }
+
+// Checks whether in a list of numbers everybody is older than 18
+allOlderThan18(list) { return all(map(ge18, list)); }
+
+main() { return; }

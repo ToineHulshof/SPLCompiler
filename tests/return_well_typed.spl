@@ -1,0 +1,26 @@
+// What is the type of this function?
+whatAmI(x, y)
+{
+  if( True )
+  {
+    return x;
+  }
+  else
+  {
+    return y;
+  }
+}
+
+// There is a return statement at the very end of the function, which means all
+// code paths reach a return eventually.
+ok()
+{
+  if( True )
+  {
+  }
+  else
+  {
+    return 10;
+  }
+  return 20;
+}

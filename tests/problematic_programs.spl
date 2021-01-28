@@ -1,0 +1,6 @@
+NegativeAssociativity(n):: Int -> Int {return n - 3 - 2 - 1;}
+AndAssociativity(b1, b2, b3):: Bool Bool Bool -> Bool {return b1 && b2 && b3;}
+PlusAssociativity(n):: Int -> Int {return n + 3 + 2 + 1;}
+DivAssociativity(n):: Int -> Int {return n / 3 / 2 / 1;}
+PlusMulPriority(n):: Int -> Int {return n * n + n * n;}
+NegativeNumber(n):: Int -> Int {return n + -5;}

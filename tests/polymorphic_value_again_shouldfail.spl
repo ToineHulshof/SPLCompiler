@@ -1,0 +1,11 @@
+// Another variant of the polymorphic value problem.
+
+// This is perfectly fine
+var tuple1 = (1:[], True:[]);
+
+// This should fail.
+var l = [];
+var tuple2 = (1:l, True:l);
+
+
+main() { return; }

@@ -1,0 +1,7 @@
+// At this point you maybe don't see what the problem is.
+// Wait until you try to implement your code generator.
+
+equal(x, y)
+{
+  return x == y;
+}

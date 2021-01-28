@@ -1,0 +1,45 @@
+// Various versions of the identity function
+
+// Identity for integers
+// The type signature forces the function to have a more concrete type than it could have.
+id_int(x) :: Int -> Int
+{
+  return x;
+}
+
+
+// Polymorphic identity with type signature
+id_poly_with(x) :: a -> a
+{
+  return x;
+}
+
+
+// Polymorphic identity without type signature
+// Type checking should figure out the type forall a . a -> a
+id_poly_without(x)
+{
+  return x;
+}
+
+
+// Clumsy polymorphic identity
+// Type checking should give type forall a . a -> a
+id_poly_wtf(x)
+{
+  var a = x;
+  var b = a;
+  var c = b;
+  return c;
+}
+
+
+// Clumsy identity for integers
+// Type checking should give type Int -> Int
+id_int_wtf(x)
+{
+  var a = x;
+  Int b = a;
+  var c = b;
+  return c;
+}

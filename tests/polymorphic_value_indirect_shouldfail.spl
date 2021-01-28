@@ -1,0 +1,18 @@
+// A variant of the polymorphic assignment problem.
+// Here, the assignment is wrapped in a function.
+// Your typechecker should give an error of some sort.
+
+var list = [];
+
+assign(l)
+{
+  list = l;
+  return;
+}
+
+main()
+{
+  assign(1:[]);
+  assign(True:[]);
+  return;
+}

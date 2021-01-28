@@ -1,0 +1,6 @@
+// An example from the slides. This should give a type error.
+
+f(x)
+{
+  return f( (x, x) );
+}

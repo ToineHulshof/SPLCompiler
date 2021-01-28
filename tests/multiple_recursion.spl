@@ -1,0 +1,14 @@
+// Generates a list of zeros and ones
+
+flip(n, l)
+{
+  if( n <= 0 )
+    return l;
+  else
+    return flop(n-1, 0:l);
+}
+
+flop(n, l)
+{
+  return flip(n, 1:l);
+}

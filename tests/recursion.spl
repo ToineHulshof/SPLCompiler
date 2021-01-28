@@ -1,0 +1,17 @@
+// Greatest common divisor,
+// "The granddaddy of all algorithms, because it is the oldest nontrivial
+// algorithm that has survived to the present day." -- Don Knuth
+
+// This one only works for positive n, m
+gcd (m, n) {
+  if (n < m) {
+    return gcd(n, m);
+  } else {
+    if (n == m){
+      return n;
+    } else {
+      // n > m
+      return gcd(m, n - m);
+    }
+  }
+}

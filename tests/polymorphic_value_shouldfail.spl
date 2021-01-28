@@ -1,0 +1,14 @@
+// This is an example why you need the value restriction.
+// This program should give a type error in some way.
+
+// The empty list [] usually has polymorphic type forall a.[a], but you
+// cannot give the variable l this type. See below what can go wrong.
+var l = [];
+
+f()
+{
+  // If l has polymorphic type forall a . [a], the next two lines are possible.
+  l = 1:l;
+  l = True:l;
+  return;
+}

@@ -1,0 +1,4 @@
+f ( n ) :: Int -> Int {
+	Int n = 21;
+	return n + n;
+}

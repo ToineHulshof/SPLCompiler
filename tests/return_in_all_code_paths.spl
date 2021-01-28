@@ -1,0 +1,43 @@
+// These functions do not always return values.
+// Each of them should be rejected by the type checker.
+
+noReturnInThen()
+{
+  if( True )
+  {
+  }
+  else
+  {
+    return 10;
+  }
+}
+
+noReturnInElse()
+{
+  if( True )
+  {
+    return 42;
+  }
+  else
+  {
+  }
+}
+
+notAlwaysReturn(x)
+{
+  while( x > 0 )
+  {
+    return 22;
+  }
+}
+
+whileAndIfCombined(x)
+{
+  while( x > 0 )
+  {
+    if( True )
+    {
+      return 10;
+    }
+  }
+}

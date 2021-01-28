@@ -1,0 +1,6 @@
+// A classic from computer science.
+// The function \x.x x can not be typed in let-polymorphic type systems.
+f(x)
+{
+  return x(x);
+}

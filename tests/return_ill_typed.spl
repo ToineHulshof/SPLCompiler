@@ -1,0 +1,13 @@
+// The returns return values of different types.
+// Make sure that the type checker rejects this program.
+blah()
+{
+  if( True )
+  {
+    return 10;
+  }
+  else
+  {
+    return False;
+  }
+}
