@@ -36,7 +36,7 @@ data VarDecl
   deriving (Show)
 
 data FunDecl
-  = FunDecl String [String] [Type] [VarDecl] [Stmt]
+  = FunDecl String [String] (Maybe ([Type], RetType)) [VarDecl] [Stmt]
   deriving (Show)
 
 data RetType
@@ -76,6 +76,7 @@ data ExpRec
 data Exp
   = ExpField String [Field]
   | ExpInt Int
+  | ExpString String
   | ExpChar Char
   | ExpBool Bool
   | ExpFunCall FunCall

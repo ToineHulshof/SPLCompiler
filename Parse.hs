@@ -137,8 +137,11 @@ expFunCall = ExpFunCall <$> funCallP
 expEmptyListP :: Parser Exp
 expEmptyListP = ExpEmptyList <$ stringP "[]"
 
+expStringP :: Parser Exp 
+expStringP = ExpString <$> (c '"' *> spanP (/='"') <* c '"')
+
 expP :: Parser Exp
-expP = expIntP <|> expCharP <|> expBoolP <|> expFunCall <|> expEmptyListP <|> ExpField <$> idP <*> fieldP
+expP = expIntP <|> expStringP <|> expCharP <|> expBoolP <|> expFunCall <|> expEmptyListP <|> ExpField <$> idP <*> fieldP
 
 expRecOp2P :: Parser ExpRec
 expRecOp2P = ExpRecOp2 <$> expP <*> w op2P <*> expRecP
@@ -147,10 +150,10 @@ expRecOp1P :: Parser ExpRec
 expRecOp1P = ExpRecOp1 <$> (op1P <* ws) <*> expRecP 
 
 expRecBracketsP :: Parser ExpRec
-expRecBracketsP = ExpRecBrackets <$> (charP '(' *> w expRecP <* charP ')')
+expRecBracketsP = ExpRecBrackets <$> (c '(' *> expRecP <* c ')')
 
 expRecTupleP :: Parser ExpRec
-expRecTupleP = curry ExpRecTuple <$> (charP '(' *> w expRecP <* charP ',') <*> (w expRecP <* charP ')')
+expRecTupleP = curry ExpRecTuple <$> (c '(' *> expRecP <* c ',') <*> expRecP <* c ')'
 
 expRecP :: Parser ExpRec
 expRecP = expRecOp2P <|> expRecOp1P <|> expRecBracketsP <|> expRecTupleP <|> ExpRecExp <$> expP
@@ -182,8 +185,8 @@ stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtFunCallP <|> stmtReturnP
 basicTypeP :: Parser BasicType
 basicTypeP = IntType <$ stringP "Int" <|> BoolType <$ stringP "Bool" <|> CharType <$ stringP "Char"
 
-funTypeP :: Parser [Type]
-funTypeP = w (stringP "::") *> sepBy (stringP "->") typeP <|> pure []
+funTypeP :: Parser (Maybe ([Type], RetType))
+funTypeP = curry Just <$> (w (stringP "::") *> many (w typeP)) <*> (w (stringP "->") *> retTypeP) <|> pure Nothing
 
 typeTupleP :: Parser Type
 typeTupleP = TypeTuple <$> (c '(' *> typeP <* c ',') <*> typeP <* c ')'  
@@ -196,7 +199,7 @@ typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID <$> id
 
 result :: Show a => Either Error (Code, a) -> String
 result (Right (c, a))
-  | null c = "Parsed succesfully\n" ++ show a
+  | null c = "Parsed succesfully" -- ++ show a
   | otherwise = "Error: did not complete parsing"
 result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
 
@@ -226,7 +229,7 @@ codeLines :: String -> [(Int, String)]
 codeLines = zip [1..] . lines
 
 parseFileP :: Show a => Parser a -> FilePath -> IO ()
-parseFileP p f = readFile f >>= putStrLn . result . parse p . code . comments . codeLines
+parseFileP p f = readFile f >>= putStrLn . (++ " " ++ f) . result . parse p . code . comments . codeLines
 
 parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP
