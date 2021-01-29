@@ -11,7 +11,7 @@ result' (Left _) = "Error"
 result' (Right (_, a)) = ppSPL a
 
 pp :: FilePath -> IO ()
-pp f = readFile f >>= putStrLn . result' . parse splP . code . comments . codeLines
+pp f = readFile f >>= putStrLn . result' . parse splP . comments' False False . code
 
 tab :: Int -> String
 tab n = replicate n '\t'

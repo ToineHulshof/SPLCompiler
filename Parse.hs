@@ -203,39 +203,34 @@ result (Right (c, a))
   | otherwise = "Error: did not complete parsing"
 result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
 
-slComments :: [(Int, String)] -> [(Int, String)]
-slComments [] = []
-slComments (x : xs) = case parse (ws *> stringP "//") $ code [x] of
-  Left _ -> x : slComments xs
-  Right _ -> slComments xs
+comments' :: Bool -> Bool -> Code -> Code
+comments' _ _ [] = []
+comments' slash star [c]
+  | slash || star = []
+  | otherwise  = [c]
+comments' slash star ((x1,l1,c1):(x2,l2,c2):xs)
+  | s == "//" = comments' True star xs
+  | s == "/*" = comments' slash True xs
+  | s == "*/" && star = comments' False False xs
+  | x1 == '\n' && slash = (x1, l1, c1) : comments' False star ((x2, l2, c2) : xs)
+  | slash || star = comments' slash star ((x2, l2, c2) : xs)
+  | otherwise = (x1, l1, c1) : comments' slash star ((x2, l2, c2) : xs)
+  where s = [x1,x2]
 
-mlComments :: Bool -> [(Int, String)] -> [(Int, String)]
-mlComments _ [] = []
-mlComments inComment (x : xs)
-  | inComment = case parse (ws *> stringP "*/") $ code [x] of
-    Left _ -> mlComments True xs
-    Right _ -> mlComments False xs
-  | otherwise = case parse (ws *> stringP "/*") $ code [x] of
-    Left _ -> x : mlComments False xs
-    Right _ -> mlComments True xs
-
-comments :: [(Int, String)] -> [(Int, String)] 
-comments = mlComments False . slComments
-
-code :: [(Int, String)] -> Code
-code s = [(a, b, c) | (b, d) <- s, (c, a) <- zip [1 ..] d]
+code :: String -> Code
+code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] (d ++ "\n")]
 
 codeLines :: String -> [(Int, String)]
 codeLines = zip [1..] . lines
 
 parseFileP :: Show a => Parser a -> FilePath -> IO ()
-parseFileP p f = readFile f >>= putStrLn . (++ " " ++ f) . result . parse p . code . comments . codeLines
+parseFileP p f = readFile f >>= putStrLn . (++ " " ++ f) . result . parse p . comments' False False . code
 
 parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP
 
 test :: Parser a -> String -> Either Error (Code, a)
-test p = parse p . code . codeLines
+test p = parse p . code
 
 main :: IO ()
 main = getLine >>= parseFile
