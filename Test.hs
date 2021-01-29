@@ -8,7 +8,3 @@ testFiles = ["2D.spl", "3D.spl", "Example.spl", "SumProduct.spl", "a_bit_of_ever
 
 testAllFiles :: IO [()]
 testAllFiles = forM (map ("tests/"++) testFiles) parseFile
-
--- Known errors:
--- Op de manier waarop wij expRec doen, kun je niet (a + b) + c parsen.
--- Multiline comments kunnen blijkbaar ook op 1 regel
