@@ -1,126 +1,10 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Main where
+module Parse where
 
-import Control.Applicative (Alternative (empty, (<|>), many, some), optional)
+import Grammar
+import Control.Applicative (Alternative ((<|>), many, some))
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
-
-type Code = [(Char, Int, Int)]
-type Error = (String, Int, Int)
-
-newtype Parser a = Parser { parse :: Code -> Either Error (Code, a) }
-
-instance Functor Parser where
-  fmap f (Parser p) = Parser $ fmap (f <$>) . p
-
-instance Applicative Parser where
-  pure x = Parser $ \code -> Right (code, x)
-  (Parser p1) <*> (Parser p2) = Parser $ \code -> do
-    (code', f) <- p1 code
-    (code'', a) <- p2 code'
-    Right (code'', f a)
-
-instance Alternative Parser where
-  empty = Parser . const $ Left ("Failed", 0, 0)
-  (Parser p1) <|> (Parser p2) = Parser $ \code -> p1 code <> p2 code
-
-newtype SPL
-  = SPL [Decl]
-  deriving (Show)
-
-data Decl
-  = DeclVarDecl VarDecl
-  | DeclFunDecl FunDecl
-  deriving (Show)
-
-data VarDecl
-  = VarDeclVar String ExpRec
-  | VarDeclType Type String ExpRec
-  deriving (Show)
-
-data FunDecl
-  = FunDecl String [String] [Type] [VarDecl] [Stmt]
-  deriving (Show)
-
-data RetType
-  = RetTypeType Type
-  | Void
-  deriving (Show)
-
--- data FTypes
---   = FTypes Type (Maybe FTypes)
---   deriving (Show)
-
-data Type
-  = TypeBasic BasicType
-  | TypeTuple Type Type
-  | TypeArray Type
-  | TypeID String
-  deriving (Show)
-
-data BasicType
-  = IntType
-  | BoolType
-  | CharType
-  deriving (Show)
-
-data Stmt
-  = StmtIf ExpRec [Stmt] (Maybe [Stmt])
-  | StmtWhile ExpRec [Stmt]
-  | StmtField String [Field] ExpRec
-  | StmtFunCall FunCall
-  | StmtReturn (Maybe ExpRec)
-  deriving (Show)
-
-data ExpRec
-  = ExpRecExp Exp
-  | ExpRecOp2 Exp Op2 ExpRec
-  | ExpRecOp1 Op1 ExpRec
-  | ExpRecBrackets ExpRec
-  | ExpRecTuple (ExpRec, ExpRec)
-  deriving (Show)
-
-data Exp
-  = ExpField String [Field]
-  | ExpInt Int
-  | ExpChar Char
-  | ExpBool Bool
-  | ExpFunCall FunCall
-  | ExpEmptyList
-  deriving (Show)
-
-data Field
-  = Head
-  | Tail
-  | First
-  | Second
-  deriving (Show)
-
-data FunCall
-  = FunCall String [ExpRec]
-  deriving (Show)
-
-data Op2
-  = Plus
-  | Minus
-  | Product
-  | Division
-  | Modulo
-  | Eq
-  | Smaller
-  | Greater
-  | Leq
-  | Geq
-  | Neq
-  | And
-  | Or
-  | Cons
-  deriving (Show)
-
-data Op1
-  = Not
-  | Min
-  deriving (Show)
 
 fst3 :: (a, b, c) -> a
 fst3 (a, _, _) = a
@@ -168,7 +52,7 @@ sepBy :: Parser a -> Parser b -> Parser [b]
 sepBy sep e = sepBy1 (ws *> sep <* ws) e <|> pure []
 
 splP :: Parser SPL
-splP = SPL <$> sepBy1 (charP ';') declP
+splP = SPL <$> some declP
 
 declP :: Parser Decl
 declP = declVarDeclP <|> declFunDeclP
@@ -311,17 +195,41 @@ typeP :: Parser Type
 typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID <$> idP
 
 result :: Show a => Either Error (Code, a) -> String
-result (Right (_, a)) = "Parsed succesfully\n" ++ show a
+result (Right (c, a))
+  | null c = "Parsed succesfully\n" ++ show a
+  | otherwise = "Error: did not complete parsing"
 result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
 
-code :: String -> Code
-code s = [(a, b, c) | (b, d) <- zip [1 ..] $ lines s, (c, a) <- zip [1 ..] d]
+slComments :: [(Int, String)] -> [(Int, String)]
+slComments [] = []
+slComments (x : xs) = case parse (ws *> stringP "//") $ code [x] of
+  Left _ -> x : slComments xs
+  Right _ -> slComments xs
+
+mlComments :: Bool -> [(Int, String)] -> [(Int, String)]
+mlComments _ [] = []
+mlComments inComment (x : xs)
+  | inComment = case parse (ws *> stringP "*/") $ code [x] of
+    Left _ -> mlComments True xs
+    Right _ -> mlComments False xs
+  | otherwise = case parse (ws *> stringP "/*") $ code [x] of
+    Left _ -> x : mlComments False xs
+    Right _ -> mlComments True xs
+
+comments :: [(Int, String)] -> [(Int, String)] 
+comments = mlComments False . slComments
+
+code :: [(Int, String)] -> Code
+code s = [(a, b, c) | (b, d) <- s, (c, a) <- zip [1 ..] d]
+
+codeLines :: String -> [(Int, String)]
+codeLines = zip [1..] . lines
 
 parseFileP :: Show a => Parser a -> FilePath -> IO ()
-parseFileP p f = readFile f >>= putStrLn . result . parse p . code
+parseFileP p f = readFile f >>= putStrLn . result . parse p . code . comments . codeLines
 
 parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP
 
-main :: IO String
-main = getLine >>= readFile . result . parse splP . code
+main :: IO ()
+main = getLine >>= parseFile
