@@ -141,7 +141,7 @@ expStringP :: Parser Exp
 expStringP = ExpString <$> (c '"' *> spanP (/='"') <* c '"')
 
 expP :: Parser Exp
-expP = expIntP <|> expStringP <|> expCharP <|> expBoolP <|> expFunCall <|> expEmptyListP <|> ExpField <$> idP <*> fieldP
+expP = expRecBracketsP <|> expRecTupleP <|> expIntP <|> expStringP <|> expCharP <|> expBoolP <|> expFunCall <|> expEmptyListP <|> ExpField <$> idP <*> fieldP
 
 expRecOp2P :: Parser ExpRec
 expRecOp2P = ExpRecOp2 <$> expP <*> w op2P <*> expRecP
@@ -149,14 +149,14 @@ expRecOp2P = ExpRecOp2 <$> expP <*> w op2P <*> expRecP
 expRecOp1P :: Parser ExpRec
 expRecOp1P = ExpRecOp1 <$> (op1P <* ws) <*> expRecP 
 
-expRecBracketsP :: Parser ExpRec
-expRecBracketsP = ExpRecBrackets <$> (c '(' *> expRecP <* c ')')
+expRecBracketsP :: Parser Exp
+expRecBracketsP = ExpBrackets <$> (c '(' *> expRecP <* c ')')
 
-expRecTupleP :: Parser ExpRec
-expRecTupleP = curry ExpRecTuple <$> (c '(' *> expRecP <* c ',') <*> expRecP <* c ')'
+expRecTupleP :: Parser Exp
+expRecTupleP = curry ExpTuple <$> (c '(' *> expRecP <* c ',') <*> expRecP <* c ')'
 
 expRecP :: Parser ExpRec
-expRecP = expRecOp2P <|> expRecOp1P <|> expRecBracketsP <|> expRecTupleP <|> ExpRecExp <$> expP
+expRecP = expRecOp1P <|> expRecOp2P <|> ExpRecExp <$> expP
 
 stmtIfP :: Parser Stmt
 stmtIfP = (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (w (stringP "else") *> stmtsP) <|> (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP
@@ -180,7 +180,7 @@ stmtReturnP :: Parser Stmt
 stmtReturnP = StmtReturn . pure <$> (stringP "return" *> ws *> expRecP <* c ';') <|> StmtReturn Nothing <$ stringP "return" <* c ';'
 
 stmtP :: Parser Stmt
-stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtFunCallP <|> stmtReturnP
+stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP
 
 basicTypeP :: Parser BasicType
 basicTypeP = IntType <$ stringP "Int" <|> BoolType <$ stringP "Bool" <|> CharType <$ stringP "Char"
@@ -199,7 +199,7 @@ typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID <$> id
 
 result :: Show a => Either Error (Code, a) -> String
 result (Right (c, a))
-  | null c = "Parsed succesfully" -- ++ show a
+  | null c = "Parsed succesfully" ++ show a
   | otherwise = "Error: did not complete parsing"
 result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
 
@@ -233,6 +233,9 @@ parseFileP p f = readFile f >>= putStrLn . (++ " " ++ f) . result . parse p . co
 
 parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP
+
+test :: Parser a -> String -> Either Error (Code, a)
+test p = parse p . code . codeLines
 
 main :: IO ()
 main = getLine >>= parseFile

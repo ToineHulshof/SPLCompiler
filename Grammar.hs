@@ -69,12 +69,12 @@ data ExpRec
   = ExpRecExp Exp
   | ExpRecOp2 Exp Op2 ExpRec
   | ExpRecOp1 Op1 ExpRec
-  | ExpRecBrackets ExpRec
-  | ExpRecTuple (ExpRec, ExpRec)
   deriving (Show)
 
 data Exp
-  = ExpField String [Field]
+  = ExpBrackets ExpRec
+  | ExpTuple (ExpRec, ExpRec)
+  | ExpField String [Field]
   | ExpInt Int
   | ExpString String
   | ExpChar Char
