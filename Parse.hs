@@ -52,7 +52,7 @@ sepBy :: Parser a -> Parser b -> Parser [b]
 sepBy sep e = sepBy1 (ws *> sep <* ws) e <|> pure []
 
 splP :: Parser SPL
-splP = SPL <$> some declP
+splP = SPL <$> some (w declP)
 
 declP :: Parser Decl
 declP = declVarDeclP <|> declFunDeclP
@@ -212,13 +212,13 @@ comments' slash star ((x1,l1,c1):(x2,l2,c2):xs)
   | s == "//" = comments' True star xs
   | s == "/*" = comments' slash True xs
   | s == "*/" && star = comments' False False xs
-  | x1 == '\n' && slash = (x1, l1, c1) : comments' False star ((x2, l2, c2) : xs)
+  | l2 > l1 && slash = comments' False star ((x2, l2, c2) : xs)
   | slash || star = comments' slash star ((x2, l2, c2) : xs)
   | otherwise = (x1, l1, c1) : comments' slash star ((x2, l2, c2) : xs)
   where s = [x1,x2]
 
 code :: String -> Code
-code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] (d ++ "\n")]
+code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] d]
 
 codeLines :: String -> [(Int, String)]
 codeLines = zip [1..] . lines
