@@ -1,7 +1,7 @@
 module Print where
 
 import Grammar
-import Parse
+import Parser
 import Text.Printf ( printf )
 
 type Depth = Int

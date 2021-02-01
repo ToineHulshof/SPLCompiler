@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Parse where
+module Parser where
 
 import Grammar
 import Control.Applicative (Alternative ((<|>), many, some))
