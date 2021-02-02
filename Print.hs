@@ -84,12 +84,14 @@ ppStmtElse _ Nothing = ""
 ppStmtElse d (Just s) = printf " else {\n%s%s}" (unlines $ map (ppStmt (d + 1)) s) (tab d)
 
 ppExp :: Exp -> String 
-ppExp (ExpTerm t) = ppTerm t
-ppExp (ExpTermExp t o e) = printf "%s %s %s" (ppTerm t) (ppTermOp o) (ppExp e)
+ppExp (Exp t ts)
+    | null ts = printf "%s" (ppTerm t)
+    | otherwise = printf "%s%s" (ppTerm t) (concatMap (\(o, t) -> " " ++ ppTermOp o ++ " " ++ ppTerm t) ts)
 
 ppTerm :: Term -> String
-ppTerm (TermFactor f) = ppFactor f
-ppTerm (TermFactorTerm f o t) = printf "(%s %s %s)" (ppFactor f) (ppFactorOp o) (ppTerm t)
+ppTerm (Term f fs)
+    | null fs = printf "%s" (ppFactor f)
+    | otherwise = printf "%s%s" (ppFactor f) (concatMap (\(o, f) -> " " ++ ppFactorOp o ++ " " ++ ppFactor f) fs)
 
 ppFactor :: Factor -> String 
 ppFactor (FactorInt i) = show i 

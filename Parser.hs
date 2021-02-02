@@ -122,7 +122,7 @@ fieldP :: Parser [Field]
 fieldP = many (c '.' *> fieldFunP)
 
 expP :: Parser Exp 
-expP = ExpTermExp <$> termP <*> w termOpP <*> expP <|> ExpTerm <$> termP
+expP = Exp <$> termP <*> many ((,) <$> termOpP <*> termP)
 
 termOpP :: Parser TermOp
 termOpP = Add <$ charP '+' <|> Subtract <$ charP '-'
@@ -131,7 +131,7 @@ factorOpP :: Parser FactorOp
 factorOpP = Times <$ charP '*' <|> Divides <$ charP '/'
 
 termP :: Parser Term 
-termP = TermFactorTerm <$> factorP <*> w factorOpP <*> termP <|> TermFactor <$> factorP 
+termP = Term <$> factorP <*> many ((,) <$> factorOpP <*> factorP)
 
 factorP :: Parser Factor
 factorP = FactorInt <$> intP <|> FactorExp <$> (c '(' *> expP <* c ')')

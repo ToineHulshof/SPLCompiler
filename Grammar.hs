@@ -66,13 +66,11 @@ data Stmt
   deriving (Show)
 
 data Exp
-  = ExpTerm Term
-  | ExpTermExp Term TermOp Exp
+  = Exp Term [(TermOp, Term)]
   deriving (Show)
 
 data Term
-  = TermFactor Factor
-  | TermFactorTerm Factor FactorOp Term
+  = Term Factor [(FactorOp, Factor)]
   deriving (Show)
 
 data FactorOp
