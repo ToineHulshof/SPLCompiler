@@ -31,8 +31,8 @@ data Decl
   deriving (Show)
 
 data VarDecl
-  = VarDeclVar String ExpRec
-  | VarDeclType Type String ExpRec
+  = VarDeclVar String Exp
+  | VarDeclType Type String Exp
   deriving (Show)
 
 data FunDecl
@@ -58,28 +58,36 @@ data BasicType
   deriving (Show)
 
 data Stmt
-  = StmtIf ExpRec [Stmt] (Maybe [Stmt])
-  | StmtWhile ExpRec [Stmt]
-  | StmtField String [Field] ExpRec
+  = StmtIf Exp [Stmt] (Maybe [Stmt])
+  | StmtWhile Exp [Stmt]
+  | StmtField String [Field] Exp
   | StmtFunCall FunCall
-  | StmtReturn (Maybe ExpRec)
-  deriving (Show)
-
-data ExpRec
-  = ExpRecExp Exp
-  | ExpRecOp2 Exp Op2 ExpRec
-  | ExpRecOp1 Op1 ExpRec
+  | StmtReturn (Maybe Exp)
   deriving (Show)
 
 data Exp
-  = ExpBrackets ExpRec
-  | ExpTuple (ExpRec, ExpRec)
-  | ExpField String [Field]
-  | ExpInt Int
-  | ExpChar Char
-  | ExpBool Bool
-  | ExpFunCall FunCall
-  | ExpEmptyList
+  = ExpTerm Term
+  | ExpTermExp Term TermOp Exp
+  deriving (Show)
+
+data Term
+  = TermFactor Factor
+  | TermFactorTerm Factor FactorOp Term
+  deriving (Show)
+
+data FactorOp
+  = Times
+  | Divides
+  deriving (Show)
+
+data Factor
+  = FactorInt Int
+  | FactorExp Exp
+  deriving (Show)
+
+data TermOp
+  = Add
+  | Subtract
   deriving (Show)
 
 data Field
@@ -90,7 +98,7 @@ data Field
   deriving (Show)
 
 data FunCall
-  = FunCall String [ExpRec]
+  = FunCall String [Exp]
   deriving (Show)
 
 data Op2

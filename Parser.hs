@@ -14,7 +14,7 @@ eitherToMaybe (Left _) = Nothing
 eitherToMaybe (Right (_, a)) = Just a
 
 ws :: Parser String
-ws = spanP isSpace -- stringP ""
+ws = spanP isSpace
 
 w :: Parser a -> Parser a
 w p = ws *> p <* ws
@@ -70,10 +70,10 @@ varDeclP :: Parser VarDecl
 varDeclP = (varDeclVarP <|> varDeclTypeP) <* c ';'
 
 varDeclVarP :: Parser VarDecl
-varDeclVarP = VarDeclVar <$> (stringP "var" *> w idP <* charP '=' <* ws) <*> expRecP
+varDeclVarP = VarDeclVar <$> (stringP "var" *> w idP <* charP '=' <* ws) <*> expP
 
 varDeclTypeP :: Parser VarDecl
-varDeclTypeP = VarDeclType <$> typeP <*> (w idP <* charP '=' <* ws) <*> expRecP
+varDeclTypeP = VarDeclType <$> typeP <*> (w idP <* charP '=' <* ws) <*> expP
 
 retTypeP :: Parser RetType
 retTypeP = voidP <|> retTypeTypeP
@@ -113,7 +113,7 @@ op2P =  Plus <$ charP '+'
     <|> Cons <$ charP ':'
 
 funCallP :: Parser FunCall
-funCallP = FunCall <$> idP <*> (c '(' *> sepBy (charP ',') expRecP <* c ')')
+funCallP = FunCall <$> idP <*> (c '(' *> sepBy (charP ',') expP <* c ')')
 
 fieldFunP :: Parser Field
 fieldFunP = Head <$ stringP "hd" <|> Tail <$ stringP "tl" <|> First <$ stringP "fst" <|> Second <$ stringP "snd"
@@ -121,47 +121,26 @@ fieldFunP = Head <$ stringP "hd" <|> Tail <$ stringP "tl" <|> First <$ stringP "
 fieldP :: Parser [Field]
 fieldP = many (c '.' *> fieldFunP)
 
-expCharP :: Parser Exp
-expCharP = ExpChar <$> (charP '\'' *> charP' isAlpha <* charP '\'')
+expP :: Parser Exp 
+expP = ExpTermExp <$> termP <*> w termOpP <*> expP <|> ExpTerm <$> termP
 
-expBoolP :: Parser Exp
-expBoolP = ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
+termOpP :: Parser TermOp
+termOpP = Add <$ charP '+' <|> Subtract <$ charP '-'
 
-expIntP :: Parser Exp
-expIntP = ExpInt <$> intP
+factorOpP :: Parser FactorOp 
+factorOpP = Times <$ charP '*' <|> Divides <$ charP '/'
 
-expFunCall :: Parser Exp
-expFunCall = ExpFunCall <$> funCallP
+termP :: Parser Term 
+termP = TermFactorTerm <$> factorP <*> w factorOpP <*> termP <|> TermFactor <$> factorP 
 
-expEmptyListP :: Parser Exp
-expEmptyListP = ExpEmptyList <$ stringP "[]"
-
--- expStringP :: Parser Exp 
--- expStringP = ExpString <$> (c '"' *> spanP (/='"') <* c '"')
-
-expP :: Parser Exp
-expP = expRecBracketsP <|> expRecTupleP <|> expIntP <|> {- expStringP <|> -} expCharP <|> expBoolP <|> expFunCall <|> expEmptyListP <|> ExpField <$> idP <*> fieldP
-
-expRecOp2P :: Parser ExpRec
-expRecOp2P = ExpRecOp2 <$> expP <*> w op2P <*> expRecP
-
-expRecOp1P :: Parser ExpRec
-expRecOp1P = ExpRecOp1 <$> (op1P <* ws) <*> expRecP 
-
-expRecBracketsP :: Parser Exp
-expRecBracketsP = ExpBrackets <$> (c '(' *> expRecP <* c ')')
-
-expRecTupleP :: Parser Exp
-expRecTupleP = curry ExpTuple <$> (c '(' *> expRecP <* c ',') <*> expRecP <* c ')'
-
-expRecP :: Parser ExpRec
-expRecP = expRecOp1P <|> expRecOp2P <|> ExpRecExp <$> expP
+factorP :: Parser Factor
+factorP = FactorInt <$> intP <|> FactorExp <$> (c '(' *> expP <* c ')')
 
 stmtIfP :: Parser Stmt
 stmtIfP = (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (w (stringP "else") *> stmtsP) <|> (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP
 
-conditionP :: String -> Parser ExpRec
-conditionP s = stringP s *> c '(' *> expRecP <* c ')'
+conditionP :: String -> Parser Exp
+conditionP s = stringP s *> c '(' *> expP <* c ')'
 
 stmtsP :: Parser [Stmt]
 stmtsP = c '{' *> many stmtP <* c '}'
@@ -170,13 +149,13 @@ stmtWhileP :: Parser Stmt
 stmtWhileP = StmtWhile <$> conditionP "while" <*> stmtsP 
 
 stmtFieldP :: Parser Stmt
-stmtFieldP = StmtField <$> idP <*> fieldP <*> (c '=' *> expRecP <* c ';')
+stmtFieldP = StmtField <$> idP <*> fieldP <*> (c '=' *> expP <* c ';')
 
 stmtFunCallP :: Parser Stmt
 stmtFunCallP = StmtFunCall <$> funCallP <* c ';'
 
 stmtReturnP :: Parser Stmt
-stmtReturnP = StmtReturn . pure <$> (stringP "return" *> ws *> expRecP <* c ';') <|> StmtReturn Nothing <$ stringP "return" <* c ';'
+stmtReturnP = StmtReturn . pure <$> (stringP "return" *> ws *> expP <* c ';') <|> StmtReturn Nothing <$ stringP "return" <* c ';'
 
 stmtP :: Parser Stmt
 stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP
@@ -202,20 +181,6 @@ result (Right (c, a))
   | otherwise = "Error: did not complete parsing"
 result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
 
--- comments' :: Bool -> Bool -> Code -> Code
--- comments' _ _ [] = []
--- comments' slash star [c]
---   | slash || star = []
---   | otherwise  = [c]
--- comments' slash star ((x1,l1,c1):(x2,l2,c2):xs)
---   | s == "//" = comments' True star xs
---   | s == "/*" = comments' slash True xs
---   | s == "*/" && star = comments' False False xs
---   | l2 > l1 && slash = comments' False star ((x2, l2, c2) : xs)
---   | slash || star = comments' slash star ((x2, l2, c2) : xs)
---   | otherwise = (x1, l1, c1) : comments' slash star ((x2, l2, c2) : xs)
---   where s = [x1,x2]
-
 comments :: Bool -> Int -> Code -> Either Error Code 
 comments _ d []
     | d == 0 = Right []
@@ -240,13 +205,13 @@ codeLines = zip [1..] . lines
 parseFileP :: Show a => Parser a -> (Either Error (Code, a) -> String) -> FilePath -> IO ()
 parseFileP p r f = readFile f >>= putStrLn . help where
   help :: String -> String
-  help s = (++ " " ++ f) $ r $ comments False 0 (code s) >>= parse p -- . filter (not . isSpace . fst3)
+  help s = (++ " " ++ f) $ r $ comments False 0 (code s) >>= parse p
 
 parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP result
 
-test :: Parser a -> String -> Either Error (Code, a)
-test p = parse p . code
+testP :: Parser a -> String -> Either Error (Code, a)
+testP p = parse p . code
 
 main :: IO ()
 main = getLine >>= parseFile
