@@ -7,11 +7,11 @@ import Text.Printf ( printf )
 type Depth = Int
 
 result' :: Either Error (Code, SPL) -> String
-result' (Left _) = "Error"
+result' (Left (e, l, c)) = "Error " ++ e ++ " line " ++ show l ++ " column " ++ show c
 result' (Right (_, a)) = ppSPL a
 
 pp :: FilePath -> IO ()
-pp f = readFile f >>= putStrLn . result' . parse splP . comments' False False . code
+pp = parseFileP splP result'
 
 tab :: Int -> String
 tab n = replicate n '\t'
@@ -88,7 +88,7 @@ ppExp (ExpBrackets e) = printf "(%s)" (ppExpRec e)
 ppExp (ExpTuple (e1, e2)) = printf "(%s, %s)" (ppExpRec e1) (ppExpRec e2)
 ppExp (ExpField n f) = printf "%s%s" n (concatMap ppField f)
 ppExp (ExpInt i) = show i
-ppExp (ExpString s) = printf "\"%s\"" s
+-- ppExp (ExpString s) = printf "\"%s\"" s
 ppExp (ExpChar c) = printf "\'%s\'" [c]
 ppExp (ExpBool b)
     | b = "True"

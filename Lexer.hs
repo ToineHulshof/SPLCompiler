@@ -18,55 +18,59 @@ data Token
     | TokenRightSquareBracket
     | TokenArrow
     | TokenVoid
-    | TokenInt 
-    | TokenBool 
-    | TokenChar 
+    | TokenIntType
+    | TokenBoolType
+    | TokenCharType
     | TokenIf
     | TokenElse
     | TokenWhile
     | TokenReturn
-    | TokenFalse
-    | TokenTrue
     | TokenEmptyArray
     | TokenDot
-    | TokenPlus 
-    | TokenMinus 
-    | TokenTimes
-    | TokenDivide
-    | TokenModulo 
-    | TokenDoubleEquals
-    | TokenLess
-    | TokenGreater 
-    | TokenLessEquals
-    | TokenGreaterEquals
-    | TokenNotEquals
-    | TokenAnd 
-    | TokenOr 
-    | TokenCons 
     | TokenNot 
+    | TokenOp2 Op2Token
+    | TokenBool Bool
     | TokenInteger Int 
     | TokenID String
 
-lex :: Code -> Either Error [Token]
-lex = undefined 
+data Op2Token
+    = Op2Plus 
+    | Op2Minus 
+    | Op2Times
+    | Op2Divide
+    | Op2Modulo 
+    | Op2DoubleEquals
+    | Op2Less
+    | Op2Greater 
+    | Op2LessEquals
+    | Op2GreaterEquals
+    | Op2NotEquals
+    | Op2And 
+    | Op2Or 
+    | Op2Cons
 
-comments :: Bool -> Int -> Code -> Either Error Code 
-comments _ d []
-    | d == 0 = Right []
-    | otherwise = Left ("Did not close all comments", 0, 0)
-comments s d [(x, l, c)]
-    | d /= 0 = Left ("Did not close all comments", l, c)
-    | s = Right []
-    | otherwise = Right [(x, l, c)]
-comments s d ((x1, l1, c1) : (x2, l2, c2) : xs)
-    | t == "//" = comments True d xs
-    | t == "/*" = comments s (d + 1) xs
-    | t == "*/" && (d /= 0) = comments s (d - 1) xs
-    | t == "*/" && (d == 0) = Left ("Trying to close comment that doesn't exist", l2, c2)
-    | l2 > l1 && s = comments False d ((x2, l2, c2) : xs)
-    | s || (d > 0) = comments s d ((x2, l2, c2) : xs)
-    | otherwise = (:) (x1, l1, c1) <$> comments s d ((x2, l2, c2) : xs)
-    where t = [x1, x2]
+
+lex :: Code -> Either Error [Token]
+lex [] = Right []
+lex ((x, l, c) : xs)
+    | x == ';' = (:) <$> Right TokenSemicolon <*> lex xs
+    | x == '(' = (:) <$> Right TokenLeftBrace <*> lex xs
+    | x == ')' = (:) <$> Right TokenLeftBrace <*> lex xs
+    | x == '{' = (:) <$> Right TokenLeftBracket <*> lex xs
+    | x == '}' = (:) <$> Right TokenLeftBracket <*> lex xs
+    | x == '[' = (:) <$> Right TokenLeftSquareBracket <*> lex xs
+    | x == ']' = (:) <$> Right TokenRightSquareBracket <*> lex xs
+    | x == '.' = (:) <$> Right TokenDot <*> lex xs
+    | x == '!' = (:) <$> Right TokenNot <*> lex xs
+    | x == '+' = (:) <$> Right (TokenOp2 Op2Plus) <*> lex xs
+    | x == '+' = (:) <$> Right (TokenOp2 Op2Plus) <*> lex xs
+    | x == '+' = (:) <$> Right (TokenOp2 Op2Plus) <*> lex xs
+    | x == '+' = (:) <$> Right (TokenOp2 Op2Plus) <*> lex xs
+    | x == '+' = (:) <$> Right (TokenOp2 Op2Plus) <*> lex xs
+    | x == '+' = (:) <$> Right (TokenOp2 Op2Plus) <*> lex xs
+    | x == '+' = (:) <$> Right (TokenOp2 Op2Plus) <*> lex xs
+    | x == '+' = (:) <$> Right (TokenOp2 Op2Plus) <*> lex xs
+    | x == '+' = (:) <$> Right (TokenOp2 Op2Plus) <*> lex xs
 
 prepare :: String -> Either Error [Token]
 prepare s = comments False 0 (code s) >>= lex
@@ -76,9 +80,3 @@ result = undefined
 
 lexFile :: FilePath -> IO String
 lexFile f = result . prepare <$> readFile f
-
-fibs :: [Integer]
-fibs = 0 : 1 : zipWith (+) fibs (tail fibs)
-
-fib :: Int -> Integer
-fib = (!!) fibs

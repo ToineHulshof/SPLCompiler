@@ -14,7 +14,7 @@ eitherToMaybe (Left _) = Nothing
 eitherToMaybe (Right (_, a)) = Just a
 
 ws :: Parser String
-ws = spanP isSpace
+ws = spanP isSpace -- stringP ""
 
 w :: Parser a -> Parser a
 w p = ws *> p <* ws
@@ -69,7 +69,6 @@ funDeclP = FunDecl <$> idP <*> (c '(' *> sepBy (charP ',') idP <* c ')') <*> fun
 varDeclP :: Parser VarDecl
 varDeclP = (varDeclVarP <|> varDeclTypeP) <* c ';'
 
--- Not sure if ws before strinP "var" is required
 varDeclVarP :: Parser VarDecl
 varDeclVarP = VarDeclVar <$> (stringP "var" *> w idP <* charP '=' <* ws) <*> expRecP
 
@@ -137,11 +136,11 @@ expFunCall = ExpFunCall <$> funCallP
 expEmptyListP :: Parser Exp
 expEmptyListP = ExpEmptyList <$ stringP "[]"
 
-expStringP :: Parser Exp 
-expStringP = ExpString <$> (c '"' *> spanP (/='"') <* c '"')
+-- expStringP :: Parser Exp 
+-- expStringP = ExpString <$> (c '"' *> spanP (/='"') <* c '"')
 
 expP :: Parser Exp
-expP = expRecBracketsP <|> expRecTupleP <|> expIntP <|> expStringP <|> expCharP <|> expBoolP <|> expFunCall <|> expEmptyListP <|> ExpField <$> idP <*> fieldP
+expP = expRecBracketsP <|> expRecTupleP <|> expIntP <|> {- expStringP <|> -} expCharP <|> expBoolP <|> expFunCall <|> expEmptyListP <|> ExpField <$> idP <*> fieldP
 
 expRecOp2P :: Parser ExpRec
 expRecOp2P = ExpRecOp2 <$> expP <*> w op2P <*> expRecP
@@ -203,31 +202,48 @@ result (Right (c, a))
   | otherwise = "Error: did not complete parsing"
 result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
 
-comments' :: Bool -> Bool -> Code -> Code
-comments' _ _ [] = []
-comments' slash star [c]
-  | slash || star = []
-  | otherwise  = [c]
-comments' slash star ((x1,l1,c1):(x2,l2,c2):xs)
-  | s == "//" = comments' True star xs
-  | s == "/*" = comments' slash True xs
-  | s == "*/" && star = comments' False False xs
-  | l2 > l1 && slash = comments' False star ((x2, l2, c2) : xs)
-  | slash || star = comments' slash star ((x2, l2, c2) : xs)
-  | otherwise = (x1, l1, c1) : comments' slash star ((x2, l2, c2) : xs)
-  where s = [x1,x2]
+-- comments' :: Bool -> Bool -> Code -> Code
+-- comments' _ _ [] = []
+-- comments' slash star [c]
+--   | slash || star = []
+--   | otherwise  = [c]
+-- comments' slash star ((x1,l1,c1):(x2,l2,c2):xs)
+--   | s == "//" = comments' True star xs
+--   | s == "/*" = comments' slash True xs
+--   | s == "*/" && star = comments' False False xs
+--   | l2 > l1 && slash = comments' False star ((x2, l2, c2) : xs)
+--   | slash || star = comments' slash star ((x2, l2, c2) : xs)
+--   | otherwise = (x1, l1, c1) : comments' slash star ((x2, l2, c2) : xs)
+--   where s = [x1,x2]
 
-code :: String -> Code
-code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] d]
+comments :: Bool -> Int -> Code -> Either Error Code 
+comments _ d []
+    | d == 0 = Right []
+    | otherwise = Left ("Did not close all comments", 0, 0)
+comments s d [(x, l, c)]
+    | d /= 0 = Left ("Did not close all comments", l, c)
+    | s = Right []
+    | otherwise = Right [(x, l, c)]
+comments s d ((x1, l1, c1) : (x2, l2, c2) : xs)
+    | t == "//" = comments True d xs
+    | t == "/*" = comments s (d + 1) xs
+    | t == "*/" && (d /= 0) = comments s (d - 1) xs
+    | t == "*/" && (d == 0) = Left ("Trying to close comment that doesn't exist", l2, c2)
+    | l2 > l1 && s = comments False d ((x2, l2, c2) : xs)
+    | s || (d > 0) = comments s d ((x2, l2, c2) : xs)
+    | otherwise = (:) (x1, l1, c1) <$> comments s d ((x2, l2, c2) : xs)
+    where t = [x1, x2]
 
 codeLines :: String -> [(Int, String)]
 codeLines = zip [1..] . lines
 
-parseFileP :: Show a => Parser a -> FilePath -> IO ()
-parseFileP p f = readFile f >>= putStrLn . (++ " " ++ f) . result . parse p . comments' False False . code
+parseFileP :: Show a => Parser a -> (Either Error (Code, a) -> String) -> FilePath -> IO ()
+parseFileP p r f = readFile f >>= putStrLn . help where
+  help :: String -> String
+  help s = (++ " " ++ f) $ r $ comments False 0 (code s) >>= parse p -- . filter (not . isSpace . fst3)
 
 parseFile :: FilePath -> IO ()
-parseFile = parseFileP splP
+parseFile = parseFileP splP result
 
 test :: Parser a -> String -> Either Error (Code, a)
 test p = parse p . code

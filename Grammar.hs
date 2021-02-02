@@ -76,7 +76,6 @@ data Exp
   | ExpTuple (ExpRec, ExpRec)
   | ExpField String [Field]
   | ExpInt Int
-  | ExpString String
   | ExpChar Char
   | ExpBool Bool
   | ExpFunCall FunCall
@@ -115,3 +114,6 @@ data Op1
   = Not
   | Min
   deriving (Show)
+
+code :: String -> Code
+code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] d]
