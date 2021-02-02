@@ -54,15 +54,15 @@ tokenize :: Int -> Code -> Either Error (Code, [Token])
 --     | d == 0 = Right ([], [])
 --     | otherwise = Left ("Uneven brackets", 0, 0)
 -- tokenize d [(x, l, c)]
---     | d < 0 || d > 1 = Left ("Uneven brackets", l, c)
---     | d == 0 = Right ([], [])
 --     | d == 1 && x == ')' = Right ([], [RightBracket])
+--     | d == 0 = Right ([], [])
+--     | otherwise = Left ("Uneven brackets", l, c)
 tokenize d i@((x1, l1, c1) : x@(x2, l2, c2) : xs) 
     | x1 == '-' && isDigit x2 = let (num, rest) = span (isDigit . fst3) (x : xs) in ((TokenInt ((*(-1)) $ read $ map fst3 num):) <$>) <$> tokenize d rest
     | Just token <- t = do
         (c, ts) <- tokenize d (if isJust t2 then xs else x:xs)
         return (c, token : ts)
-    | x1 == ';' = Right (i, [])
+    | x1 == ';' = if d == 0 then Right (i, []) else Left ("Uneven brackets", l1, c1)
     | x1 == ')' && d == 0 = Right (i, [])
     | x1 == '(' = ((LeftBracket:) <$>) <$> tokenize (d + 1) (x : xs)
     | x1 == ')' = ((RightBracket:) <$>) <$> tokenize (d - 1) (x : xs)
@@ -74,6 +74,7 @@ tokenize d i@((x1, l1, c1) : x@(x2, l2, c2) : xs)
         t2 = stringToToken [x1, x2]
         t = t2 <|> t1
         s = [x1, x2]
+tokenize d x = tokenize d (x ++ [(' ', 0, 0)]) -- Ugly fix
 
 isIden :: (Char, Int, Int) -> Bool
 isIden (c, _, _) = c == '_' || isAlphaNum c
