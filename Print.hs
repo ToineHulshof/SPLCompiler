@@ -1,7 +1,7 @@
 module Print where
 
 import Grammar
-import Parser
+import Parser ( expP, parseFileP, splP, code )
 import Text.Printf ( printf )
 
 type Depth = Int
@@ -84,18 +84,51 @@ ppStmtElse _ Nothing = ""
 ppStmtElse d (Just s) = printf " else {\n%s%s}" (unlines $ map (ppStmt (d + 1)) s) (tab d)
 
 ppExp :: Exp -> String 
-ppExp (Exp t ts)
-    | null ts = printf "%s" (ppTerm t)
-    | otherwise = printf "%s%s" (ppTerm t) (concatMap (\(o, t) -> " " ++ ppTermOp o ++ " " ++ ppTerm t) ts)
+ppExp (ExpOp1 o e) = ppOp1 o ++ ppExp e
+ppExp (ExpOr o) = ppExpOr o
+ppExp (ExpOrRec o e) = printf "%s || %s" (ppExpOr o) (ppExp e)
+
+ppExpOr :: OrExp -> String 
+ppExpOr (ExpAnd o) = ppExpAnd o
+ppExpOr (ExpAndRec o e) = printf "%s && %s" (ppExpAnd o) (ppExpOr e)
+
+ppExpAnd :: AndExp -> String
+ppExpAnd (ExpCompare e) = ppExpCompare e
+ppExpAnd (ExpCompareRec e o a) = printf "%s %s %s" (ppExpCompare e) (ppCompareOp o) (ppExpAnd a)
+
+ppExpCompare :: CompareExp -> String
+ppExpCompare (ExpCons t) = ppTerm t
+ppExpCompare (ExpConsRec t e) = printf "%s : %s" (ppTerm t) (ppExpCompare e)
+
+ppCompareOp :: CompareOp -> String
+ppCompareOp Equals = "=="
+ppCompareOp NotEquals = "!="
+ppCompareOp GreaterEquals = ">="
+ppCompareOp LessEquals = "<="
+ppCompareOp Less = "<"
+ppCompareOp Greater = ">"
 
 ppTerm :: Term -> String
 ppTerm (Term f fs)
     | null fs = printf "%s" (ppFactor f)
-    | otherwise = printf "%s%s" (ppFactor f) (concatMap (\(o, f) -> " " ++ ppFactorOp o ++ " " ++ ppFactor f) fs)
+    | otherwise = printf "%s%s" (ppFactor f) (concatMap (\(o, f) -> " " ++ ppTermOp o ++ " " ++ ppFactor f) fs)
 
 ppFactor :: Factor -> String 
-ppFactor (FactorInt i) = show i 
-ppFactor (FactorExp e) = printf "(%s)" (ppExp e)
+ppFactor (Factor b bs)
+    | null bs = printf "%s" (ppBottomExp b)
+    | otherwise = printf "%s%s" (ppBottomExp b) (concatMap (\(o, f) -> " " ++ ppFactorOp o ++ " " ++ ppBottomExp f) bs)
+
+ppBottomExp :: BottomExp -> String
+ppBottomExp (ExpRec e) = printf "(%s)" (ppExp e)
+ppBottomExp (ExpTuple (e1, e2)) = printf "(%s, %s)" (ppExp e1) (ppExp e2)
+ppBottomExp (ExpField s f) = s ++ concatMap ppField f
+ppBottomExp (ExpInt i) = show i
+ppBottomExp (ExpChar c) = printf "'%s'" [c]
+ppBottomExp (ExpBool b)
+    | b = "True"
+    | otherwise = "False"
+ppBottomExp (ExpFunCall f) = ppFunCall f
+ppBottomExp ExpEmptyList = "[]"
 
 ppFactorOp :: FactorOp -> String
 ppFactorOp Times = "*"
@@ -104,22 +137,6 @@ ppFactorOp Divides = "/"
 ppTermOp :: TermOp -> String
 ppTermOp Add = "+"
 ppTermOp Subtract = "-"
-
-ppOp2 :: Op2 -> String 
-ppOp2 Plus = "+"
-ppOp2 Minus = "-"
-ppOp2 Product = "*"
-ppOp2 Division = "/"
-ppOp2 Modulo = "%"
-ppOp2 Eq = "=="
-ppOp2 Smaller = "<"
-ppOp2 Greater = ">"
-ppOp2 Leq = "<="
-ppOp2 Geq = ">="
-ppOp2 Neq = "!="
-ppOp2 And = "&&"
-ppOp2 Or = "||"
-ppOp2 Cons = ":"
 
 ppOp1 :: Op1 -> String 
 ppOp1 Not = "!"

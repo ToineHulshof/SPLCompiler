@@ -66,11 +66,32 @@ data Stmt
   deriving (Show)
 
 data Exp
-  = Exp Term [(TermOp, Term)]
+  = ExpOp1 Op1 Exp
+  | ExpOr OrExp
+  | ExpOrRec OrExp Exp
+  deriving (Show)
+
+data OrExp
+  = ExpAnd AndExp
+  | ExpAndRec AndExp OrExp
+  deriving (Show)
+
+data AndExp
+  = ExpCompare CompareExp
+  | ExpCompareRec CompareExp CompareOp AndExp
+  deriving (Show)
+
+data CompareExp
+  = ExpCons Term
+  | ExpConsRec Term CompareExp
   deriving (Show)
 
 data Term
-  = Term Factor [(FactorOp, Factor)]
+  = Term Factor [(TermOp, Factor)]
+  deriving (Show)
+
+data Factor
+  = Factor BottomExp [(FactorOp, BottomExp)]
   deriving (Show)
 
 data FactorOp
@@ -78,14 +99,34 @@ data FactorOp
   | Divides
   deriving (Show)
 
-data Factor
-  = FactorInt Int
-  | FactorExp Exp
+data BottomExp
+  = ExpRec Exp
+  | ExpTuple (Exp, Exp)
+  | ExpField String [Field]
+  | ExpInt Int
+  | ExpChar Char
+  | ExpBool Bool
+  | ExpFunCall FunCall
+  | ExpEmptyList
   deriving (Show)
 
 data TermOp
   = Add
   | Subtract
+  deriving (Show)
+
+data CompareOp
+  = NotEquals
+  | Less
+  | LessEquals
+  | Equals
+  | Greater
+  | GreaterEquals
+  deriving (Show)
+
+data Op1
+  = Not
+  | Min
   deriving (Show)
 
 data Field
@@ -98,28 +139,3 @@ data Field
 data FunCall
   = FunCall String [Exp]
   deriving (Show)
-
-data Op2
-  = Plus
-  | Minus
-  | Product
-  | Division
-  | Modulo
-  | Eq
-  | Smaller
-  | Greater
-  | Leq
-  | Geq
-  | Neq
-  | And
-  | Or
-  | Cons
-  deriving (Show)
-
-data Op1
-  = Not
-  | Min
-  deriving (Show)
-
-code :: String -> Code
-code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] d]

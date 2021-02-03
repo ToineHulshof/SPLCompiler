@@ -23,13 +23,13 @@ c :: Char -> Parser Char
 c x = w (charP x)
 
 charP :: Char -> Parser Char
-charP x = charP' (==x)
+charP x = satisfy (==x)
 
 stringP :: String -> Parser String
 stringP = traverse charP
 
-charP' :: (Char -> Bool) -> Parser Char
-charP' p = Parser $ \case
+satisfy :: (Char -> Bool) -> Parser Char
+satisfy p = Parser $ \case
   (y, l, c) : xs
     | p y -> Right (xs, y)
     | otherwise -> Left ([y], l, c)
@@ -85,7 +85,7 @@ retTypeTypeP :: Parser RetType
 retTypeTypeP = RetTypeType <$> typeP
 
 idP :: Parser String
-idP = (:) <$> charP' isAlpha <*> spanP (\c -> isAlphaNum c || c == '_')
+idP = (:) <$> satisfy isAlpha <*> spanP (\c -> isAlphaNum c || c == '_')
 
 intP :: Parser Int
 intP = read <$> digitP <|> (*(-1)) . read <$> (charP '-' *> digitP)
@@ -93,24 +93,24 @@ intP = read <$> digitP <|> (*(-1)) . read <$> (charP '-' *> digitP)
 digitP :: Parser String
 digitP = notNull $ spanP isDigit
 
-op1P :: Parser Op1
-op1P = Not <$ charP '!' <|> Min <$ charP '-'
+-- op1P :: Parser Op1
+-- op1P = Not <$ charP '!' <|> Min <$ charP '-'
 
-op2P :: Parser Op2
-op2P =  Plus <$ charP '+'
-    <|> Minus <$ charP '-'
-    <|> Product <$ charP '*'
-    <|> Division <$ charP '/'
-    <|> Modulo <$ charP '%'
-    <|> Eq <$ stringP "=="
-    <|> Leq <$ stringP "<="
-    <|> Geq <$ stringP ">="
-    <|> Smaller <$ charP '<'
-    <|> Greater <$ charP '>'
-    <|> Neq <$ stringP "!="
-    <|> And <$ stringP "&&"
-    <|> Or <$ stringP "||"
-    <|> Cons <$ charP ':'
+-- op2P :: Parser Op2
+-- op2P =  Plus <$ charP '+'
+--     <|> Minus <$ charP '-'
+--     <|> Product <$ charP '*'
+--     <|> Division <$ charP '/'
+--     <|> Modulo <$ charP '%'
+--     <|> Eq <$ stringP "=="
+--     <|> Leq <$ stringP "<="
+--     <|> Geq <$ stringP ">="
+--     <|> Smaller <$ charP '<'
+--     <|> Greater <$ charP '>'
+--     <|> Neq <$ stringP "!="
+--     <|> And <$ stringP "&&"
+--     <|> Or <$ stringP "||"
+--     <|> Cons <$ charP ':'
 
 funCallP :: Parser FunCall
 funCallP = FunCall <$> idP <*> (c '(' *> sepBy (charP ',') expP <* c ')')
@@ -122,7 +122,27 @@ fieldP :: Parser [Field]
 fieldP = many (c '.' *> fieldFunP)
 
 expP :: Parser Exp 
-expP = Exp <$> termP <*> many ((,) <$> termOpP <*> termP)
+expP = ExpOp1 <$> w op1P <*> expP <|> ExpOrRec <$> orExpP <* w (stringP "||") <*> expP <|> ExpOr <$> orExpP
+
+op1P :: Parser Op1
+op1P = Not <$ charP '!' <|> Min <$ charP '-'
+
+orExpP :: Parser OrExp
+orExpP = ExpAndRec <$> andExpP <* w (stringP "&&") <*> orExpP <|> ExpAnd <$> andExpP
+
+andExpP :: Parser AndExp 
+andExpP =  ExpCompareRec <$> compareExpP <*> compareOpP <*> andExpP <|> ExpCompare <$> compareExpP
+
+compareOpP :: Parser CompareOp 
+compareOpP =  Equals <$ stringP "=="
+          <|> LessEquals <$ stringP "<="
+          <|> GreaterEquals  <$ stringP ">="
+          <|> Less <$ charP '<'
+          <|> Greater <$ charP '>'
+          <|> NotEquals <$ stringP "!="
+
+compareExpP :: Parser CompareExp 
+compareExpP = ExpConsRec <$> termP <* c ':' <*> compareExpP <|> ExpCons <$> termP
 
 termOpP :: Parser TermOp
 termOpP = Add <$ charP '+' <|> Subtract <$ charP '-'
@@ -131,10 +151,25 @@ factorOpP :: Parser FactorOp
 factorOpP = Times <$ charP '*' <|> Divides <$ charP '/'
 
 termP :: Parser Term 
-termP = Term <$> factorP <*> many ((,) <$> factorOpP <*> factorP)
+termP = Term <$> factorP <*> many ((,) <$> w termOpP <*> factorP)
 
 factorP :: Parser Factor
-factorP = FactorInt <$> intP <|> FactorExp <$> (c '(' *> expP <* c ')')
+factorP = Factor <$> bottomExpP <*> many ((,) <$> w factorOpP <*> bottomExpP)
+
+bottomExpP :: Parser BottomExp
+bottomExpP = expRecP <|> expTupleP <|> ExpFunCall <$> funCallP <|> ExpEmptyList <$ stringP "[]" <|> ExpInt <$> intP <|> expCharP <|> expBoolP <|> ExpField <$> idP <*> fieldP
+
+expBoolP :: Parser BottomExp
+expBoolP = ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
+
+expCharP :: Parser BottomExp
+expCharP = ExpChar <$> (charP '\'' *> satisfy isAlpha <* charP '\'')
+
+expTupleP :: Parser BottomExp
+expTupleP = curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
+
+expRecP :: Parser BottomExp
+expRecP = ExpRec <$> (c '(' *> expP <* c ')')
 
 stmtIfP :: Parser Stmt
 stmtIfP = (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (w (stringP "else") *> stmtsP) <|> (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP
@@ -212,6 +247,9 @@ parseFile = parseFileP splP result
 
 testP :: Parser a -> String -> Either Error (Code, a)
 testP p = parse p . code
+
+code :: String -> Code
+code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] d]
 
 main :: IO ()
 main = getLine >>= parseFile

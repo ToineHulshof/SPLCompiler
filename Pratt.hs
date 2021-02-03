@@ -1,6 +1,6 @@
 module Pratt where
 
-import Grammar ( Exp, Parser(Parser), Error, Code, code )
+import Grammar ( Exp, Parser(Parser), Error, Code )
 import Data.Maybe ( isJust )
 import Parser
 import Data.Char ( isAlpha, isAlphaNum, isDigit, isSpace )
