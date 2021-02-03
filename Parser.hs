@@ -93,25 +93,6 @@ intP = read <$> digitP <|> (*(-1)) . read <$> (charP '-' *> digitP)
 digitP :: Parser String
 digitP = notNull $ spanP isDigit
 
--- op1P :: Parser Op1
--- op1P = Not <$ charP '!' <|> Min <$ charP '-'
-
--- op2P :: Parser Op2
--- op2P =  Plus <$ charP '+'
---     <|> Minus <$ charP '-'
---     <|> Product <$ charP '*'
---     <|> Division <$ charP '/'
---     <|> Modulo <$ charP '%'
---     <|> Eq <$ stringP "=="
---     <|> Leq <$ stringP "<="
---     <|> Geq <$ stringP ">="
---     <|> Smaller <$ charP '<'
---     <|> Greater <$ charP '>'
---     <|> Neq <$ stringP "!="
---     <|> And <$ stringP "&&"
---     <|> Or <$ stringP "||"
---     <|> Cons <$ charP ':'
-
 funCallP :: Parser FunCall
 funCallP = FunCall <$> idP <*> (c '(' *> sepBy (charP ',') expP <* c ')')
 

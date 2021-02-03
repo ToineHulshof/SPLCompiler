@@ -1,4 +1,4 @@
-module Print where
+module Printer where
 
 import Grammar
 import Parser ( expP, parseFileP, splP, code )
