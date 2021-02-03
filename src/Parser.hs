@@ -193,7 +193,7 @@ typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID <$> id
 
 result :: Show a => Either Error (Code, a) -> String
 result (Right (c, a))
-  | null c = "Parsed succesfully" ++ show a
+  | null c = "Parsed succesfully" -- ++ show a
   | otherwise = "Error: did not complete parsing"
 result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
 
