@@ -1,3 +1,5 @@
+-- A small script to automatically test all test files
+
 module Test where
 
 import Parser ( parseFile )
