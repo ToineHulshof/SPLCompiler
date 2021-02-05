@@ -1,3 +1,5 @@
+-- Our implemented Parser with the help of the other files
+
 {-# LANGUAGE LambdaCase #-}
 
 module Parser where
@@ -6,28 +8,41 @@ import Grammar
 import Control.Applicative (Alternative ((<|>), many, some))
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 
+-- Several definitions of helper functions which are used in the "real" parsers
+
+-- Returns the first element of a 3-tuple
 fst3 :: (a, b, c) -> a
 fst3 (a, _, _) = a
 
+-- Picks the a from the Either Error Code datatype if possible
 eitherToMaybe :: Either Error (Code, a) -> Maybe a
 eitherToMaybe (Left _) = Nothing
 eitherToMaybe (Right (_, a)) = Just a
 
+-- Parses all consecutive whitespace
 ws :: Parser String
 ws = spanP isSpace
 
+-- Ignores all surrounded whitespaces for the given parser
 w :: Parser a -> Parser a
 w p = ws *> p <* ws
 
+-- Parses the given Char while ignoring whitespaces
 c :: Char -> Parser Char
 c x = w (charP x)
 
+-- Creates a Parser that parses the next Char that is equal to the Char in the Parser
 charP :: Char -> Parser Char
 charP x = satisfy (==x)
 
+-- Creates a Parser that parses the next sequence of Chars that is equal to the String in the Parser
 stringP :: String -> Parser String
 stringP = traverse charP
 
+-- Creates a Parser takes parses a Char with a specific requirement
+-- If the Char is fulfilling the requirement, return a (Code, Char)
+-- If the Char doesnt fulfill the requirement, return an Error with the Char and its position
+-- If none of the above is the case, return an Error with "Unexpected EOF"
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = Parser $ \case
   (y, l, c) : xs
@@ -35,21 +50,26 @@ satisfy p = Parser $ \case
     | otherwise -> Left ([y], l, c)
   [] -> Left ("Unexpected EOF", 0, 0)
 
+-- Creates a Parser that parses all the consecutive Chars that satisfy the given requirement
 spanP :: (Char -> Bool) -> Parser String
 spanP p = Parser $ \code -> let (token, rest) = span (p . fst3) code in Right (rest, map fst3 token)
 
+-- Extends the given Parser with the functionality to return an Error when null is parsed
 notNull :: Parser [a] -> Parser [a]
 notNull (Parser p) = Parser $ \code -> do
   (code', xs) <- p code
   if null xs then Left ("Error", 0, 0) else Right (code', xs)
 
--- Parses at least 1 element
+-- Parses at least 1 element of Parser b seperated by Parser a
 sepBy1 :: Parser a -> Parser b -> Parser [b]
 sepBy1 sep e = (:) <$> e <*> many (sep *> e)
 
--- Parses 0 or more elements
+-- Parses 0 or more elements of Parser b seperated by Parser a
 sepBy :: Parser a -> Parser b -> Parser [b]
 sepBy sep e = sepBy1 (ws *> sep <* ws) e <|> pure []
+
+-- The definitions that correspond with the implemented Grammar
+-- These are self-explanatory, but the general idea is elaborated in the report
 
 splP :: Parser SPL
 splP = SPL <$> some (w declP)
@@ -191,46 +211,58 @@ typeArrayP = TypeArray <$> (c '[' *> typeP <* c ']')
 typeP :: Parser Type
 typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID <$> idP
 
+-- Several functions to easily apply the parser to certain programs
+
+-- Maps the result of the parsed program to a string which describes the result
 result :: Show a => Either Error (Code, a) -> String
 result (Right (c, a))
   | null c = "Parsed succesfully" -- ++ show a
   | otherwise = "Error: did not complete parsing"
 result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
 
+-- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
+-- The boolean argument is true when the parser is currently in a line comment and false otherwise
+-- The integer argument represents the current "level" of recursive block comments, e.g. 0 when you are not in a /* */ comment, 1 if you are and 2 if you are in a comment inside a comment
 comments :: Bool -> Int -> Code -> Either Error Code 
 comments _ d []
-    | d == 0 = Right []
-    | otherwise = Left ("Did not close all comments", 0, 0)
+    | d == 0 = Right [] -- Parser is done and the parser is not currently in a block comment 
+    | otherwise = Left ("Did not close all comments", 0, 0) -- Parser is done, but is currently in a block comment
 comments s d [(x, l, c)]
-    | d /= 0 = Left ("Did not close all comments", l, c)
-    | s = Right []
-    | otherwise = Right [(x, l, c)]
+    | d /= 0 = Left ("Did not close all comments", l, c) -- Parser only has one character left, but it is still in a block comment, so this can't be closed
+    | s = Right [] -- Parser only has one character left and is currently in a line comment
+    | otherwise = Right [(x, l, c)] -- Parser has only one character left and isn't in a comment
 comments s d ((x1, l1, c1) : (x2, l2, c2) : xs)
-    | t == "//" = comments True d xs
-    | t == "/*" = comments s (d + 1) xs
-    | t == "*/" && (d /= 0) = comments s (d - 1) xs
-    | t == "*/" && (d == 0) = Left ("Trying to close comment that doesn't exist", l2, c2)
-    | l2 > l1 && s = comments False d ((x2, l2, c2) : xs)
-    | s || (d > 0) = comments s d ((x2, l2, c2) : xs)
-    | otherwise = (:) (x1, l1, c1) <$> comments s d ((x2, l2, c2) : xs)
+    | t == "//" = comments True d xs -- Parser recognizes it is in a line comment
+    | t == "/*" = comments s (d + 1) xs -- Parser starts a new recursive block comment
+    | t == "*/" && (d /= 0) = comments s (d - 1) xs -- Parser closes a valid recursive block comment 
+    | t == "*/" && (d == 0) = Left ("Trying to close comment that doesn't exist", l2, c2) -- Parser closes an invalid recursive block comment
+    | l2 > l1 && s = comments False d ((x2, l2, c2) : xs) -- The end of line is reached, so the line comment is reset if it was active
+    | s || (d > 0) = comments s d ((x2, l2, c2) : xs) -- Parser is currently in a comment and ignores the next character
+    | otherwise = (:) (x1, l1, c1) <$> comments s d ((x2, l2, c2) : xs) -- Parser isn't in a comment currently and adds the current character to the returned Code
     where t = [x1, x2]
 
+-- Splits a string (mainly a program) into separate lines and numbers these lines
 codeLines :: String -> [(Int, String)]
 codeLines = zip [1..] . lines
 
+-- A parser for parsing a file
 parseFileP :: Show a => Parser a -> (Either Error (Code, a) -> String) -> FilePath -> IO ()
 parseFileP p r f = readFile f >>= putStrLn . help where
   help :: String -> String
   help s = (++ " " ++ f) $ r $ comments False 0 (code s) >>= parse p
 
+-- A function that parses the program in the given FilePath
 parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP result
 
+-- A function that parses the given string with the given parser
 testP :: Parser a -> String -> Either Error (Code, a)
 testP p = parse p . code
 
+-- A function that transforms a string to a list of tuples with (character, line, column)
 code :: String -> Code
 code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] d]
 
+-- Parses the file provided in the IO
 main :: IO ()
 main = getLine >>= parseFile

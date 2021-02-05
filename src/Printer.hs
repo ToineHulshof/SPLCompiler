@@ -1,3 +1,5 @@
+-- The implemented pretty printer for printing the output of the parser
+
 module Printer where
 
 import Grammar
@@ -6,25 +8,27 @@ import Text.Printf ( printf )
 
 type Depth = Int
 
+-- A function that either prints the Error or pretty prints the parsed code
 result' :: Either Error (Code, SPL) -> String
 result' (Left (e, l, c)) = "Error " ++ e ++ " line " ++ show l ++ " column " ++ show c
 result' (Right (_, a)) = ppSPL a
 
+-- Pretty prints the program in the provided filepath
 pp :: FilePath -> IO ()
 pp = parseFileP splP result'
 
-test :: String -> String
-test s = case parse expP $ code s of
-    Left (e, l, c) -> e
-    Right (_, e) -> ppExp e
-
+-- Pretty prints n tabs
 tab :: Int -> String
 tab n = replicate n '\t'
 
+-- Joints the first string to each element of the list of strings (excluding the last element)
 join :: String -> [String] -> String
 join _ [] = []
 join _ [x] = x
 join s (x:xs) = x ++ s ++ join s xs
+
+-- All the pretty print functions for the implemented grammer
+-- These are all pretty self-explanatory
 
 ppSPL :: SPL -> String
 ppSPL (SPL a) = join "\n\n" $ map (ppDecl 0) a
