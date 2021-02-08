@@ -21,7 +21,7 @@ pp = parseFileP splP result'
 tab :: Int -> String
 tab n = replicate n '\t'
 
--- Joints the first string to each element of the list of strings (excluding the last element)
+-- Joins a list of strings with a given seperator
 join :: String -> [String] -> String
 join _ [] = []
 join _ [x] = x
