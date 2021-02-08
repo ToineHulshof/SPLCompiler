@@ -4,19 +4,19 @@ module Grammar where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 
--- Code is the list of chars in a program including its position, where the integers are the row and column respectively
+-- Code is the list of chars in a program including its position, where the integers are the line and column respectively
 type Code = [(Char, Int, Int)]
--- Error is a datatype to store an error message as a String with its position, where the integers are the row and column respectively
+-- Error is a datatype to store an error message as a String with its position, where the integers are the line and column respectively
 type Error = (String, Int, Int)
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
 newtype Parser a = Parser { parse :: Code -> Either Error (Code, a) }
 
--- Prove that our Parser is a Functor
+-- Proof that our Parser is a Functor
 instance Functor Parser where
   fmap f (Parser p) = Parser $ fmap (f <$>) . p
 
--- Prove that our Parser is an Applicative
+-- Proof that our Parser is an Applicative
 instance Applicative Parser where
   pure x = Parser $ \code -> Right (code, x)
   (Parser p1) <*> (Parser p2) = Parser $ \code -> do
@@ -24,7 +24,7 @@ instance Applicative Parser where
     (code'', a) <- p2 code'
     Right (code'', f a)
 
--- Prove that our Parser is an Alternative
+-- Proof that our Parser is an Alternative
 instance Alternative Parser where
   empty = Parser . const $ Left ("Failed", 0, 0)
   (Parser p1) <|> (Parser p2) = Parser $ \code -> p1 code <> p2 code
