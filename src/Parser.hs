@@ -14,11 +14,6 @@ import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 fst3 :: (a, b, c) -> a
 fst3 (a, _, _) = a
 
--- Picks the a from the Either Error Code datatype if possible
-eitherToMaybe :: Either Error (Code, a) -> Maybe a
-eitherToMaybe (Left _) = Nothing
-eitherToMaybe (Right (_, a)) = Just a
-
 -- Parses all consecutive whitespace
 ws :: Parser String
 ws = spanP isSpace
@@ -39,7 +34,7 @@ charP x = satisfy (==x)
 stringP :: String -> Parser String
 stringP = traverse charP
 
--- Creates a Parser takes parses a Char with a specific requirement
+-- Creates a Parser that parses a Char with a specific requirement
 -- If the Char is fulfilling the requirement, return a (Code, Char)
 -- If the Char doesnt fulfill the requirement, return an Error with the Char and its position
 -- If none of the above is the case, return an Error with "Unexpected EOF"
@@ -54,7 +49,7 @@ satisfy p = Parser $ \case
 spanP :: (Char -> Bool) -> Parser String
 spanP p = Parser $ \code -> let (token, rest) = span (p . fst3) code in Right (rest, map fst3 token)
 
--- Extends the given Parser with the functionality to return an Error when null is parsed
+-- Extends the given Parser with the functionality to return an Error when zero characters are parsed
 notNull :: Parser [a] -> Parser [a]
 notNull (Parser p) = Parser $ \code -> do
   (code', xs) <- p code
@@ -241,11 +236,7 @@ comments s d ((x1, l1, c1) : (x2, l2, c2) : xs)
     | otherwise = (:) (x1, l1, c1) <$> comments s d ((x2, l2, c2) : xs) -- Parser isn't in a comment currently and adds the current character to the returned Code
     where t = [x1, x2]
 
--- Splits a string (mainly a program) into separate lines and numbers these lines
-codeLines :: String -> [(Int, String)]
-codeLines = zip [1..] . lines
-
--- A parser for parsing a file
+-- A function that parses a file for a given parser
 parseFileP :: Show a => Parser a -> (Either Error (Code, a) -> String) -> FilePath -> IO ()
 parseFileP p r f = readFile f >>= putStrLn . help where
   help :: String -> String
@@ -255,7 +246,7 @@ parseFileP p r f = readFile f >>= putStrLn . help where
 parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP result
 
--- A function that parses the given string with the given parser
+-- A helper function to test if a parser behaves correctly on a given input.
 testP :: Parser a -> String -> Either Error (Code, a)
 testP p = parse p . code
 
