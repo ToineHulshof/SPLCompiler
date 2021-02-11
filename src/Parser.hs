@@ -102,7 +102,7 @@ retTypeTypeP = RetTypeType <$> typeP
 idP :: Parser String
 idP = (:) <$> satisfy isAlpha <*> spanP (\c -> isAlphaNum c || c == '_')
 
-intP :: Parser Int
+intP :: Parser Integer
 intP = read <$> digitP <|> (*(-1)) . read <$> (charP '-' *> digitP)
 
 digitP :: Parser String

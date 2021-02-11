@@ -119,7 +119,7 @@ data BottomExp
   = ExpRec Exp
   | ExpTuple (Exp, Exp)
   | ExpField String [Field]
-  | ExpInt Int
+  | ExpInt Integer
   | ExpChar Char
   | ExpBool Bool
   | ExpFunCall FunCall
