@@ -123,7 +123,8 @@ ppFactor (Factor b bs)
     | otherwise = printf "%s%s" (ppBottomExp b) (concatMap (\(o, f) -> " " ++ ppFactorOp o ++ " " ++ ppBottomExp f) bs)
 
 ppBottomExp :: BottomExp -> String
-ppBottomExp (ExpRec e) = printf "(%s)" (ppExp e)
+ppBottomExp (ExpRecBrackets e) = printf "(%s)" (ppExp e)
+ppBottomExp (ExpRec e) = ppExp e
 ppBottomExp (ExpTuple (e1, e2)) = printf "(%s, %s)" (ppExp e1) (ppExp e2)
 ppBottomExp (ExpField s f) = s ++ concatMap ppField f
 ppBottomExp (ExpInt i) = show i

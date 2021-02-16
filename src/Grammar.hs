@@ -116,7 +116,8 @@ data FactorOp
   deriving (Show)
 
 data BottomExp
-  = ExpRec Exp
+  = ExpRecBrackets Exp
+  | ExpRec Exp
   | ExpTuple (Exp, Exp)
   | ExpField String [Field]
   | ExpInt Integer

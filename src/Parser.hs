@@ -127,7 +127,7 @@ orExpP :: Parser OrExp
 orExpP = ExpAndRec <$> andExpP <* w (stringP "&&") <*> orExpP <|> ExpAnd <$> andExpP
 
 andExpP :: Parser AndExp 
-andExpP =  ExpCompareRec <$> compareExpP <*> compareOpP <*> andExpP <|> ExpCompare <$> compareExpP
+andExpP =  ExpCompareRec <$> compareExpP <*> w compareOpP <*> andExpP <|> ExpCompare <$> compareExpP
 
 compareOpP :: Parser CompareOp 
 compareOpP =  Equals <$ stringP "=="
@@ -153,7 +153,7 @@ factorP :: Parser Factor
 factorP = Factor <$> bottomExpP <*> many ((,) <$> w factorOpP <*> bottomExpP)
 
 bottomExpP :: Parser BottomExp
-bottomExpP = expRecP <|> expTupleP <|> ExpFunCall <$> funCallP <|> ExpEmptyList <$ stringP "[]" <|> ExpInt <$> intP <|> expCharP <|> expBoolP <|> ExpField <$> idP <*> fieldP
+bottomExpP = expRecP <|> expTupleP <|> ExpFunCall <$> funCallP <|> ExpEmptyList <$ stringP "[]" <|> ExpInt <$> intP <|> expCharP <|> expBoolP <|> ExpField <$> idP <*> fieldP <|> ExpRec <$> w expP
 
 expBoolP :: Parser BottomExp
 expBoolP = ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
@@ -165,7 +165,7 @@ expTupleP :: Parser BottomExp
 expTupleP = curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
 
 expRecP :: Parser BottomExp
-expRecP = ExpRec <$> (c '(' *> expP <* c ')')
+expRecP = ExpRecBrackets <$> (c '(' *> expP <* c ')')
 
 stmtIfP :: Parser Stmt
 stmtIfP = (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (w (stringP "else") *> stmtsP) <|> (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP
@@ -212,7 +212,7 @@ typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID <$> id
 result :: Show a => Either Error (Code, a) -> String
 result (Right (c, a))
   | null c = "Parsed succesfully" -- ++ show a
-  | otherwise = "Error: did not complete parsing"
+  | otherwise = "Error: did not complete parsing: " ++ map fst3 c
 result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
 
 -- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
