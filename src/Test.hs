@@ -1,6 +1,6 @@
 -- A small script to automatically test all test files
 
-module Test where
+module Main where
 
 import Parser ( parseFile, testP, splP, expP )
 import Control.Monad ( forM )
@@ -10,3 +10,6 @@ testFiles = ["2D.spl", "3D.spl", "Example.spl", "SumProduct.spl", "a_bit_of_ever
 
 testAllFiles :: IO [()]
 testAllFiles = forM (map ("../tests/"++) testFiles) parseFile
+
+main :: IO [()]
+main = testAllFiles
