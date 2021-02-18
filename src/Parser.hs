@@ -119,7 +119,7 @@ fieldP :: Parser [Field]
 fieldP = many (c '.' *> fieldFunP)
 
 op1P :: Parser Op1
-op1P = Not <$ charP '!' <|> Min <$ charP '-'
+op1P = Not <$ c '!' <|> Min <$ c '-'
 
 op2P :: Parser Op2
 op2P =  Plus <$ charP '+'
@@ -183,7 +183,7 @@ expBoolP :: Parser Exp
 expBoolP = ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
 
 expCharP :: Parser Exp
-expCharP = ExpChar <$> (charP '\'' *> satisfy isAlpha <* charP '\'')
+expCharP = ExpChar <$> (charP '\'' *> satisfy (const True) <* charP '\'')
 
 expTupleP :: Parser Exp
 expTupleP = curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
