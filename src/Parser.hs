@@ -7,6 +7,7 @@ module Parser where
 import Grammar
 import Control.Applicative (Alternative ((<|>), many, some))
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
+import Data.Maybe (isNothing)
 
 -- Several definitions of helper functions which are used in the "real" parsers
 
@@ -117,55 +118,80 @@ fieldFunP = Head <$ stringP "hd" <|> Tail <$ stringP "tl" <|> First <$ stringP "
 fieldP :: Parser [Field]
 fieldP = many (c '.' *> fieldFunP)
 
-expP :: Parser Exp 
-expP = ExpOp1 <$> w op1P <*> expP <|> ExpOrRec <$> orExpP <* w (stringP "||") <*> expP <|> ExpOr <$> orExpP
-
 op1P :: Parser Op1
 op1P = Not <$ charP '!' <|> Min <$ charP '-'
 
-orExpP :: Parser OrExp
-orExpP = ExpAndRec <$> andExpP <* w (stringP "&&") <*> orExpP <|> ExpAnd <$> andExpP
+op2P :: Parser Op2
+op2P =  Plus <$ charP '+'
+    <|> Minus <$ charP '-'
+    <|> Product <$ charP '*'
+    <|> Division <$ charP '/'
+    <|> Modulo <$ charP '%'
+    <|> Eq <$ stringP "=="
+    <|> Leq <$ stringP "<="
+    <|> Geq <$ stringP ">="
+    <|> Smaller <$ charP '<'
+    <|> Greater <$ charP '>'
+    <|> Neq <$ stringP "!="
+    <|> And <$ stringP "&&"
+    <|> Or <$ stringP "||"
+    <|> Cons <$ charP ':'
 
-andExpP :: Parser AndExp 
-andExpP =  ExpCompareRec <$> compareExpP <*> w compareOpP <*> andExpP <|> ExpCompare <$> compareExpP
+expP :: Parser Exp
+expP = expNOp2P <|> w expOp2P
 
-compareOpP :: Parser CompareOp 
-compareOpP =  Equals <$ stringP "=="
-          <|> LessEquals <$ stringP "<="
-          <|> GreaterEquals  <$ stringP ">="
-          <|> Less <$ charP '<'
-          <|> Greater <$ charP '>'
-          <|> NotEquals <$ stringP "!="
+expNOp2P :: Parser Exp 
+expNOp2P = ExpEmptyList <$ w (stringP "[]") <|> expBoolP <|> expCharP <|> ExpInt <$> intP <|> ExpField <$> idP <*> fieldP <|> ExpFunCall <$> funCallP <|> expBracketsP <|> expTupleP <|> ExpOp1 <$> w op1P <*> expP
 
-compareExpP :: Parser CompareExp 
-compareExpP = ExpConsRec <$> termP <* c ':' <*> compareExpP <|> ExpCons <$> termP
+expOp2P :: Parser Exp 
+expOp2P = Parser $ expBP 0
 
-termOpP :: Parser TermOp
-termOpP = Add <$ charP '+' <|> Subtract <$ charP '-'
+expBP :: Int -> Code -> Either Error (Code, Exp)
+expBP minBP c = do
+  (c', lhs) <- parse expNOp2P c
+  (c'', lhs') <- lhsP 0 minBP lhs c'
+  return (c'', lhs')
 
-factorOpP :: Parser FactorOp 
-factorOpP = Times <$ charP '*' <|> Divides <$ charP '/'
+lhsP :: Int -> Int -> Exp -> Code -> Either Error (Code, Exp)
+lhsP l m e c = do
+  (c', o') <- help $ parse (w op2P) c
+  case o' of
+    Nothing -> Right (c, e)
+    Just o -> do
+      let (lBP, rBP) = bp o
+      if lBP < m then
+        Right (c, e)
+      else do
+        (c'', rhs) <- expBP rBP c'
+        (c''', lhs) <- lhsP lBP m (Exp o e rhs) c''
+        return (c''', lhs)
+  where
+    help :: Either Error (Code, Op2) -> Either Error (Code, Maybe Op2)
+    help (Left (e, l, c))
+      | e == "Unexpected EOF" = Right ([], Nothing)
+      | otherwise = Left (e, l, c)
+    help (Right (c, o)) = Right (c, Just o)
 
-termP :: Parser Term 
-termP = Term <$> factorP <*> many ((,) <$> w termOpP <*> factorP)
+bp :: Op2 -> (Int, Int)
+bp o
+  | o `elem` [Plus, Minus] = (9, 10)
+  | o `elem` [Product, Division, Modulo] = (11, 12)
+  | o `elem` [Neq, Smaller, Leq, Greater, Eq, Greater, Geq] = (5, 6)
+  | o == And = (4, 3)
+  | o == Or = (2, 1)
+  | o == Cons = (8, 7)
 
-factorP :: Parser Factor
-factorP = Factor <$> bottomExpP <*> many ((,) <$> w factorOpP <*> bottomExpP)
-
-bottomExpP :: Parser BottomExp
-bottomExpP = expRecP <|> expTupleP <|> ExpFunCall <$> funCallP <|> ExpEmptyList <$ stringP "[]" <|> ExpInt <$> intP <|> expCharP <|> expBoolP <|> ExpField <$> idP <*> fieldP <|> ExpRec <$> w expP
-
-expBoolP :: Parser BottomExp
+expBoolP :: Parser Exp
 expBoolP = ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
 
-expCharP :: Parser BottomExp
+expCharP :: Parser Exp
 expCharP = ExpChar <$> (charP '\'' *> satisfy isAlpha <* charP '\'')
 
-expTupleP :: Parser BottomExp
+expTupleP :: Parser Exp
 expTupleP = curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
 
-expRecP :: Parser BottomExp
-expRecP = ExpRecBrackets <$> (c '(' *> expP <* c ')')
+expBracketsP :: Parser Exp
+expBracketsP = ExpBrackets <$> (c '(' *> expP <* c ')')
 
 stmtIfP :: Parser Stmt
 stmtIfP = (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (w (stringP "else") *> stmtsP) <|> (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP
@@ -257,3 +283,34 @@ code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] d]
 -- Parses the file provided in the IO
 main :: IO ()
 main = getLine >>= parseFile
+
+-- bp :: String -> Either Error (Int, Associativity)
+-- bp s | s `elem` ["+", "-"] = Right (6, LeftA)
+--      | s `elem` ["*", "/", "%"] = Right (7, LeftA)
+--      | s `elem` ["!=", "<", "<=", "==", ">", ">="] = Right (4, NonA)
+--      | s == "&&" = Right (3, RightA)
+--      | s == "||" = Right (2, RightA)
+--      | s == ":" = Right (5, RightA)
+--      | otherwise = Left ("Unknown token", 0, 0)
+
+-- bp' :: Code -> Either Error (Int, Int)
+-- bp' code | s `elem` ["+", "-"] = Right (9, 10)
+--      | s `elem` ["*", "/", "%"] = Right (11, 12)
+--      | s `elem` ["!=", "<", "<=", "==", ">", ">="] = Right (5, 6)
+--      | s == "&&" = Right (3, 4)
+--      | s == "||" = Right (1, 2)
+--      | s == ":" = Right (7, 8)
+--      | otherwise = Left ("Unknown token", l, c)
+--      where s = map fst3 code
+--            (_, l, c) = head code
+
+-- bp'' :: Code -> Either Error (Int, Int, Code)
+-- bp'' code | s ["+", "-"] = Right (9, 10)
+--      | s ["*", "/", "%"] = Right (11, 12)
+--      | s ["!=", "<", "<=", "==", ">", ">="] = Right (5, 6)
+--      | s ["&&"] = Right (3, 4)
+--      | s ["||"] = Right (1, 2)
+--      | s [":"] = Right (7, 8)
+--      | otherwise = Left ("Unknown token", l, c)
+--      where s = any (flip isPrefixOf $ map fst3 code)
+--            (_, l, c) = head code

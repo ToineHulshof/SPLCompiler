@@ -82,43 +82,10 @@ data Stmt
 -- Here we used the provided hints to ensure precendence
 -- More details can be found in the report
 data Exp
-  = ExpOp1 Op1 Exp
-  | ExpOr OrExp
-  | ExpOrRec OrExp Exp
-  deriving (Show)
-
-data OrExp
-  = ExpAnd AndExp
-  | ExpAndRec AndExp OrExp
-  deriving (Show)
-
-data AndExp
-  = ExpCompare CompareExp
-  | ExpCompareRec CompareExp CompareOp AndExp
-  deriving (Show)
-
-data CompareExp
-  = ExpCons Term
-  | ExpConsRec Term CompareExp
-  deriving (Show)
-
-data Term
-  = Term Factor [(TermOp, Factor)]
-  deriving (Show)
-
-data Factor
-  = Factor BottomExp [(FactorOp, BottomExp)]
-  deriving (Show)
-
-data FactorOp
-  = Times
-  | Divides
-  deriving (Show)
-
-data BottomExp
-  = ExpRecBrackets Exp
-  | ExpRec Exp
+  = Exp Op2 Exp Exp
+  | ExpOp1 Op1 Exp
   | ExpTuple (Exp, Exp)
+  | ExpBrackets Exp
   | ExpField String [Field]
   | ExpInt Integer
   | ExpChar Char
@@ -127,19 +94,22 @@ data BottomExp
   | ExpEmptyList
   deriving (Show)
 
-data TermOp
-  = Add
-  | Subtract
-  deriving (Show)
-
-data CompareOp
-  = NotEquals
-  | Less
-  | LessEquals
-  | Equals
+data Op2
+  = Plus
+  | Minus
+  | Product
+  | Division
+  | Modulo
+  | Eq
+  | Smaller
   | Greater
-  | GreaterEquals
-  deriving (Show)
+  | Leq
+  | Geq
+  | Neq
+  | And
+  | Or
+  | Cons
+  deriving (Eq, Show)
 
 data Op1
   = Not
