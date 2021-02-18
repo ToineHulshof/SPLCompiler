@@ -1,3 +1,5 @@
+image: haskell:8.6.5
+
 test:
   script:
     - cd src && ghc Test.hs && ./Test && cd ../
