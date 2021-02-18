@@ -1,0 +1,2 @@
+script:
+  - cd src && ghc Test.hs && ./Test && cd ../
