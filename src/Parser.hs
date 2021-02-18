@@ -141,14 +141,14 @@ expP :: Parser Exp
 expP = expOp2P <|> expNOp2P
 
 expNOp2P :: Parser Exp 
-expNOp2P = ExpOp1 <$> op1P <*> expP <|> expTupleP <|> expBracketsP <|> ExpFunCall <$> funCallP <|> ExpField <$> idP <*> fieldP <|> ExpInt <$> intP <|> expCharP <|> expBoolP <|> ExpEmptyList <$ w (stringP "[]")
+expNOp2P = ExpInt <$> intP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField <$> idP <*> fieldP <|> expCharP <|> expBoolP <|> ExpEmptyList <$ w (stringP "[]")
 
 expOp2P :: Parser Exp 
 expOp2P = Parser $ expBP 0
 
 expBP :: Int -> Code -> Either Error (Code, Exp)
 expBP minBP c = do
-  (c', lhs) <- parse expNOp2P c
+  (c', lhs) <- parse (expBracketsP <|> expTupleP <|> expNOp2P) c
   (c'', lhs') <- lhsP 0 minBP lhs c'
   return (c'', lhs')
 
