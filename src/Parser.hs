@@ -138,10 +138,10 @@ op2P =  Plus <$ charP '+'
     <|> Cons <$ charP ':'
 
 expP :: Parser Exp
-expP = expNOp2P <|> w expOp2P
+expP = expOp2P <|> expNOp2P
 
 expNOp2P :: Parser Exp 
-expNOp2P = ExpEmptyList <$ w (stringP "[]") <|> expBoolP <|> expCharP <|> ExpInt <$> intP <|> ExpField <$> idP <*> fieldP <|> ExpFunCall <$> funCallP <|> expBracketsP <|> expTupleP <|> ExpOp1 <$> w op1P <*> expP
+expNOp2P = ExpOp1 <$> op1P <*> expP <|> expTupleP <|> expBracketsP <|> ExpFunCall <$> funCallP <|> ExpField <$> idP <*> fieldP <|> ExpInt <$> intP <|> expCharP <|> expBoolP <|> ExpEmptyList <$ w (stringP "[]")
 
 expOp2P :: Parser Exp 
 expOp2P = Parser $ expBP 0
@@ -167,9 +167,7 @@ lhsP l m e c = do
         return (c''', lhs)
   where
     help :: Either Error (Code, Op2) -> Either Error (Code, Maybe Op2)
-    help (Left (e, l, c))
-      | e == "Unexpected EOF" = Right ([], Nothing)
-      | otherwise = Left (e, l, c)
+    help (Left (e, l, c)) = Right ([], Nothing)
     help (Right (c, o)) = Right (c, Just o)
 
 bp :: Op2 -> (Int, Int)
@@ -283,34 +281,3 @@ code s = [(a, b, c) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] d]
 -- Parses the file provided in the IO
 main :: IO ()
 main = getLine >>= parseFile
-
--- bp :: String -> Either Error (Int, Associativity)
--- bp s | s `elem` ["+", "-"] = Right (6, LeftA)
---      | s `elem` ["*", "/", "%"] = Right (7, LeftA)
---      | s `elem` ["!=", "<", "<=", "==", ">", ">="] = Right (4, NonA)
---      | s == "&&" = Right (3, RightA)
---      | s == "||" = Right (2, RightA)
---      | s == ":" = Right (5, RightA)
---      | otherwise = Left ("Unknown token", 0, 0)
-
--- bp' :: Code -> Either Error (Int, Int)
--- bp' code | s `elem` ["+", "-"] = Right (9, 10)
---      | s `elem` ["*", "/", "%"] = Right (11, 12)
---      | s `elem` ["!=", "<", "<=", "==", ">", ">="] = Right (5, 6)
---      | s == "&&" = Right (3, 4)
---      | s == "||" = Right (1, 2)
---      | s == ":" = Right (7, 8)
---      | otherwise = Left ("Unknown token", l, c)
---      where s = map fst3 code
---            (_, l, c) = head code
-
--- bp'' :: Code -> Either Error (Int, Int, Code)
--- bp'' code | s ["+", "-"] = Right (9, 10)
---      | s ["*", "/", "%"] = Right (11, 12)
---      | s ["!=", "<", "<=", "==", ">", ">="] = Right (5, 6)
---      | s ["&&"] = Right (3, 4)
---      | s ["||"] = Right (1, 2)
---      | s [":"] = Right (7, 8)
---      | otherwise = Left ("Unknown token", l, c)
---      where s = any (flip isPrefixOf $ map fst3 code)
---            (_, l, c) = head code
