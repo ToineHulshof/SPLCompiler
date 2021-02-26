@@ -8,6 +8,7 @@ import Grammar
 import Control.Applicative (Alternative ((<|>), many, some))
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 import Data.Maybe (isNothing)
+import Data.List (isPrefixOf)
 
 -- Several definitions of helper functions which are used in the "real" parsers
 
@@ -43,8 +44,8 @@ satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = Parser $ \case
   (y, l, c) : xs
     | p y -> Right (xs, y)
-    | otherwise -> Left ([y], l, c)
-  [] -> Left ("Unexpected EOF", 0, 0)
+    | otherwise -> Left [Error [y] l c]
+  [] -> Left [Error "Unexpected EOF" 0 0]
 
 -- Creates a Parser that parses all the consecutive Chars that satisfy the given requirement
 spanP :: (Char -> Bool) -> Parser String
@@ -54,7 +55,7 @@ spanP p = Parser $ \code -> let (token, rest) = span (p . fst3) code in Right (r
 notNull :: Parser [a] -> Parser [a]
 notNull (Parser p) = Parser $ \code -> do
   (code', xs) <- p code
-  if null xs then Left ("Error", 0, 0) else Right (code', xs)
+  if null xs then Left [Error "Error" 0 0] else Right (code', xs)
 
 -- Parses at least 1 element of Parser b seperated by Parser a
 sepBy1 :: Parser a -> Parser b -> Parser [b]
@@ -146,13 +147,13 @@ expNOp2P = ExpInt <$> intP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCa
 expOp2P :: Parser Exp 
 expOp2P = Parser $ expBP 0
 
-expBP :: Int -> Code -> Either Error (Code, Exp)
+expBP :: Int -> Code -> Either [Error] (Code, Exp)
 expBP minBP c = do
   (c', lhs) <- parse (expBracketsP <|> expTupleP <|> expNOp2P) c
   (c'', lhs') <- lhsP 0 minBP lhs c'
   return (c'', lhs')
 
-lhsP :: Int -> Int -> Exp -> Code -> Either Error (Code, Exp)
+lhsP :: Int -> Int -> Exp -> Code -> Either [Error] (Code, Exp)
 lhsP l m e c = do
   (c', o') <- help $ parse (w op2P) c
   case o' of
@@ -166,8 +167,8 @@ lhsP l m e c = do
         (c''', lhs) <- lhsP lBP m (Exp o e rhs) c''
         return (c''', lhs)
   where
-    help :: Either Error (Code, Op2) -> Either Error (Code, Maybe Op2)
-    help (Left (e, l, c)) = Right ([], Nothing)
+    help :: Either [Error] (Code, Op2) -> Either [Error] (Code, Maybe Op2)
+    help (Left _) = Right ([], Nothing)
     help (Right (c, o)) = Right (c, Just o)
 
 bp :: Op2 -> (Int, Int)
@@ -232,47 +233,73 @@ typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID <$> id
 
 -- Several functions to easily apply the parser to certain programs
 
+-- Joins a list of strings with a given seperator
+join :: String -> [String] -> String
+join _ [] = []
+join _ [x] = x
+join s (x:xs) = x ++ s ++ join s xs
+
 -- Maps the result of the parsed program to a string which describes the result
-result :: Show a => Either Error (Code, a) -> String
+result :: Show a => Either [Error] (Code, a) -> String
 result (Right (c, a))
   | null c = "Parsed succesfully" -- ++ show a
-  | otherwise = "Error: did not complete parsing: " ++ map fst3 c
-result (Left (e, l, c)) = "Error: " ++ e ++ ". Line: " ++ show l ++ ", Character: " ++ show c ++ "."
+  | otherwise = show $ Error ("Did not complete parsing: " ++ map fst3 c) 0 0
+result (Left es) = join "\n" $ map show es
 
 -- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
 -- The boolean argument is true when the parser is currently in a line comment and false otherwise
 -- The integer argument represents the current "level" of recursive block comments, e.g. 0 when you are not in a /* */ comment, 1 if you are and 2 if you are in a comment inside a comment
-comments :: Bool -> Int -> Code -> Either Error Code 
+-- comments :: Bool -> Int -> Code -> Either [Error] Code
+-- comments _ d []
+--   | d == 0 = Right [] -- Parser is done and the parser is not currently in a block comment 
+--   | otherwise = Left ("Did not close all comments", 0, 0) -- Parser is done, but is currently in a block comment
+-- comments s d (('/', l1, c1) : ('/', l2, c2) : xs) = comments True d xs
+-- comments s d (('/', l1, c1) : ('*', l2, c2) : xs) = comments s (d + 1) xs
+-- comments s d (('*', l1, c1) : ('/', l2, c2) : xs)
+--   | d /= 0 = comments s (d - 1) xs
+--   | otherwise = Left ("Trying to close comment that doesn't exist", l2, c2)
+-- comments s d ((x1, l1, c1) : (x2, l2, c2) : xs)
+--   | l2 > l1 && s = comments False d ((x2, l2, c2) : xs)
+--   | s || (d > 0) = comments s d ((x2, l2, c2) : xs)
+-- comments s d ((x1, l1, c1) : xs) = (:) (x1, l1, c1) <$> comments s d xs
+
+-- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
+-- The boolean argument is true when the parser is currently in a line comment and false otherwise
+-- The integer argument represents the current "level" of recursive block comments, e.g. 0 when you are not in a /* */ comment, 1 if you are and 2 if you are in a comment inside a comment
+comments :: Bool -> Int -> Code -> Either [Error] Code 
 comments _ d []
     | d == 0 = Right [] -- Parser is done and the parser is not currently in a block comment 
-    | otherwise = Left ("Did not close all comments", 0, 0) -- Parser is done, but is currently in a block comment
+    | otherwise = Left [Error "Did not close all comments" 0 0] -- Parser is done, but is currently in a block comment
 comments s d [(x, l, c)]
-    | d /= 0 = Left ("Did not close all comments", l, c) -- Parser only has one character left, but it is still in a block comment, so this can't be closed
+    | d /= 0 = Left [Error "Did not close all comments" l c] -- Parser only has one character left, but it is still in a block comment, so this can't be closed
     | s = Right [] -- Parser only has one character left and is currently in a line comment
     | otherwise = Right [(x, l, c)] -- Parser has only one character left and isn't in a comment
 comments s d ((x1, l1, c1) : (x2, l2, c2) : xs)
     | t == "//" = comments True d xs -- Parser recognizes it is in a line comment
     | t == "/*" = comments s (d + 1) xs -- Parser starts a new recursive block comment
     | t == "*/" && (d /= 0) = comments s (d - 1) xs -- Parser closes a valid recursive block comment 
-    | t == "*/" && (d == 0) = Left ("Trying to close comment that doesn't exist", l2, c2) -- Parser closes an invalid recursive block comment
+    | t == "*/" && (d == 0) = Left [Error "Trying to close comment that doesn't exist" l2 c2] -- Parser closes an invalid recursive block comment
     | l2 > l1 && s = comments False d ((x2, l2, c2) : xs) -- The end of line is reached, so the line comment is reset if it was active
     | s || (d > 0) = comments s d ((x2, l2, c2) : xs) -- Parser is currently in a comment and ignores the next character
     | otherwise = (:) (x1, l1, c1) <$> comments s d ((x2, l2, c2) : xs) -- Parser isn't in a comment currently and adds the current character to the returned Code
     where t = [x1, x2]
 
 -- A function that parses a file for a given parser
-parseFileP :: Show a => Parser a -> (Either Error (Code, a) -> String) -> FilePath -> IO ()
+parseFileP :: Show a => Parser a -> (Either [Error] (Code, a) -> String) -> FilePath -> IO ()
 parseFileP p r f = readFile f >>= putStrLn . help where
   help :: String -> String
-  help s = (++ " " ++ f) $ r $ comments False 0 (code s) >>= parse p
+  help s = r $ comments False 0 (code s) >>= parse p --(++ " " ++ f) $ 
 
 -- A function that parses the program in the given FilePath
 parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP result
 
 -- A helper function to test if a parser behaves correctly on a given input.
-testP :: Parser a -> String -> Either Error (Code, a)
+testP :: Parser a -> String -> Either [Error] (Code, a)
 testP p = parse p . code
+
+p :: String -> Either [Error] (Code, SPL)
+p = parse splP . code
 
 -- A function that transforms a string to a list of tuples with (character, line, column)
 code :: String -> Code

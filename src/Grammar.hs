@@ -7,10 +7,14 @@ import Control.Applicative (Alternative (empty, (<|>)))
 -- Code is the list of chars in a program including its position, where the integers are the line and column respectively
 type Code = [(Char, Int, Int)]
 -- Error is a datatype to store an error message as a String with its position, where the integers are the line and column respectively
-type Error = (String, Int, Int)
+data Error
+  = Error String Int Int
+
+instance Show Error where
+  show (Error e l c) = "\x1b[31mError\x1b[0m " ++ e ++ " " ++ show l ++ ":" ++ show c
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
-newtype Parser a = Parser { parse :: Code -> Either Error (Code, a) }
+newtype Parser a = Parser { parse :: Code -> Either [Error] (Code, a) }
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
@@ -26,7 +30,7 @@ instance Applicative Parser where
 
 -- Proof that our Parser is an Alternative
 instance Alternative Parser where
-  empty = Parser . const $ Left ("Failed", 0, 0)
+  empty = Parser . const $ Left [Error "" 0 0]--("Failed", 0, 0)
   (Parser p1) <|> (Parser p2) = Parser $ \code -> p1 code <> p2 code
 
 -- Our defined types in the Grammar (pretty similar to the given grammar; implementation details are mentioned in the code or in the report)

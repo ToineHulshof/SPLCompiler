@@ -9,8 +9,8 @@ import Text.Printf ( printf )
 type Depth = Int
 
 -- A function that either prints the Error or pretty prints the parsed code
-result' :: Either Error (Code, SPL) -> String
-result' (Left (e, l, c)) = "Error " ++ e ++ " line " ++ show l ++ " column " ++ show c
+result' :: Either [Error] (Code, SPL) -> String
+result' (Left es) = join "\n" $ map show es
 result' (Right (_, a)) = ppSPL a
 
 -- Pretty prints the program in the provided filepath
