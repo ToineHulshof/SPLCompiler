@@ -11,7 +11,7 @@ import Grammar
 
 data Scheme = Scheme [String] Type deriving (Show)
 type Subst = M.Map String Type
-data Kind = Var | Fun
+data Kind = Var | Fun deriving (Eq, Ord, Show)
 
 class Types a where
   ftv :: a -> S.Set String
@@ -48,13 +48,13 @@ nullSubst = M.empty
 composeSubst :: Subst -> Subst -> Subst
 composeSubst s1 s2 = M.map (apply s1) s2 `M.union` s1
 
-newtype TypeEnv = TypeEnv (M.Map String Scheme)
+newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme)
 
 instance Show TypeEnv where
     show (TypeEnv env) = show env
 
-remove :: TypeEnv -> String -> TypeEnv
-remove (TypeEnv env) var = TypeEnv $ M.delete var env
+remove :: TypeEnv -> Kind -> String -> TypeEnv
+remove (TypeEnv env) k var = TypeEnv $ M.delete (k, var) env
 
 instance Types TypeEnv where
     ftv (TypeEnv env) = ftv (M.elems env)
@@ -172,7 +172,7 @@ tiExp _ (ExpChar _) = return (nullSubst, TypeBasic CharType)
 tiExp env (ExpFunCall f) = tiFunCall env f
 tiExp _ ExpEmptyList = return (nullSubst, TypeArray $ TypeBasic CharType)
 
-typeInference :: M.Map String Scheme -> Exp -> TI Type
+typeInference :: M.Map (Kind, String) Scheme -> Exp -> TI Type
 typeInference env e = do
     (s,t) <- tiExp (TypeEnv env) e
     return (apply s t)
