@@ -6,6 +6,7 @@ import Control.Applicative (Alternative (empty, (<|>)))
 
 -- Code is the list of chars in a program including its position, where the integers are the line and column respectively
 type Code = [(Char, Int, Int)]
+
 -- Error is a datatype to store an error message as a String with its position, where the integers are the line and column respectively
 data Error
   = Error String Int Int
@@ -14,7 +15,7 @@ instance Show Error where
   show (Error e l c) = "\x1b[31mError\x1b[0m " ++ e ++ " " ++ show l ++ ":" ++ show c
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
-newtype Parser a = Parser { parse :: Code -> Either [Error] (Code, a) }
+newtype Parser a = Parser {parse :: Code -> Either [Error] (Code, a)}
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
@@ -30,11 +31,11 @@ instance Applicative Parser where
 
 -- Proof that our Parser is an Alternative
 instance Alternative Parser where
-  empty = Parser . const $ Left [Error "" 0 0]--("Failed", 0, 0)
+  empty = Parser . const $ Left [Error "" 0 0] --("Failed", 0, 0)
   (Parser p1) <|> (Parser p2) = Parser $ \code -> p1 code <> p2 code
 
 -- Our defined types in the Grammar (pretty similar to the given grammar; implementation details are mentioned in the code or in the report)
--- Our naming convention for the constructors: if there is only one, simply use the same name; 
+-- Our naming convention for the constructors: if there is only one, simply use the same name;
 -- If there are more, the name is AB, where A is the current datatype and B is the next, recursive datatype (DeclVarDecl -> current = Decl and next = VarDecl)
 
 newtype SPL
@@ -53,26 +54,29 @@ data VarDecl
 
 -- FArgs and FunType are immediately defined here, not separate in the Grammar
 data FunDecl
-  = FunDecl String [String] (Maybe ([Type], RetType)) [VarDecl] [Stmt]
+  = FunDecl String [String] (Maybe FunType) [VarDecl] [Stmt]
   deriving (Show)
 
 data RetType
   = RetTypeType Type
   | Void
-  deriving (Show)
-  
+  deriving (Eq, Show)
+
+data FunType = FunType [Type] RetType deriving (Eq, Show)
+
 data Type
   = TypeBasic BasicType
   | TypeTuple Type Type
   | TypeArray Type
   | TypeID String
-  deriving (Show)
+  | TypeFun FunType
+  deriving (Eq, Show)
 
 data BasicType
   = IntType
   | BoolType
   | CharType
-  deriving (Show)
+  deriving (Eq, Show)
 
 -- Recursive definition of Field is already defined here, not in Field
 data Stmt

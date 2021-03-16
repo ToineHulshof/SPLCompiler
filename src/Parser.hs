@@ -5,6 +5,7 @@
 module Parser where
 
 import Grammar
+import Types
 import Control.Applicative (Alternative ((<|>), many, some))
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 import Data.Maybe (isNothing)
@@ -219,8 +220,8 @@ stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP
 basicTypeP :: Parser BasicType
 basicTypeP = IntType <$ stringP "Int" <|> BoolType <$ stringP "Bool" <|> CharType <$ stringP "Char"
 
-funTypeP :: Parser (Maybe ([Type], RetType))
-funTypeP = curry Just <$> (w (stringP "::") *> many (w typeP)) <*> (w (stringP "->") *> retTypeP) <|> pure Nothing
+funTypeP :: Parser (Maybe FunType)
+funTypeP = (\args ret -> Just $ FunType args ret) <$> (w (stringP "::") *> many (w typeP)) <*> (w (stringP "->") *> retTypeP) <|> pure Nothing
 
 typeTupleP :: Parser Type
 typeTupleP = TypeTuple <$> (c '(' *> typeP <* c ',') <*> typeP <* c ')'  
