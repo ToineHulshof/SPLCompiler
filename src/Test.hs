@@ -1,6 +1,6 @@
 -- A small script to automatically test all test files
 
-module Main where
+module Test where
 
 import Parser ( parseFile, testP, splP, expP )
 import Control.Monad ( forM )
