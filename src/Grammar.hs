@@ -52,24 +52,17 @@ data VarDecl
   | VarDeclType Type String Exp
   deriving (Show)
 
--- FArgs and FunType are immediately defined here, not separate in the Grammar
 data FunDecl
-  = FunDecl String [String] (Maybe FunType) [VarDecl] [Stmt]
+  = FunDecl String [String] (Maybe Type) [VarDecl] [Stmt]
   deriving (Show)
-
-data RetType
-  = RetTypeType Type
-  | Void
-  deriving (Eq, Show)
-
-data FunType = FunType [Type] RetType deriving (Eq, Show)
 
 data Type
   = TypeBasic BasicType
   | TypeTuple Type Type
   | TypeArray Type
   | TypeID String
-  | TypeFun FunType
+  | TypeFun Type Type
+  | Void
   deriving (Eq, Show)
 
 data BasicType

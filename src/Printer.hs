@@ -3,7 +3,7 @@
 module Printer where
 
 import Grammar
-import Parser (code, expP, parseFileP, splP)
+import Parser (code, expP, parseFileP, splP, testP, funDeclP)
 import Text.Printf (printf)
 
 type Depth = Int
@@ -44,19 +44,23 @@ ppVarDecl (VarDeclType t n e) = printf "%s %s = %s;" (ppType t) n (ppExp e)
 ppFunDecl :: Depth -> FunDecl -> String
 ppFunDecl d (FunDecl n a t v s) = printf "%s%s(%s) %s{\n%s%s%s%s}" (tab d) n (join ", " a) (ppFunType t) (unlines $ map (printf "%s%s" (tab (d + 1)) . ppVarDecl) v) (if null v then "" else "\n") (unlines $ map (ppStmt (d + 1)) s) (tab d)
 
-ppFunType :: Maybe FunType -> String
+ppFunType :: Maybe Type -> String
 ppFunType Nothing = ""
-ppFunType (Just (FunType t r)) = printf ":: %s-> %s " (join "" (map ((++ " ") . ppType) t)) (ppRetType r)
+ppFunType (Just t) = ":: " ++ ppType t -- printf ":: %s-> %s " (join "" (map ((++ " ") . ppType) t)) (ppRetType r)
+-- ppFunType (Just (FunType t r)) = printf ":: %s-> %s " (join "" (map ((++ " ") . ppType) t)) (ppRetType r)
 
-ppRetType :: RetType -> String
-ppRetType (RetTypeType t) = ppType t
-ppRetType Void = "Void"
+-- ppRetType :: RetType -> String
+-- ppRetType (RetTypeType t) = ppType t
+-- ppRetType Void = "Void"
 
 ppType :: Type -> String
 ppType (TypeBasic t) = ppBasicType t
 ppType (TypeTuple t1 t2) = printf "(%s, %s)" (ppType t1) (ppType t2)
 ppType (TypeArray t) = printf "[%s]" (ppType t)
 ppType (TypeID s) = s
+ppType (TypeFun t1 Void) = printf "-> %s " (ppType t1)
+ppType (TypeFun t1 t2) = printf "%s %s" (ppType t1) (ppType t2)
+ppType Void = "Void"
 
 ppBasicType :: BasicType -> String
 ppBasicType IntType = "Int"

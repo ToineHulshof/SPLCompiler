@@ -9,8 +9,9 @@ import Grammar
 
 -- import qualified Text.PrettyPrint as PP
 
-data Scheme = Scheme [String] Type
+data Scheme = Scheme [String] Type deriving (Show)
 type Subst = M.Map String Type
+data Kind = Var | Fun
 
 class Types a where
   ftv :: a -> S.Set String
@@ -18,20 +19,20 @@ class Types a where
 
 instance Types Type where
   ftv (TypeID n) = S.singleton n
-  ftv (TypeBasic _) = S.empty
+  ftv (TypeBasic _)  = S.empty
   ftv (TypeArray t) = ftv t
-  ftv (TypeFun (FunType ts Void)) = ftv ts
-  ftv (TypeFun (FunType ts (RetTypeType t))) = ftv ts `S.union` ftv t
-  ftv (TypeTuple t1 t2) = ftv t1 `S.union` ftv t2
+  ftv (TypeFun t1 t2) = ftv t1 `S.union` ftv t2
+  ftv (TypeTuple t1 t2)  = ftv t1 `S.union` ftv t2
+  ftv Void = S.empty
 
   apply s (TypeID n) = case M.lookup n s of
     Nothing -> TypeID n
     Just t -> t
   apply s (TypeBasic t) = TypeBasic t
   apply s (TypeArray t) = TypeArray (apply s t)
-  apply s (TypeFun (FunType ts Void)) = TypeFun (FunType (apply s ts) Void)
-  apply s (TypeFun (FunType ts (RetTypeType t))) = TypeFun (FunType (map (apply s) ts) (RetTypeType (apply s t)))
+  apply s (TypeFun t1 t2) = TypeFun (apply s t1) (apply s t2)
   apply s (TypeTuple t1 t2) = TypeTuple (apply s t1) (apply s t2)
+  apply s Void = Void
 
 instance Types Scheme where
   ftv (Scheme vars t) = ftv t `S.intersection` S.fromList vars
@@ -49,8 +50,11 @@ composeSubst s1 s2 = M.map (apply s1) s2 `M.union` s1
 
 newtype TypeEnv = TypeEnv (M.Map String Scheme)
 
+instance Show TypeEnv where
+    show (TypeEnv env) = show env
+
 remove :: TypeEnv -> String -> TypeEnv
-remove (TypeEnv env) var = TypeEnv (M.delete var env)
+remove (TypeEnv env) var = TypeEnv $ M.delete var env
 
 instance Types TypeEnv where
     ftv (TypeEnv env) = ftv (M.elems env)
@@ -85,9 +89,8 @@ instantiate (Scheme vars t) = do
     return $ apply s t
 
 mgu :: Type -> Type -> TI Subst
-mgu (TypeFun (FunType l1 (RetTypeType r1))) (TypeFun (FunType l2 (RetTypeType r2))) = do
-    ss <- zipWithM mgu l1 l2
-    let s1 = foldr composeSubst nullSubst ss
+mgu (TypeFun l1 r1) (TypeFun l2 r2) = do
+    s1 <- mgu l1 l2
     s2 <- mgu (apply s1 r1) (apply s1 r2)
     return $ s1 `composeSubst` s2
 mgu (TypeArray t1) (TypeArray t2) = mgu t1 t2
@@ -109,29 +112,32 @@ varBind u t
     | otherwise = return (M.singleton u t)
 
 tiDecl :: TypeEnv -> Decl -> TI (Subst, Type)
-tiDecl e (DeclVarDecl v) = tiVarDecl e v
+-- tiDecl e (DeclVarDecl v) = tiVarDecl e v
 tiDecl e (DeclFunDecl f) = tiFunDecl e f
 
-tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, Type)
-tiVarDecl env (VarDeclVar s e) = do
-    tv <- newTyVar "a"
-    let TypeEnv env' = remove env s
-    let env'' = TypeEnv (env' `M.union` M.singleton s (Scheme []tv))
-    (s1, t1) <- tiExp env'' e
-    return (s1 , TypeFun (FunType [apply s1 tv] (RetTypeType t1)))
+--tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, Type)
+--tiVarDecl env (VarDeclVar s e) = do
+--    tv <- newTyVar "a"
+--    let TypeEnv env' = removeVar env s
+--    let env'' = TypeEnv (env' `M.union` M.singleton s (Scheme [] tv))
+--    (s1, t1) <- tiExp env'' e
+--    return (s1 , TypeFun (FunType [apply s1 tv] (RetTypeType t1)))
 -- tiVarDecl (TypeEnv env) (VarDeclVar s e) = case M.lookup s env of
 --     Nothing -> throwError $ "unbound variable: " ++ s
 --     Just sigma -> do
 --         t <- instantiate sigma
 --         return (nullSubst, t)
-tiVarDecl e (VarDeclType t _ _) = return (nullSubst, t)
+--tiVarDecl e (VarDeclType t _ _) = return (nullSubst, t)
 
-tiRetType :: TypeEnv -> RetType -> TI (Subst, Type)
-tiRetType _ Void = return (nullSubst, TypeBasic IntType) -- Dit moet Void worden
-tiRetType _ (RetTypeType t) = return (nullSubst, t)
+-- SPL -> TypeEnv
+-- fun x() { return y() && True; }
+-- fun y() { return 3; }
+-- { y :: -> Bool, -> c }
+-- y :: (ai -> ai+1 -> ...)
+-- x(a, b) :: Int Int -> Bool { return f() && b; }
 
 tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type)
-tiFunDecl env (FunDecl _ _ (Just (FunType ts r)) _ _) = tiRetType env r
+tiFunDecl env (FunDecl _ (args) (Just t) _ _) = return (nullSubst, t)
 -- FunDecl zonder type
 
 tiStmt :: TypeEnv -> Stmt -> TI (Subst, Type)

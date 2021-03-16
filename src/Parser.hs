@@ -5,7 +5,7 @@
 module Parser where
 
 import Grammar
-import Types
+-- import Types
 import Control.Applicative (Alternative ((<|>), many, some))
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 import Data.Maybe (isNothing)
@@ -93,14 +93,14 @@ varDeclVarP = VarDeclVar <$> (stringP "var" *> w idP <* charP '=' <* ws) <*> exp
 varDeclTypeP :: Parser VarDecl
 varDeclTypeP = VarDeclType <$> typeP <*> (w idP <* charP '=' <* ws) <*> expP
 
-retTypeP :: Parser RetType
+retTypeP :: Parser Type
 retTypeP = voidP <|> retTypeTypeP
 
-voidP :: Parser RetType
+voidP :: Parser Type
 voidP = Void <$ stringP "Void"
 
-retTypeTypeP :: Parser RetType
-retTypeTypeP = RetTypeType <$> typeP
+retTypeTypeP :: Parser Type
+retTypeTypeP = typeP
 
 idP :: Parser String
 idP = (:) <$> satisfy isAlpha <*> spanP (\c -> isAlphaNum c || c == '_')
@@ -220,8 +220,8 @@ stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP
 basicTypeP :: Parser BasicType
 basicTypeP = IntType <$ stringP "Int" <|> BoolType <$ stringP "Bool" <|> CharType <$ stringP "Char"
 
-funTypeP :: Parser (Maybe FunType)
-funTypeP = (\args ret -> Just $ FunType args ret) <$> (w (stringP "::") *> many (w typeP)) <*> (w (stringP "->") *> retTypeP) <|> pure Nothing
+funTypeP :: Parser (Maybe Type)
+funTypeP = (\args ret -> Just $ foldr TypeFun Void $ args ++ [ret]) <$> (w (stringP "::") *> many (w typeP)) <*> (w (stringP "->") *> retTypeP) <|> pure Nothing
 
 typeTupleP :: Parser Type
 typeTupleP = TypeTuple <$> (c '(' *> typeP <* c ',') <*> typeP <* c ')'  
