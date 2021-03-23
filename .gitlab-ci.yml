@@ -3,6 +3,9 @@ image: haskell:8.6.5
 variables:
   STACK_ROOT: "${CI_PROJECT_DIR}/.stack-root"
 
+after_script:
+  - sudo chown -R gitlab-runner:gitlab-runner .
+
 cache:
   paths:
     - .stack-work/
