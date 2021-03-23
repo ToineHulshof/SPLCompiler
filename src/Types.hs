@@ -6,6 +6,7 @@ import Control.Monad.State
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Grammar
+import Parser
 
 -- import qualified Text.PrettyPrint as PP
 
@@ -115,7 +116,7 @@ tiDecl :: TypeEnv -> Decl -> TI (Subst, Type)
 -- tiDecl e (DeclVarDecl v) = tiVarDecl e v
 tiDecl e (DeclFunDecl f) = tiFunDecl e f
 
---tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, Type)
+-- tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, Type)
 --tiVarDecl env (VarDeclVar s e) = do
 --    tv <- newTyVar "a"
 --    let TypeEnv env' = removeVar env s
@@ -172,14 +173,14 @@ tiExp _ (ExpChar _) = return (nullSubst, TypeBasic CharType)
 tiExp env (ExpFunCall f) = tiFunCall env f
 tiExp _ ExpEmptyList = return (nullSubst, TypeArray $ TypeBasic CharType)
 
-typeInference :: M.Map (Kind, String) Scheme -> Exp -> TI Type
+typeInference :: TypeEnv -> Decl -> TI Type
 typeInference env e = do
-    (s,t) <- tiExp (TypeEnv env) e
+    (s,t) <- tiDecl env e
     return (apply s t)
 
-test :: Exp -> IO ()
-test e = do
-    (res, _) <- runTI (typeInference M.empty e)
+test :: Decl -> IO ()
+test d = do
+    (res, _) <- runTI (typeInference (TypeEnv M.empty) d)
     case res of
         Left err -> putStrLn $ "error: " ++ err
-        Right t -> putStrLn $ show e ++ " :: " ++ show t
+        Right t -> putStrLn $ show d ++ " :: " ++ show t

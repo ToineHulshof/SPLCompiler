@@ -3,7 +3,7 @@ module Binding where
 import Parser
 import Grammar
 import Types
-import Control.Monad (foldM)
+import Control.Monad (foldM, forM)
 import qualified Data.Map as M
 
 emptyEnv :: TypeEnv
@@ -18,7 +18,7 @@ btSPL (SPL ds) = do
     return $ foldl combine emptyEnv x
 
 btDecl :: Decl -> TI TypeEnv
-btDecl (DeclVarDecl v) = btVarDecl v
+btDecl (DeclVarDecl v) = return (TypeEnv M.empty) -- (volgens mij gebeurt dit al in het typing) btVarDecl v
 btDecl (DeclFunDecl f) = btFunDecl f
 
 btVarDecl :: VarDecl -> TI TypeEnv
@@ -39,3 +39,9 @@ showEnv s = do
     case res of
         Left err -> putStrLn $ "error: " ++ err
         Right t  -> putStrLn $ "typenv: " ++ show t
+
+t :: SPL -> IO [()]
+t s@(SPL ds) = do
+    (bt, _) <- runTI $ btSPL s
+    case bt of
+        Right t -> forM ds test
