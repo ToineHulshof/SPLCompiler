@@ -75,11 +75,9 @@ data TIState = TIState { tiSupply :: Int, tiSubst :: Subst }
 type TI a = ExceptT String (ReaderT TIEnv (StateT TIState IO)) a
 
 runTI :: TI a -> IO (Either String a, TIState)
-runTI t = do
-    (res,st) <- runStateT (runReaderT (runExceptT t) initTIEnv) initTIState
-    return (res,st)
-        where initTIEnv = TIEnv { }
-              initTIState = TIState { tiSupply = 0, tiSubst = M.empty }
+runTI t = runStateT (runReaderT (runExceptT t) initTIEnv) initTIState
+    where initTIEnv = TIEnv { }
+          initTIState = TIState { tiSupply = 0, tiSubst = M.empty }
 
 newTyVar :: String -> TI Type
 newTyVar prefix = do
@@ -116,6 +114,9 @@ varBind u t
     | u `S.member` ftv t = throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
     | otherwise = return (M.singleton u t)
 
+tiSPL :: TypeEnv -> SPL -> TI (Subst, Type)
+tiSPL env (SPL ds) = tiDecls env ds
+
 tiDecl :: TypeEnv -> Decl -> TI (Subst, Type)
 tiDecl e (DeclVarDecl v) = tiVarDecl e v
 tiDecl e (DeclFunDecl f) = tiFunDecl e f
@@ -127,6 +128,12 @@ tiVarDecl env (VarDeclVar s e) = do
    let env'' = TypeEnv (env' `M.union` M.singleton (Var, s) (Scheme [] tv))
    tiExp env'' e
 tiVarDecl e (VarDeclType t _ _) = return (nullSubst, t)
+
+tiDecls :: TypeEnv -> [Decl] -> TI (Subst, Type)
+tiDecls env (d:ds) = do
+    (s1, t1) <- tiDecl env d
+    (s2, t2) <- tiDecls (apply s1 env) ds
+    return (s1 `composeSubst` s2, t2)
 
 nameOfVarDecl :: VarDecl -> String
 nameOfVarDecl (VarDeclVar n _) = n
@@ -140,13 +147,6 @@ tiVarDecls e@(TypeEnv env) (v:vs) = do
     let env' = TypeEnv $ env `M.union` M.singleton (Var, n) (Scheme [] t1)
     (s2, t2) <- tiVarDecls (apply s1 env') vs
     return (s1 `composeSubst` s2, t2)
-
--- SPL -> TypeEnv
--- fun x() { return y() && True; }
--- fun y() { return 3; }
--- { y :: -> Bool, -> c }
--- y :: (ai -> ai+1 -> ...)
--- x(a, b) :: Int Int -> Bool { return f() && b; }
 
 tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type)
 tiFunDecl env (FunDecl _ _ (Just t) _ _) = return (nullSubst, t)
@@ -217,23 +217,25 @@ funType (TypeFun t End) = End
 funType (TypeFun t1 t2) = TypeFun t1 (funType t2)
 
 tiFunCall :: TypeEnv -> FunCall -> TI (Subst, Type)
-tiFunCall e@(TypeEnv env) (FunCall n es) = do
-    case M.lookup (Fun, n) env of
-        Nothing -> throwError $ "function " ++ n ++ " doesn't exist"
-        Just sigma -> do
-            t <- instantiate sigma
-            ts <- mapM (tiExp e) es
-            let t1 = foldr (TypeFun . snd) End ts
-            let s1 = foldr (composeSubst . fst) nullSubst ts
-            let ret = retType t
-            let fun = funType t
-            s <- mgu t1 fun
-            return (s, ret)
+tiFunCall e@(TypeEnv env) (FunCall n es) = case M.lookup (Fun, n) env of
+    Nothing -> throwError $ "function " ++ n ++ " doesn't exist"
+    Just sigma -> do
+        t <- instantiate sigma
+        ts <- mapM (tiExp e) es
+        let t1 = foldr (TypeFun . snd) End ts
+        let s1 = foldr (composeSubst . fst) nullSubst ts
+        let ret = retType t
+        let fun = funType t
+        s <- mgu t1 fun
+        return (s, ret)
 
 -- We moeten iets aan type toevoegen/ veranderen/ nieuw data type toevoegen
 -- dat ervoor zorgt dat we a -> b kunnen doen (functie types)
 
--- Dit misschien?
+tiOp1 :: Op1 -> (Type, Type)
+tiOp1 Min = (TypeBasic IntType, TypeBasic IntType)
+tiOp1 Not = (TypeBasic BoolType, TypeBasic BoolType)
+
 tiOp2 :: Op2 -> (Type, Type, Type)
 tiOp2 o
     | o `elem` [Plus, Minus, Product, Division, Modulo] = (TypeBasic IntType, TypeBasic IntType, TypeBasic IntType)
@@ -243,31 +245,40 @@ tiOp2 o
 tiExp :: TypeEnv -> Exp -> TI (Subst, Type)
 tiExp env (Exp o e1 e2) = do
     let (t1, t2, t3) = tiOp2 o
-    -- Checken of e1 type t1 heeft en e2 type t2
-    return (nullSubst, t3)
-tiExp env (ExpOp1 o e) = tiExp env e -- iets doen met het type van o
+    (s1, t1') <- tiExp env e1
+    (s2, t2') <- tiExp (apply s1 env) e2
+    s3 <- mgu t1 t1'
+    s4 <- mgu t2 t2'
+    return (s1 `composeSubst` s2 `composeSubst` s3 `composeSubst` s4, t3)
+tiExp env (ExpOp1 o e) = do
+    let (t1, t2) = tiOp1 o
+    (s1, t1') <- tiExp env e
+    s2 <- mgu t1 t1'
+    return (s1 `composeSubst` s2, t2)
 tiExp env (ExpTuple (e1, e2)) = do
     (s1, t1) <- tiExp env e1
-    (s2, t2) <- tiExp env e1 -- s1 applyen?
+    (s2, t2) <- tiExp (apply s1 env) e1
     return (s1 `composeSubst` s2, TypeTuple t1 t2)
 tiExp env (ExpBrackets e) = tiExp env e
-tiExp (TypeEnv env) (ExpField s []) = case M.lookup (Var, s) env of
+tiExp (TypeEnv env) (ExpField s fs) = case M.lookup (Var, s) env of
     Nothing -> throwError $ s ++ " is not defined"
     Just sigma -> do 
         t <- instantiate sigma
-        return (nullSubst, t)
-tiExp env (ExpField s xs) = undefined
+        t' <- checkFields t fs
+        s <- mgu t t'
+        return (s, t')
 tiExp _ (ExpInt _) = return (nullSubst, TypeBasic IntType)
 tiExp _ (ExpBool _) = return (nullSubst, TypeBasic BoolType)
 tiExp _ (ExpChar _) = return (nullSubst, TypeBasic CharType)
 tiExp env (ExpFunCall f) = tiFunCall env f
-tiExp _ ExpEmptyList = return (nullSubst, TypeArray $ TypeBasic CharType)
+tiExp _ ExpEmptyList = do
+    t <- newTyVar "l"
+    return (nullSubst, TypeArray t)
 
-typeInference :: TypeEnv -> Decl -> TI Type
-typeInference env e = do
-    (s,t) <- tiDecl env e
-    return (apply s t)
-
+-- ti :: TypeEnv -> Decl -> TI Type
+-- ti env e = do
+--     (s,t) <- tiDecl env e
+--     return (apply s t)
 
 test' :: [VarDecl] -> IO ()
 test' ds = do
@@ -290,9 +301,9 @@ showSubst' ti = do
         Left err -> putStrLn  err
         Right s -> print s
 
-test :: Decl -> IO ()
-test d = do
-    (res, _) <- runTI (typeInference (TypeEnv M.empty) d)
-    case res of
-        Left err -> putStrLn $ "error: " ++ err
-        Right t -> putStrLn $ show d ++ " :: " ++ show t
+-- test :: Decl -> IO ()
+-- test d = do
+--     (res, _) <- runTI (ti (TypeEnv M.empty) d)
+--     case res of
+--         Left err -> putStrLn $ "error: " ++ err
+--         Right t -> putStrLn $ show d ++ " :: " ++ show t

@@ -40,8 +40,19 @@ showEnv s = do
         Left err -> putStrLn $ "error: " ++ err
         Right t  -> putStrLn $ "typenv: " ++ show t
 
-t :: SPL -> IO [()]
-t s@(SPL ds) = do
-    (bt, _) <- runTI $ btSPL s
+-- t :: SPL -> IO [()]
+-- t s@(SPL ds) = do
+--     (bt, _) <- runTI $ btSPL s
+--     case bt of
+--         Right t -> forM ds test
+
+ti :: SPL -> IO ()
+ti spl = do
+    (bt, _) <- runTI $ btSPL spl
     case bt of
-        Right t -> forM ds test
+        Left err -> putStrLn err
+        Right env -> do
+            (res, _) <- runTI $ tiSPL env spl
+            case res of
+                Left err -> putStrLn err
+                Right (s, t) -> putStrLn $ "Program is correctly typed (" ++ show s ++ ", " ++ show t ++ ")"
