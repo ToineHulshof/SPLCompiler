@@ -14,5 +14,6 @@ test:
     # - stack --system-ghc build
     # - stack test
     - ghc --version
-    - stack update
-    # - stack test
+    # - stack update
+    - stack --version
+    - stack test
