@@ -10,6 +10,6 @@ image: haskell:8.6.5
 
 test:
   script:
-    # - ghc --version
+    - ghc --version
     # - stack --system-ghc build
-    - stack test
+    # - stack test
