@@ -1,11 +1,7 @@
 image: haskell:8.6.5
 
 variables:
-  STACK_ROOT: "${CI_PROJECT_DIR}/.stack"
-
-stages:
-  - build
-  - test
+  STACK_ROOT: "${CI_PROJECT_DIR}/.stack-root"
 
 cache:
   paths:
@@ -13,8 +9,5 @@ cache:
     - .stack-root/
 
 test:
-  stage: test
   script:
-    - ghc --version
-    - stack --system-ghc build
     - stack test
