@@ -22,7 +22,7 @@ btDecl (DeclVarDecl v) = return (TypeEnv M.empty) -- (volgens mij gebeurt dit al
 btDecl (DeclFunDecl f) = btFunDecl f
 
 btVarDecl :: VarDecl -> TI TypeEnv
-btVarDecl (VarDeclVar s _) = do TypeEnv . M.singleton (Var, s) . Scheme [] <$> newTyVar "a"
+btVarDecl (VarDeclVar s _) = TypeEnv . M.singleton (Var, s) . Scheme [] <$> newTyVar "a"
 btVarDecl (VarDeclType t s _) = return $ TypeEnv $ M.singleton (Var, s) (Scheme [] t)
 
 btFunDecl :: FunDecl -> TI TypeEnv
@@ -49,6 +49,7 @@ showEnv s = do
 ti :: SPL -> IO ()
 ti spl = do
     (bt, _) <- runTI $ btSPL spl
+    print bt
     case bt of
         Left err -> putStrLn err
         Right env -> do
@@ -56,3 +57,8 @@ ti spl = do
             case res of
                 Left err -> putStrLn err
                 Right (s, t) -> putStrLn $ "Program is correctly typed (" ++ show s ++ ", " ++ show t ++ ")"
+
+test :: String -> IO ()
+test s = case testP splP s of
+    Left e -> print e
+    Right (c, s) -> if not $ null c then putStrLn "Did not finish parsing" else ti s

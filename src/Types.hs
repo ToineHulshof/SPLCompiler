@@ -127,9 +127,14 @@ tiVarDecl env (VarDeclVar s e) = do
    let TypeEnv env' = remove env Var s
    let env'' = TypeEnv (env' `M.union` M.singleton (Var, s) (Scheme [] tv))
    tiExp env'' e
-tiVarDecl e (VarDeclType t _ _) = return (nullSubst, t)
+tiVarDecl (TypeEnv env) (VarDeclType t s e) = do
+    let env' = TypeEnv (env `M.union` M.singleton (Var, s) (Scheme [] t))
+    (s1, t1) <- tiExp env' e
+    s2 <- mgu t t1
+    return (s1 `composeSubst` s2, t)
 
 tiDecls :: TypeEnv -> [Decl] -> TI (Subst, Type)
+tiDecls env [] = return (nullSubst, End)
 tiDecls env (d:ds) = do
     (s1, t1) <- tiDecl env d
     (s2, t2) <- tiDecls (apply s1 env) ds
@@ -139,7 +144,10 @@ nameOfVarDecl :: VarDecl -> String
 nameOfVarDecl (VarDeclVar n _) = n
 nameOfVarDecl (VarDeclType _ n _) = n
 
-tiVarDecls :: TypeEnv -> [VarDecl] -> TI (Subst,Type)
+-- Misschien moeten we ipv TI (Subst, Type) TI (Subst, Type, TypeEnv) returnen overal
+-- Als je de λ-calculus wil typeren, heb je geen state, maar hier wel.
+
+tiVarDecls :: TypeEnv -> [VarDecl] -> TI (Subst, Type)
 tiVarDecls _ [] = return (nullSubst, Void)
 tiVarDecls e@(TypeEnv env) (v:vs) = do
     let n = nameOfVarDecl v
@@ -287,19 +295,19 @@ test' ds = do
         Left err -> putStrLn $ "error: " ++ err
         Right t -> putStrLn $ show ds ++ " :: " ++ show t
 
-showSubst :: TI (Subst, Type) -> IO ()
-showSubst ti = do
-    (a, b) <- runTI ti
-    case a of
-        Left err -> putStrLn  err
-        Right (s, t) -> print s
+-- showSubst :: TI (Subst, Type) -> IO ()
+-- showSubst ti = do
+--     (a, b) <- runTI ti
+--     case a of
+--         Left err -> putStrLn  err
+--         Right (s, t) -> print s
 
-showSubst' :: TI Subst -> IO ()
-showSubst' ti = do
-    (a, b) <- runTI ti
-    case a of
-        Left err -> putStrLn  err
-        Right s -> print s
+-- showSubst' :: TI Subst -> IO ()
+-- showSubst' ti = do
+--     (a, b) <- runTI ti
+--     case a of
+--         Left err -> putStrLn  err
+--         Right s -> print s
 
 -- test :: Decl -> IO ()
 -- test d = do
