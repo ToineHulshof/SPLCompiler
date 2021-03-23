@@ -17,3 +17,5 @@ test:
     # - stack update
     - stack --version
     - stack test
+  tags:
+    - docker-internal
