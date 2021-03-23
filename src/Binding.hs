@@ -29,7 +29,7 @@ btFunDecl :: FunDecl -> TI TypeEnv
 btFunDecl (FunDecl s args Nothing _ _) = do
     nvars <- mapM newTyVar args
     ret <- newTyVar "r"
-    let t = foldr TypeFun Void $ nvars ++ [ret]
+    let t = foldr TypeFun End $ nvars ++ [ret]
     return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
 btFunDecl (FunDecl s _ (Just t) _ _) = return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
 

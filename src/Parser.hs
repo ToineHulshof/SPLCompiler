@@ -221,7 +221,7 @@ basicTypeP :: Parser BasicType
 basicTypeP = IntType <$ stringP "Int" <|> BoolType <$ stringP "Bool" <|> CharType <$ stringP "Char"
 
 funTypeP :: Parser (Maybe Type)
-funTypeP = (\args ret -> Just $ foldr TypeFun Void $ args ++ [ret]) <$> (w (stringP "::") *> many (w typeP)) <*> (w (stringP "->") *> retTypeP) <|> pure Nothing
+funTypeP = (\args ret -> Just $ foldr TypeFun End $ args ++ [ret]) <$> (w (stringP "::") *> many (w typeP)) <*> (w (stringP "->") *> retTypeP) <|> pure Nothing
 
 typeTupleP :: Parser Type
 typeTupleP = TypeTuple <$> (c '(' *> typeP <* c ',') <*> typeP <* c ')'  

@@ -61,6 +61,7 @@ ppType (TypeID s) = s
 ppType (TypeFun t1 Void) = printf "-> %s " (ppType t1)
 ppType (TypeFun t1 t2) = printf "%s %s" (ppType t1) (ppType t2)
 ppType Void = "Void"
+ppType End = ""
 
 ppBasicType :: BasicType -> String
 ppBasicType IntType = "Int"

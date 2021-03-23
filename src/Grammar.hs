@@ -63,6 +63,7 @@ data Type
   | TypeID String
   | TypeFun Type Type
   | Void
+  | End
   deriving (Eq, Show)
 
 data BasicType
