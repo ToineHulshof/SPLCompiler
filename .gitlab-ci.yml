@@ -1,7 +1,7 @@
 image: haskell:8.6.5
 
 variables:
-  STACK_ROOT: "${CI_PROJECT_DIR}/.stack-root"
+  STACK_ROOT: "${CI_PROJECT_DIR}"
 
 cache:
   paths:
