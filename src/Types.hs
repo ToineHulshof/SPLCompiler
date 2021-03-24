@@ -94,7 +94,7 @@ newTyVar prefix = do
 
 instantiate :: Scheme -> TI Type
 instantiate (Scheme vars t) = do
-    nvars <- mapM newTyVar vars -- (λ → newTyVar "a")
+    nvars <- mapM newTyVar vars
     let s = M.fromList (zip vars nvars)
     return $ apply s t
 
@@ -122,9 +122,7 @@ varBind u t
     | otherwise = return (M.singleton u t)
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, Type, TypeEnv)
-tiSPL env (SPL ds) = do
-    (s, t, e) <- tiDecls env ds
-    return (s, t, apply s e)
+tiSPL env (SPL ds) = tiDecls env ds
 
 tiDecl :: TypeEnv -> Decl -> TI (Subst, Type, TypeEnv)
 tiDecl env (DeclVarDecl v) = tiVarDecl env v
@@ -132,22 +130,24 @@ tiDecl e (DeclFunDecl f) = tiFunDecl e f
 
 tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, Type, TypeEnv)
 tiVarDecl env (VarDeclVar s e) = do
-   tv <- newTyVar "a"
-   let TypeEnv env' = remove env Var s
-   let env'' = TypeEnv (env' `M.union` M.singleton (Var, s) (Scheme [] tv))
-   (s, t) <- tiExp env'' e
-   return (s, t, apply s env'')
-tiVarDecl (TypeEnv env) (VarDeclType t s e) = do
-    let env' = TypeEnv (env `M.union` M.singleton (Var, s) (Scheme [] t))
-    (s1, t1) <- tiExp env' e
-    s2 <- mgu t t1
-    return (s1 `composeSubst` s2, t, apply (s1 `composeSubst` s2) env')
+    (s1, t1) <- tiExp env e
+    let t' = generalize (apply s1 env) t1
+    let TypeEnv env' = remove env Var s
+    let env'' = TypeEnv (M.insert (Var, s) t' env')
+    return (s1, t1, env'')
+tiVarDecl env (VarDeclType t s e) = do
+    (s1, t1) <- tiExp env e
+    s2 <- mgu t1 t
+    let t' = generalize (apply (s1 `composeSubst` s2) env) t1
+    let TypeEnv env' = remove env Var s
+    let env'' = TypeEnv (M.insert (Var, s) t' env')
+    return (s1 `composeSubst` s2, t1, env'')
 
 tiDecls :: TypeEnv -> [Decl] -> TI (Subst, Type, TypeEnv)
 tiDecls env [] = return (nullSubst, End, emptyEnv)
 tiDecls env (d:ds) = do
     (s1, t1, e1) <- tiDecl env d
-    (s2, t2, e2) <- tiDecls (apply s1 env) ds
+    (s2, t2, e2) <- tiDecls (apply s1 e1) ds
     return (s1 `composeSubst` s2, t2, e1 `combine` e2)
 
 nameOfVarDecl :: VarDecl -> String
@@ -254,20 +254,24 @@ tiOp1 :: Op1 -> (Type, Type)
 tiOp1 Min = (TypeBasic IntType, TypeBasic IntType)
 tiOp1 Not = (TypeBasic BoolType, TypeBasic BoolType)
 
-tiOp2 :: Op2 -> (Type, Type, Type)
-tiOp2 o
-    | o `elem` [Plus, Minus, Product, Division, Modulo] = (TypeBasic IntType, TypeBasic IntType, TypeBasic IntType)
-    | o `elem` [And, Or] = (TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType)
+tiOp2 :: TypeEnv -> Op2 -> TI (Subst, Type, Type, Type)
+tiOp2 env o
+    | o `elem` [Plus, Minus, Product, Division, Modulo] = return (nullSubst, TypeBasic IntType, TypeBasic IntType, TypeBasic IntType)
+    | o `elem` [And, Or] = return (nullSubst, TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType)
+    -- | o == Cons = do
+    --     t <- newTyVar "c"
+    --     let t' = generalize env t
+    --     return (t, TypeArray t, TypeArray t)
     | otherwise = undefined
 
 tiExp :: TypeEnv -> Exp -> TI (Subst, Type)
 tiExp env (Exp o e1 e2) = do
-    let (t1, t2, t3) = tiOp2 o
-    (s1, t1') <- tiExp env e1
+    (s0, t1, t2, t3) <- tiOp2 env o
+    (s1, t1') <- tiExp (apply s0 env) e1
     (s2, t2') <- tiExp (apply s1 env) e2
     s3 <- mgu t1 t1'
     s4 <- mgu t2 t2'
-    return (s1 `composeSubst` s2 `composeSubst` s3 `composeSubst` s4, t3)
+    return (s0 `composeSubst` s1 `composeSubst` s2 `composeSubst` s3 `composeSubst` s4, t3)
 tiExp env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1') <- tiExp env e
