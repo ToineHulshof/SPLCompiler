@@ -6,12 +6,6 @@ import Types
 import Control.Monad (foldM, forM)
 import qualified Data.Map as M
 
-emptyEnv :: TypeEnv
-emptyEnv = TypeEnv M.empty
-
-combine :: TypeEnv -> TypeEnv -> TypeEnv
-combine (TypeEnv env1) (TypeEnv env2) = TypeEnv $ env1 `M.union` env2
-
 btSPL :: SPL -> TI TypeEnv
 btSPL (SPL ds) = do
     x <- mapM btDecl ds
@@ -56,7 +50,7 @@ ti spl = do
             (res, _) <- runTI $ tiSPL env spl
             case res of
                 Left err -> putStrLn err
-                Right (s, t) -> putStrLn $ "Program is correctly typed (" ++ show s ++ ", " ++ show t ++ ")"
+                Right (s, t, e) -> putStrLn $ "Program is correctly typed\n" ++ show e
 
 test :: String -> IO ()
 test s = case testP splP s of

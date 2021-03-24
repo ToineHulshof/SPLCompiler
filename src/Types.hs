@@ -47,6 +47,9 @@ instance Types a => Types [a] where
 nullSubst :: Subst
 nullSubst = M.empty
 
+combine :: TypeEnv -> TypeEnv -> TypeEnv
+combine (TypeEnv env1) (TypeEnv env2) = TypeEnv $ env1 `M.union` env2
+
 composeSubst :: Subst -> Subst -> Subst
 composeSubst s1 s2 = M.map (apply s1) s2 `M.union` s1
 
@@ -55,10 +58,14 @@ newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme)
 instance Show TypeEnv where
     show (TypeEnv env) = show env
 
+emptyEnv :: TypeEnv
+emptyEnv = TypeEnv M.empty
+
 remove :: TypeEnv -> Kind -> String -> TypeEnv
 remove (TypeEnv env) k var = TypeEnv $ M.delete (k, var) env
 
 removeAll :: TypeEnv -> Kind -> [String] -> TypeEnv
+removeAll env _ [] = env
 removeAll env k (v:vars) = removeAll (remove env k v) k vars 
 
 instance Types TypeEnv where
@@ -114,31 +121,34 @@ varBind u t
     | u `S.member` ftv t = throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
     | otherwise = return (M.singleton u t)
 
-tiSPL :: TypeEnv -> SPL -> TI (Subst, Type)
-tiSPL env (SPL ds) = tiDecls env ds
+tiSPL :: TypeEnv -> SPL -> TI (Subst, Type, TypeEnv)
+tiSPL env (SPL ds) = do
+    (s, t, e) <- tiDecls env ds
+    return (s, t, apply s e)
 
-tiDecl :: TypeEnv -> Decl -> TI (Subst, Type)
-tiDecl e (DeclVarDecl v) = tiVarDecl e v
+tiDecl :: TypeEnv -> Decl -> TI (Subst, Type, TypeEnv)
+tiDecl env (DeclVarDecl v) = tiVarDecl env v
 tiDecl e (DeclFunDecl f) = tiFunDecl e f
 
-tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, Type)
+tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, Type, TypeEnv)
 tiVarDecl env (VarDeclVar s e) = do
    tv <- newTyVar "a"
    let TypeEnv env' = remove env Var s
    let env'' = TypeEnv (env' `M.union` M.singleton (Var, s) (Scheme [] tv))
-   tiExp env'' e
+   (s, t) <- tiExp env'' e
+   return (s, t, apply s env'')
 tiVarDecl (TypeEnv env) (VarDeclType t s e) = do
     let env' = TypeEnv (env `M.union` M.singleton (Var, s) (Scheme [] t))
     (s1, t1) <- tiExp env' e
     s2 <- mgu t t1
-    return (s1 `composeSubst` s2, t)
+    return (s1 `composeSubst` s2, t, apply (s1 `composeSubst` s2) env')
 
-tiDecls :: TypeEnv -> [Decl] -> TI (Subst, Type)
-tiDecls env [] = return (nullSubst, End)
+tiDecls :: TypeEnv -> [Decl] -> TI (Subst, Type, TypeEnv)
+tiDecls env [] = return (nullSubst, End, emptyEnv)
 tiDecls env (d:ds) = do
-    (s1, t1) <- tiDecl env d
-    (s2, t2) <- tiDecls (apply s1 env) ds
-    return (s1 `composeSubst` s2, t2)
+    (s1, t1, e1) <- tiDecl env d
+    (s2, t2, e2) <- tiDecls (apply s1 env) ds
+    return (s1 `composeSubst` s2, t2, e1 `combine` e2)
 
 nameOfVarDecl :: VarDecl -> String
 nameOfVarDecl (VarDeclVar n _) = n
@@ -147,17 +157,17 @@ nameOfVarDecl (VarDeclType _ n _) = n
 -- Misschien moeten we ipv TI (Subst, Type) TI (Subst, Type, TypeEnv) returnen overal
 -- Als je de λ-calculus wil typeren, heb je geen state, maar hier wel.
 
-tiVarDecls :: TypeEnv -> [VarDecl] -> TI (Subst, Type)
-tiVarDecls _ [] = return (nullSubst, Void)
+tiVarDecls :: TypeEnv -> [VarDecl] -> TI (Subst, Type, TypeEnv)
+tiVarDecls _ [] = return (nullSubst, Void, emptyEnv)
 tiVarDecls e@(TypeEnv env) (v:vs) = do
     let n = nameOfVarDecl v
-    (s1, t1) <- tiVarDecl e v
+    (s1, t1, e1) <- tiVarDecl e v
     let env' = TypeEnv $ env `M.union` M.singleton (Var, n) (Scheme [] t1)
-    (s2, t2) <- tiVarDecls (apply s1 env') vs
-    return (s1 `composeSubst` s2, t2)
+    (s2, t2, e2) <- tiVarDecls (apply s1 env') vs
+    return (s1 `composeSubst` s2, t2, env')
 
-tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type)
-tiFunDecl env (FunDecl _ _ (Just t) _ _) = return (nullSubst, t)
+tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type, TypeEnv)
+tiFunDecl env (FunDecl _ _ (Just t) _ _) = return (nullSubst, t, emptyEnv)
 -- tiFunDecl env (FunDecl _ args Nothing vars stmts) = do
 --     argsTv <- mapM newTyVar args
 --     retTv <- newTyVar "r"
@@ -287,6 +297,13 @@ tiExp _ ExpEmptyList = do
 -- ti env e = do
 --     (s,t) <- tiDecl env e
 --     return (apply s t)
+
+testExp :: Exp -> IO ()
+testExp e = do
+    (res, _) <- runTI $ tiExp (TypeEnv M.empty) e
+    case res of
+        Left err -> putStrLn $ "error: " ++ err
+        Right t -> putStrLn $ show e ++ " :: " ++ show t
 
 test' :: [VarDecl] -> IO ()
 test' ds = do
