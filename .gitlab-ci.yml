@@ -1,21 +1,5 @@
 image: haskell:8.6.5
 
-variables:
-  STACK_ROOT: "${CI_PROJECT_DIR}/.stack-root"
-
-cache:
-  paths:
-    - .stack-work/
-    - .stack-root/
-
 test:
   script:
-    # - stack path --stack-root
-    # - stack --system-ghc build
-    # - stack test
-    - ghc --version
-    # - stack update
-    - stack --version
-    - stack test
-  tags:
-    - docker-internal
+    - ghc test/Spec.hs && test/Spec
