@@ -1,16 +1,13 @@
 module Types where
 
-import Control.Monad.Except
-import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.Except ( zipWithM, foldM, runExceptT, MonadError(throwError), ExceptT )
+import Control.Monad.Reader ( ReaderT(runReaderT) )
+import Control.Monad.State ( MonadState(put, get), StateT(runStateT) )
 import Data.Functor ( (<&>) )
-import Data.Maybe
+import Data.Maybe ( fromMaybe, listToMaybe )
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Grammar
-import Parser
-
--- import qualified Text.PrettyPrint as PP
 
 data Scheme = Scheme [String] Type deriving (Show)
 type Subst = M.Map String Type
@@ -31,11 +28,11 @@ instance Types Type where
   apply s (TypeID n) = case M.lookup n s of
     Nothing -> TypeID n
     Just t -> t
-  apply s (TypeBasic t) = TypeBasic t
+  apply _ (TypeBasic t) = TypeBasic t
   apply s (TypeArray t) = TypeArray (apply s t)
   apply s (TypeFun t1 t2) = TypeFun (apply s t1) (apply s t2)
   apply s (TypeTuple t1 t2) = TypeTuple (apply s t1) (apply s t2)
-  apply s Void = Void
+  apply _ Void = Void
 
 instance Types Scheme where
   ftv (Scheme vars t) = ftv t `S.intersection` S.fromList vars
@@ -57,7 +54,7 @@ composeSubst s1 s2 = M.map (apply s1) s2 `M.union` s1
 newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme)
 
 instance Show TypeEnv where
-    show (TypeEnv env) = show env
+    show (TypeEnv env) = unlines $ map (\((k, n), Scheme _ t) -> show k ++ " " ++ n ++ " :: " ++ show t) $ M.toList env
 
 emptyEnv :: TypeEnv
 emptyEnv = TypeEnv M.empty
@@ -114,6 +111,7 @@ mgu t (TypeID u) = varBind u t
 mgu (TypeBasic t1) (TypeBasic t2)
     | t1 == t2 = return nullSubst
     | otherwise = throwError $ "types do not unify: " ++ show t1 ++ " vs. " ++ show t2
+mgu Void Void = return nullSubst
 mgu t1 t2 = throwError $ "types do not unify: " ++ show t1 ++ " vs. " ++ show t2
 
 varBind :: String -> Type -> TI Subst
@@ -130,12 +128,18 @@ tiDecl env (DeclVarDecl v) = tiVarDecl env v
 tiDecl e (DeclFunDecl f) = tiFunDecl e f
 
 tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, TypeEnv)
-tiVarDecl env (VarDeclVar s e) = do
+tiVarDecl env@(TypeEnv envt) (VarDeclVar s e) = do
     (s1, t1) <- tiExp env e
-    let t' = generalize (apply s1 env) t1
-    let TypeEnv env' = remove env Var s
-    let env'' = TypeEnv (M.insert (Var, s) t' env')
-    return (s1, apply s1 env'')
+    case M.lookup (Var, s) envt of 
+        Nothing -> do
+            let t' = generalize env t1
+            let TypeEnv env' = remove env Var s
+            let env'' = TypeEnv (M.insert (Var, s) t' env')
+            return (s1, apply s1 env'')
+        Just v -> do
+            vt <- instantiate v
+            s2 <- mgu vt t1
+            return (s1 `composeSubst` s2, apply (s1 `composeSubst` s2) env)
 tiVarDecl env (VarDeclType t s e) = do
     (s1, t1) <- tiExp env e
     s2 <- mgu t1 t
@@ -149,7 +153,7 @@ tiDecls env [] = return (nullSubst, env)
 tiDecls env (d:ds) = do
     (s1, e1) <- tiDecl env d
     (s2, e2) <- tiDecls (apply s1 e1) ds
-    return (s1 `composeSubst` s2, apply (s1 `composeSubst` s2) e2)
+    return (s2`composeSubst` s1, e2)
 
 nameOfVarDecl :: VarDecl -> String
 nameOfVarDecl (VarDeclVar n _) = n
@@ -158,33 +162,72 @@ nameOfVarDecl (VarDeclType _ n _) = n
 tiVarDecls :: TypeEnv -> [VarDecl] -> TI (Subst, TypeEnv)
 tiVarDecls env vs = tiDecls env $ map DeclVarDecl vs
 
+checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
+checkReturn _ t (StmtReturn Nothing) = mgu t Void
+checkReturn env t (StmtReturn (Just e)) = do
+    (s1, t1) <- tiExp env e
+    s2 <- mgu t t1
+    return $ s1 `composeSubst` s2
+
+getReturns :: Stmt -> [Stmt]
+getReturns (StmtIf _ s1 s2) = allReturns s1 ++ allReturns (fromMaybe [] s2)
+getReturns (StmtWhile _ s) = allReturns s
+getReturns StmtField {} = []
+getReturns StmtFunCall {} = []
+getReturns r = [r]
+
+allReturns :: [Stmt] -> [Stmt]
+allReturns = concatMap getReturns
+
+returnType :: TypeEnv -> Stmt -> TI (Subst, Type)
+returnType _ (StmtReturn Nothing) = return (nullSubst, Void)
+returnType env (StmtReturn (Just e)) = tiExp env e
+
 tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, TypeEnv)
-tiFunDecl = undefined
--- tiFunDecl env (FunDecl n args (Just t) vars stmts) = do
---     argsTv <- mapM newTyVar args
---     retTv <- newTyVar "r"
---     let TypeEnv env' = removeAll env Var args
---     let argsType = foldr TypeFun End $ argsTv ++ [retTv]
---     s1 <- mgu argsType t
---     let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args argsTv
---     let env'' = apply s1 $ TypeEnv (env' `M.union` argsTvMap)
---     (s2, env''') <- tiVarDecls env'' vars
---     s3 <- tiStmts (apply s2 env''') stmts
---     let returns = [ rs | rs@StmtReturn {} <- stmts]
---     return _a
--- tiFunDecl env (FunDecl _ args Nothing vars stmts) = do
---     argsTv <- mapM newTyVar args
---     retTv <- newTyVar "r"
---     let TypeEnv env' = removeAll env Var args
---     let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args argsTv
---     let env'' = TypeEnv (env' `M.union` argsTvMap)
---     -- check return
---     -- check var decl
---     -- check statms
-
---     return _a
-
--- FunDecl zonder type
+tiFunDecl env (FunDecl n args (Just t) vars stmts)
+    | l1 /= l2 = throwError $ show n ++ " got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments"
+    | otherwise = do
+        let TypeEnv env' = removeAll env Var args
+        let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args (funTypeToList t)
+        let env'' = TypeEnv (env' `M.union` argsTvMap)
+        (s1, env''') <- tiVarDecls env'' vars
+        s2 <- tiStmts (apply s1 env''') stmts
+        let returns = allReturns stmts
+        if null returns then do
+            s3 <- mgu (retType t) Void 
+            let substFull = s1 `composeSubst` s2 `composeSubst` s3 
+            return (substFull, apply substFull env)
+        else do
+            ss <- mapM (checkReturn (apply (s1 `composeSubst` s2) env''') $ retType t) returns
+            let substFull = foldl composeSubst nullSubst ss
+            return (substFull, apply substFull env)
+    where
+        l1 = length (funTypeToList t) - 1
+        l2 = length args
+tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup (Fun, n) envt of
+    Nothing -> throwError "wtf"
+    Just s -> do
+        let TypeEnv env' = removeAll env Var args
+        argsTv <- mapM newTyVar args
+        t <- instantiate s
+        let typeList = funTypeToList t
+        let fArgs = init typeList 
+        s0 <- zipWithM mgu fArgs argsTv
+        let s1 = foldl composeSubst nullSubst s0
+        let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args typeList
+        let env'' = apply s1 $ TypeEnv (env' `M.union` argsTvMap)
+        (s1, env''') <- tiVarDecls env'' vars
+        s2 <- tiStmts (apply s1 env''') stmts
+        let returns = allReturns stmts
+        if null returns then do
+            s3 <- mgu (last typeList) Void
+            let substFull = s1 `composeSubst` s2 `composeSubst` s3 
+            return (substFull, apply substFull env)
+        else do
+            (_, t) <- returnType env''' $ head returns
+            ss <- mapM (checkReturn (apply (s1 `composeSubst` s2) env''') $ retType t) returns
+            let substFull = foldl composeSubst nullSubst ss
+            return (substFull, apply substFull env)
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
 tiStmts _ [] = return nullSubst
@@ -236,22 +279,27 @@ retType :: Type -> Type
 retType (TypeFun t1 t2) = retType t2
 retType t = t
 
-funType :: Type -> Type
-funType (TypeFun t1 r@(TypeFun t2 t3)) = TypeFun t1 (funType r)
-funType (TypeFun t1 t2) = t1
+funType :: Type -> Maybe Type
+funType (TypeFun t1 r@(TypeFun t2 t3)) = TypeFun t1 <$> funType r
+funType (TypeFun t1 t2) = Just t1
+funType t = Nothing
+
+funTypeToList :: Type -> [Type]
+funTypeToList (TypeFun t1 t2) = t1 : funTypeToList t2
+funTypeToList t = [t]
 
 tiFunCall :: TypeEnv -> FunCall -> TI (Subst, Type)
-tiFunCall e@(TypeEnv env) (FunCall n es) = case M.lookup (Fun, n) env of
+tiFunCall e@(TypeEnv env) f@(FunCall n es) = case M.lookup (Fun, n) env of
     Nothing -> throwError $ "function " ++ n ++ " doesn't exist"
     Just sigma -> do
         t <- instantiate sigma
-        ts <- mapM (tiExp e) es
-        let t1 = foldr1 TypeFun (map snd ts)
-        let s1 = foldr1 composeSubst (map fst ts)
-        let ret = retType t
-        let fun = funType t
-        s <- mgu t1 fun
-        return (s, ret)
+        case funType t of 
+            Nothing -> if null es then return (nullSubst, retType t) else throwError $ "Number of arguments of " ++ show f ++ " does not correspond with its type"
+            Just funT -> if length es /= length (funTypeToList funT) then throwError $ show n ++ " got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments" else do
+                ts <- mapM (tiExp e) es
+                s <- zipWithM mgu (map snd ts) (funTypeToList funT)
+                let s1 = foldr1 composeSubst $ map fst ts ++ s
+                return (s1, retType t)
 
 tiOp1 :: Op1 -> (Type, Type)
 tiOp1 Min = (TypeBasic IntType, TypeBasic IntType)
@@ -294,8 +342,8 @@ tiExp (TypeEnv env) (ExpField s fs) = case M.lookup (Var, s) env of
     Just sigma -> do 
         t <- instantiate sigma
         t' <- checkFields t fs
-        s <- mgu t t'
-        return (s, t')
+        s1 <- mgu t' t
+        return (s1, t')
 tiExp _ (ExpInt _) = return (nullSubst, TypeBasic IntType)
 tiExp _ (ExpBool _) = return (nullSubst, TypeBasic BoolType)
 tiExp _ (ExpChar _) = return (nullSubst, TypeBasic CharType)
@@ -310,31 +358,3 @@ testExp e = do
     case res of
         Left err -> putStrLn $ "error: " ++ err
         Right t -> putStrLn $ show e ++ " :: " ++ show t
-
--- test' :: [VarDecl] -> IO ()
--- test' ds = do
---     (res, _) <- runTI $ tiVarDecls (TypeEnv M.empty) ds
---     case res of
---         Left err -> putStrLn $ "error: " ++ err
---         Right t -> putStrLn $ show ds ++ " :: " ++ show t
-
--- showSubst :: TI (Subst, Type) -> IO ()
--- showSubst ti = do
---     (a, b) <- runTI ti
---     case a of
---         Left err -> putStrLn  err
---         Right (s, t) -> print s
-
--- showSubst' :: TI Subst -> IO ()
--- showSubst' ti = do
---     (a, b) <- runTI ti
---     case a of
---         Left err -> putStrLn  err
---         Right s -> print s
-
--- test :: Decl -> IO ()
--- test d = do
---     (res, _) <- runTI (ti (TypeEnv M.empty) d)
---     case res of
---         Left err -> putStrLn $ "error: " ++ err
---         Right t -> putStrLn $ show d ++ " :: " ++ show t

@@ -12,7 +12,7 @@ btSPL (SPL ds) = do
     return $ foldl combine emptyEnv x
 
 btDecl :: Decl -> TI TypeEnv
-btDecl (DeclVarDecl v) = return (TypeEnv M.empty) -- (volgens mij gebeurt dit al in het typing) btVarDecl v
+btDecl (DeclVarDecl v) = btVarDecl v
 btDecl (DeclFunDecl f) = btFunDecl f
 
 btVarDecl :: VarDecl -> TI TypeEnv
@@ -30,14 +30,14 @@ btFunDecl (FunDecl s _ (Just t) _ _) = return $ TypeEnv $ M.singleton (Fun, s) (
 ti :: SPL -> TypeEnv -> IO ()
 ti spl e = do
     (bt, _) <- runTI $ btSPL spl
-    print bt
     case bt of
         Left err -> putStrLn err
         Right env -> do
+            print env
             (res, _) <- runTI $ tiSPL (e `combine` env) spl
             case res of
                 Left err -> putStrLn err
-                Right (s, e) -> putStrLn $ "Program is correctly typed\nsubst: " ++ show s ++ "\nenv: " ++ show e
+                Right (s, e) -> putStrLn $ "Program is correctly typed\nsubst: " ++ show s ++ "\nenv:\n" ++ show e
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of
