@@ -3,6 +3,7 @@ module Types where
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Functor ( (<&>) )
 import Data.Maybe
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -121,53 +122,56 @@ varBind u t
     | u `S.member` ftv t = throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
     | otherwise = return (M.singleton u t)
 
-tiSPL :: TypeEnv -> SPL -> TI (Subst, Type, TypeEnv)
+tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv)
 tiSPL env (SPL ds) = tiDecls env ds
 
-tiDecl :: TypeEnv -> Decl -> TI (Subst, Type, TypeEnv)
+tiDecl :: TypeEnv -> Decl -> TI (Subst, TypeEnv)
 tiDecl env (DeclVarDecl v) = tiVarDecl env v
 tiDecl e (DeclFunDecl f) = tiFunDecl e f
 
-tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, Type, TypeEnv)
+tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, TypeEnv)
 tiVarDecl env (VarDeclVar s e) = do
     (s1, t1) <- tiExp env e
     let t' = generalize (apply s1 env) t1
     let TypeEnv env' = remove env Var s
     let env'' = TypeEnv (M.insert (Var, s) t' env')
-    return (s1, t1, env'')
+    return (s1, apply s1 env'')
 tiVarDecl env (VarDeclType t s e) = do
     (s1, t1) <- tiExp env e
     s2 <- mgu t1 t
     let t' = generalize (apply (s1 `composeSubst` s2) env) t1
     let TypeEnv env' = remove env Var s
     let env'' = TypeEnv (M.insert (Var, s) t' env')
-    return (s1 `composeSubst` s2, t1, env'')
+    return (s1 `composeSubst` s2, apply (s1 `composeSubst` s2) env'')
 
-tiDecls :: TypeEnv -> [Decl] -> TI (Subst, Type, TypeEnv)
-tiDecls env [] = return (nullSubst, End, emptyEnv)
+tiDecls :: TypeEnv -> [Decl] -> TI (Subst, TypeEnv)
+tiDecls env [] = return (nullSubst, env)
 tiDecls env (d:ds) = do
-    (s1, t1, e1) <- tiDecl env d
-    (s2, t2, e2) <- tiDecls (apply s1 e1) ds
-    return (s1 `composeSubst` s2, t2, e1 `combine` e2)
+    (s1, e1) <- tiDecl env d
+    (s2, e2) <- tiDecls (apply s1 e1) ds
+    return (s1 `composeSubst` s2, apply (s1 `composeSubst` s2) e2)
 
 nameOfVarDecl :: VarDecl -> String
 nameOfVarDecl (VarDeclVar n _) = n
 nameOfVarDecl (VarDeclType _ n _) = n
 
--- Misschien moeten we ipv TI (Subst, Type) TI (Subst, Type, TypeEnv) returnen overal
--- Als je de λ-calculus wil typeren, heb je geen state, maar hier wel.
+tiVarDecls :: TypeEnv -> [VarDecl] -> TI (Subst, TypeEnv)
+tiVarDecls env vs = tiDecls env $ map DeclVarDecl vs
 
-tiVarDecls :: TypeEnv -> [VarDecl] -> TI (Subst, Type, TypeEnv)
-tiVarDecls _ [] = return (nullSubst, Void, emptyEnv)
-tiVarDecls e@(TypeEnv env) (v:vs) = do
-    let n = nameOfVarDecl v
-    (s1, t1, e1) <- tiVarDecl e v
-    let env' = TypeEnv $ env `M.union` M.singleton (Var, n) (Scheme [] t1)
-    (s2, t2, e2) <- tiVarDecls (apply s1 env') vs
-    return (s1 `composeSubst` s2, t2, env')
-
-tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type, TypeEnv)
-tiFunDecl env (FunDecl _ _ (Just t) _ _) = return (nullSubst, t, emptyEnv)
+tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, TypeEnv)
+tiFunDecl = undefined
+-- tiFunDecl env (FunDecl n args (Just t) vars stmts) = do
+--     argsTv <- mapM newTyVar args
+--     retTv <- newTyVar "r"
+--     let TypeEnv env' = removeAll env Var args
+--     let argsType = foldr TypeFun End $ argsTv ++ [retTv]
+--     s1 <- mgu argsType t
+--     let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args argsTv
+--     let env'' = apply s1 $ TypeEnv (env' `M.union` argsTvMap)
+--     (s2, env''') <- tiVarDecls env'' vars
+--     s3 <- tiStmts (apply s2 env''') stmts
+--     let returns = [ rs | rs@StmtReturn {} <- stmts]
+--     return _a
 -- tiFunDecl env (FunDecl _ args Nothing vars stmts) = do
 --     argsTv <- mapM newTyVar args
 --     retTv <- newTyVar "r"
@@ -182,11 +186,12 @@ tiFunDecl env (FunDecl _ _ (Just t) _ _) = return (nullSubst, t, emptyEnv)
 
 -- FunDecl zonder type
 
-tiStmts :: TypeEnv -> [Stmt] -> TI (Subst, Type)
+tiStmts :: TypeEnv -> [Stmt] -> TI Subst
+tiStmts _ [] = return nullSubst
 tiStmts env (s:ss) = do
-    (s1, t1) <- tiStmt env s
-    (s2, t2) <- tiStmts (apply s1 env) ss
-    return (s1 `composeSubst` s2, t1)
+    s1 <- tiStmt env s
+    s2 <- tiStmts (apply s1 env) ss
+    return (s1 `composeSubst` s2)
 
 checkField :: Type -> Field -> TI Type
 checkField (TypeArray t) Head = return t
@@ -198,18 +203,18 @@ checkField n f = throwError $ show f ++ " cannot be applied on type " ++ show n
 checkFields :: Type -> [Field] -> TI Type
 checkFields = foldM checkField
 
-tiStmt :: TypeEnv -> Stmt -> TI (Subst, Type)
+tiStmt :: TypeEnv -> Stmt -> TI Subst
 tiStmt env (StmtIf e ss1 ss2) = do
     (s1, t1) <- tiExp env e
     s1 <- mgu (TypeBasic BoolType) t1
-    (s2, t2) <- tiStmts env ss1
-    (s3, t3) <- tiStmts (apply s1 env) (fromMaybe [] ss2)
-    return (s1 `composeSubst` s2 `composeSubst` s3, t2)
+    s2 <- tiStmts env ss1
+    s3 <- tiStmts (apply s1 env) (fromMaybe [] ss2)
+    return (s1 `composeSubst` s2 `composeSubst` s3)
 tiStmt env (StmtWhile e ss) = do
     (s1, t1) <- tiExp env e
     s1 <- mgu (TypeBasic BoolType) t1
-    (s2, t2) <- tiStmts env ss
-    return (s1 `composeSubst` s2, t2)
+    s2 <- tiStmts env ss
+    return (s1 `composeSubst` s2)
 tiStmt e@(TypeEnv env) (StmtField n fs ex) = do
     (s1, t1) <- tiExp e ex
     case M.lookup (Var, n) env of
@@ -218,21 +223,22 @@ tiStmt e@(TypeEnv env) (StmtField n fs ex) = do
             t <- instantiate sigma
             t' <- checkFields t fs
             s2 <- mgu t1 t'
-            return (s1 `composeSubst` s2, t)
-tiStmt env (StmtFunCall f) = tiFunCall env f
+            return (s1 `composeSubst` s2)
+tiStmt env (StmtFunCall f) = do
+    (s, _) <- tiFunCall env f
+    return s
 tiStmt env (StmtReturn sr) = do
     case sr of
-        Nothing -> return (nullSubst, Void)
-        Just e -> do
-            tiExp env e
+        Nothing -> return nullSubst
+        Just e -> tiExp env e <&> fst
 
 retType :: Type -> Type
-retType (TypeFun t End) = t
 retType (TypeFun t1 t2) = retType t2
+retType t = t
 
 funType :: Type -> Type
-funType (TypeFun t End) = End
-funType (TypeFun t1 t2) = TypeFun t1 (funType t2)
+funType (TypeFun t1 r@(TypeFun t2 t3)) = TypeFun t1 (funType r)
+funType (TypeFun t1 t2) = t1
 
 tiFunCall :: TypeEnv -> FunCall -> TI (Subst, Type)
 tiFunCall e@(TypeEnv env) (FunCall n es) = case M.lookup (Fun, n) env of
@@ -240,38 +246,39 @@ tiFunCall e@(TypeEnv env) (FunCall n es) = case M.lookup (Fun, n) env of
     Just sigma -> do
         t <- instantiate sigma
         ts <- mapM (tiExp e) es
-        let t1 = foldr (TypeFun . snd) End ts
-        let s1 = foldr (composeSubst . fst) nullSubst ts
+        let t1 = foldr1 TypeFun (map snd ts)
+        let s1 = foldr1 composeSubst (map fst ts)
         let ret = retType t
         let fun = funType t
         s <- mgu t1 fun
         return (s, ret)
 
--- We moeten iets aan type toevoegen/ veranderen/ nieuw data type toevoegen
--- dat ervoor zorgt dat we a -> b kunnen doen (functie types)
-
 tiOp1 :: Op1 -> (Type, Type)
 tiOp1 Min = (TypeBasic IntType, TypeBasic IntType)
 tiOp1 Not = (TypeBasic BoolType, TypeBasic BoolType)
 
-tiOp2 :: TypeEnv -> Op2 -> TI (Subst, Type, Type, Type)
+tiOp2 :: TypeEnv -> Op2 -> TI (Subst, Type, Type, Type, Maybe [Type])
 tiOp2 env o
-    | o `elem` [Plus, Minus, Product, Division, Modulo] = return (nullSubst, TypeBasic IntType, TypeBasic IntType, TypeBasic IntType)
-    | o `elem` [And, Or] = return (nullSubst, TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType)
-    -- | o == Cons = do
-    --     t <- newTyVar "c"
-    --     let t' = generalize env t
-    --     return (t, TypeArray t, TypeArray t)
-    | otherwise = undefined
+    | o `elem` [Plus, Minus, Product, Division, Modulo] = return (nullSubst, TypeBasic IntType, TypeBasic IntType, TypeBasic IntType, Nothing)
+    | o `elem` [And, Or] = return (nullSubst, TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType, Nothing)
+    | o == Cons = newTyVar "c" >>= (\t -> return (nullSubst, t, TypeArray t, TypeArray t, Nothing))
+    | o `elem` [Eq, Neq] = newTyVar "e" >>= (\t -> return (nullSubst, t, t, TypeBasic BoolType, Just [TypeBasic BoolType, TypeBasic IntType, TypeBasic CharType]))
+    | o `elem` [Leq, Geq, Smaller, Greater] = newTyVar "e" >>= (\t -> return (nullSubst, t, t, TypeBasic BoolType, Just [TypeBasic IntType, TypeBasic CharType]))
 
 tiExp :: TypeEnv -> Exp -> TI (Subst, Type)
 tiExp env (Exp o e1 e2) = do
-    (s0, t1, t2, t3) <- tiOp2 env o
+    (s0, t1, t2, t3, l) <- tiOp2 env o
     (s1, t1') <- tiExp (apply s0 env) e1
-    (s2, t2') <- tiExp (apply s1 env) e2
+    (s2, t2') <- tiExp (apply (s0 `composeSubst` s1) env) e2
     s3 <- mgu t1 t1'
     s4 <- mgu t2 t2'
-    return (s0 `composeSubst` s1 `composeSubst` s2 `composeSubst` s3 `composeSubst` s4, t3)
+    let substFull = s4 `composeSubst` s3 `composeSubst` s2 `composeSubst` s1 `composeSubst` s0
+    let env' = apply substFull env
+    case l of
+        Nothing -> return (substFull, t3)
+        Just ts -> do
+            s5 <- mgu t1' t2'
+            if t1' `elem` ts then return (s5 `composeSubst` substFull, t3) else throwError $ "cannot apply " ++ show o ++ " on types " ++ show t1' ++ " and " ++ show t2'
 tiExp env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1') <- tiExp env e
@@ -297,11 +304,6 @@ tiExp _ ExpEmptyList = do
     t <- newTyVar "l"
     return (nullSubst, TypeArray t)
 
--- ti :: TypeEnv -> Decl -> TI Type
--- ti env e = do
---     (s,t) <- tiDecl env e
---     return (apply s t)
-
 testExp :: Exp -> IO ()
 testExp e = do
     (res, _) <- runTI $ tiExp (TypeEnv M.empty) e
@@ -309,12 +311,12 @@ testExp e = do
         Left err -> putStrLn $ "error: " ++ err
         Right t -> putStrLn $ show e ++ " :: " ++ show t
 
-test' :: [VarDecl] -> IO ()
-test' ds = do
-    (res, _) <- runTI $ tiVarDecls (TypeEnv M.empty) ds
-    case res of
-        Left err -> putStrLn $ "error: " ++ err
-        Right t -> putStrLn $ show ds ++ " :: " ++ show t
+-- test' :: [VarDecl] -> IO ()
+-- test' ds = do
+--     (res, _) <- runTI $ tiVarDecls (TypeEnv M.empty) ds
+--     case res of
+--         Left err -> putStrLn $ "error: " ++ err
+--         Right t -> putStrLn $ show ds ++ " :: " ++ show t
 
 -- showSubst :: TI (Subst, Type) -> IO ()
 -- showSubst ti = do

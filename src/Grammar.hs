@@ -63,14 +63,26 @@ data Type
   | TypeID String
   | TypeFun Type Type
   | Void
-  | End
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show Type where
+  show (TypeBasic b) = show b
+  show (TypeTuple t1 t2) = "(" ++ show t1 ++ ", " ++ show t2 ++ ")"
+  show (TypeArray t) = "[" ++ show t ++ "]"
+  show (TypeID s) = "id " ++ s
+  show (TypeFun t1 t2) = show t1 ++ " -> " ++ show t2
+  show Void = "Void"
 
 data BasicType
   = IntType
   | BoolType
   | CharType
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show BasicType where
+  show IntType = "Int"
+  show BoolType = "Bool"
+  show CharType = "Char"
 
 -- Recursive definition of Field is already defined here, not in Field
 data Stmt
