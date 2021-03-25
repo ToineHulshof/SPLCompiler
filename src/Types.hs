@@ -8,6 +8,7 @@ import Data.Maybe ( fromMaybe, listToMaybe )
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Grammar
+import Debug.Trace ( trace )
 
 data Scheme = Scheme [String] Type deriving (Show)
 type Subst = M.Map String Type
@@ -207,27 +208,51 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
 tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup (Fun, n) envt of
     Nothing -> throwError "wtf"
     Just s -> do
+        tvs <- mapM newTyVar args
         let TypeEnv env' = removeAll env Var args
-        argsTv <- mapM newTyVar args
-        t <- instantiate s
-        let typeList = funTypeToList t
-        let fArgs = init typeList 
-        s0 <- zipWithM mgu fArgs argsTv
-        let s1 = foldl composeSubst nullSubst s0
-        let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args typeList
-        let env'' = apply s1 $ TypeEnv (env' `M.union` argsTvMap)
-        (s1, env''') <- tiVarDecls env'' vars
-        s2 <- tiStmts (apply s1 env''') stmts
+        let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args tvs
+        let env'' = TypeEnv $ env' `M.union` argsTvMap
+        (_, env''') <- tiVarDecls env'' vars
+        s1 <- tiStmts env''' stmts
+        let env'''' = remove env''' Fun n
         let returns = allReturns stmts
-        if null returns then do
-            s3 <- mgu (last typeList) Void
-            let substFull = s1 `composeSubst` s2 `composeSubst` s3 
-            return (substFull, apply substFull env)
-        else do
-            (_, t) <- returnType env''' $ head returns
-            ss <- mapM (checkReturn (apply (s1 `composeSubst` s2) env''') $ retType t) returns
-            let substFull = foldl composeSubst nullSubst ss
-            return (substFull, apply substFull env)
+        let ts = map (apply s1) tvs
+        case listToMaybe returns of
+            Nothing -> do
+                let t = foldr1 TypeFun (ts ++ [Void])
+                let env''''' = env'''' `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
+                return (s1, apply s1 env''''')
+            Just r -> do
+                (_, t2) <- returnType env'''' r
+                mapM_ (checkReturn env''' t2) returns
+                let t = foldr1 TypeFun (ts ++ [t2])
+                let env''''' = env'''' `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
+                return (s1, env''''')
+        -- argsTv <- mapM newTyVar args
+        -- let TypeEnv env' = removeAll env Var args
+        -- t <- instantiate s
+        -- let typeList = funTypeToList t
+        -- s0 <- zipWithM mgu argsTv typeList
+        -- let s1 = foldl composeSubst nullSubst s0
+        -- let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args typeList
+        -- let env'' = apply s1 $ TypeEnv (env' `M.union` argsTvMap)
+        -- (s1, env''') <- tiVarDecls env'' vars
+        -- s2 <- tiStmts (apply s1 env''') stmts
+        -- let returns = allReturns stmts
+        -- if null returns then do
+        --     s3 <- mgu (last typeList) Void
+        --     let substFull = s1 `composeSubst` s2 `composeSubst` s3 
+        --     return (substFull, apply substFull env)
+        -- else do
+        --     (s3, t) <- returnType env''' $ head returns
+        --     let substFull = s1 `composeSubst` s2 `composeSubst` s3 
+        --     ss <- mapM (checkReturn (apply substFull env''') t) returns
+        --     let s4 = foldl composeSubst nullSubst ss
+
+        --     let (TypeEnv env'''') = remove env''' Fun n
+        --     let env''''' = apply (substFull `composeSubst` s4) $ TypeEnv (env'''' `M.union` M.singleton (Fun, n) (Scheme [] (foldr1 TypeFun $ typeList ++ [t])))
+
+        --     return (substFull `composeSubst` s4, env''''')
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
 tiStmts _ [] = return nullSubst

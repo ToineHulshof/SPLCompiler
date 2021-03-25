@@ -33,7 +33,7 @@ ti spl e = do
     case bt of
         Left err -> putStrLn err
         Right env -> do
-            print env
+            -- print env
             (res, _) <- runTI $ tiSPL (e `combine` env) spl
             case res of
                 Left err -> putStrLn err
