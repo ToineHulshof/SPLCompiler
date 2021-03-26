@@ -1,0 +1,2 @@
+var x = 'c':y;
+var y = x;

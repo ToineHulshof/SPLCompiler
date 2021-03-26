@@ -235,15 +235,37 @@ tiStmts env (s:ss) = do
     s2 <- tiStmts (apply s1 env) ss
     return (s1 `composeSubst` s2)
 
-checkField :: Type -> Field -> TI Type
-checkField (TypeArray t) Head = return t
-checkField t@(TypeArray ty) Tail = return t
-checkField (TypeTuple t1 t2) First = return t1
-checkField (TypeTuple t1 t2) Second = return t2
+checkField :: Type -> Field -> TI (Subst, Type)
+checkField (TypeArray t) Head = return (nullSubst, t)
+checkField t@(TypeArray ty) Tail = return (nullSubst, t)
+checkField (TypeTuple t1 t2) First = return (nullSubst, t1)
+checkField (TypeTuple t1 t2) Second = return (nullSubst, t2)
+checkField t@(TypeID s) Head = do
+    v <- newTyVar "f"
+    s <- mgu t (TypeArray v)
+    return (s, v)
+checkField t@(TypeID s) Tail = do
+    v <- newTyVar "f"
+    s <- mgu t (TypeArray v)
+    return (s, TypeArray v)
+checkField t@(TypeID s) First = do
+    t1 <- newTyVar "f"
+    t2 <- newTyVar "f"
+    s <- mgu t (TypeTuple t1 t2)
+    return (s, t1)
+checkField t@(TypeID s) Second = do
+    t1 <- newTyVar "f"
+    t2 <- newTyVar "f"
+    s <- mgu t (TypeTuple t1 t2)
+    return (s, t2)
 checkField n f = throwError $ show f ++ " cannot be applied on type " ++ show n
 
-checkFields :: Type -> [Field] -> TI Type
-checkFields = foldM checkField
+checkFields :: Type -> [Field] -> TI (Subst, Type)
+checkFields t [] = return (nullSubst, t)
+checkFields t (f:fs) = do
+    (s1, t1) <- checkField t f
+    (s2, t2) <- checkFields t1 fs
+    return (s1 `composeSubst` s2, t2)
 
 tiStmt :: TypeEnv -> Stmt -> TI Subst
 tiStmt env (StmtIf e ss1 ss2) = do
@@ -263,9 +285,9 @@ tiStmt e@(TypeEnv env) (StmtField n fs ex) = do
         Nothing -> throwError $ n ++ " is not defined"
         Just sigma -> do
             t <- instantiate sigma
-            t' <- checkFields t fs
-            s2 <- mgu t1 t'
-            return (s1 `composeSubst` s2)
+            (s2, t') <- checkFields t fs
+            s3 <- mgu t1 t'
+            return (s1 `composeSubst` s2 `composeSubst` s3)
 tiStmt env (StmtFunCall f) = do
     (s, _) <- tiFunCall env f
     return s
@@ -335,15 +357,15 @@ tiExp env (ExpOp1 o e) = do
     return (s1 `composeSubst` s2, t2)
 tiExp env (ExpTuple (e1, e2)) = do
     (s1, t1) <- tiExp env e1
-    (s2, t2) <- tiExp (apply s1 env) e1
+    (s2, t2) <- tiExp (apply s1 env) e2
     return (s1 `composeSubst` s2, TypeTuple t1 t2)
 tiExp env (ExpBrackets e) = tiExp env e
 tiExp (TypeEnv env) (ExpField s fs) = case M.lookup (Var, s) env of
     Nothing -> throwError $ s ++ " is not defined"
-    Just sigma -> do 
+    Just sigma -> do
         t <- instantiate sigma
-        t' <- checkFields t fs
-        s1 <- mgu t' t
+        (s1, t') <- checkFields t fs
+        -- s2 <- mgu t' t
         return (s1, t')
 tiExp _ (ExpInt _) = return (nullSubst, TypeBasic IntType)
 tiExp _ (ExpBool _) = return (nullSubst, TypeBasic BoolType)
