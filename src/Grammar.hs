@@ -56,11 +56,13 @@ data FunDecl
   = FunDecl String [String] (Maybe Type) [VarDecl] [Stmt]
   deriving (Show)
 
+data Condition = Eq | Ord deriving (Eq, Ord, Show)
+
 data Type
   = TypeBasic BasicType
   | TypeTuple Type Type
   | TypeArray Type
-  | TypeID String
+  | TypeID (Maybe Condition) String
   | TypeFun Type Type
   | Void
   deriving (Eq)
@@ -69,7 +71,8 @@ instance Show Type where
   show (TypeBasic b) = show b
   show (TypeTuple t1 t2) = "(" ++ show t1 ++ ", " ++ show t2 ++ ")"
   show (TypeArray t) = "[" ++ show t ++ "]"
-  show (TypeID s) = s
+  show (TypeID Nothing s) = s
+  show (TypeID (Just c) s) = show c ++ " " ++ s ++ " => " ++ s
   show (TypeFun t1 t2) = show t1 ++ " -> " ++ show t2
   show Void = "Void"
 

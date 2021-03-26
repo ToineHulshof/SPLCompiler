@@ -230,7 +230,7 @@ typeArrayP :: Parser Type
 typeArrayP = TypeArray <$> (c '[' *> typeP <* c ']')
 
 typeP :: Parser Type
-typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID <$> idP
+typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID Nothing <$> idP
 
 -- Several functions to easily apply the parser to certain programs
 
