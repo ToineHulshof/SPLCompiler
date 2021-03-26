@@ -205,9 +205,11 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
 tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup (Fun, n) envt of
     Nothing -> throwError "wtf"
     Just s -> do
+        -- x <- instantiate s
+        -- let tvs = init $ funTypeToList x
         tvs <- mapM newTyVar args
         let env1 = remove env Fun n
-        let TypeEnv env2 = removeAll env1 Var args
+        let TypeEnv env2 = removeAll env Var args
         let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args tvs
         let env3 = TypeEnv $ env2 `M.union` argsTvMap
         env4 <- tiVarDecls env3 vars
@@ -225,34 +227,8 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
                 let t = foldr1 TypeFun (ts ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
                 return $ apply s1 env5
-        -- argsTv <- mapM newTyVar args
-        -- let TypeEnv env' = removeAll env Var args
-        -- t <- instantiate s
-        -- let typeList = funTypeToList t
-        -- s0 <- zipWithM mgu argsTv typeList
-        -- let s1 = foldl composeSubst nullSubst s0
-        -- let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args typeList
-        -- let env'' = apply s1 $ TypeEnv (env' `M.union` argsTvMap)
-        -- (s1, env''') <- tiVarDecls env'' vars
-        -- s2 <- tiStmts (apply s1 env''') stmts
-        -- let returns = allReturns stmts
-        -- if null returns then do
-        --     s3 <- mgu (last typeList) Void
-        --     let substFull = s1 `composeSubst` s2 `composeSubst` s3 
-        --     return (substFull, apply substFull env)
-        -- else do
-        --     (s3, t) <- returnType env''' $ head returns
-        --     let substFull = s1 `composeSubst` s2 `composeSubst` s3 
-        --     ss <- mapM (checkReturn (apply substFull env''') t) returns
-        --     let s4 = foldl composeSubst nullSubst ss
-
-        --     let (TypeEnv env'''') = remove env''' Fun n
-        --     let env''''' = apply (substFull `composeSubst` s4) $ TypeEnv (env'''' `M.union` M.singleton (Fun, n) (Scheme [] (foldr1 TypeFun $ typeList ++ [t])))
-
-        --     return (substFull `composeSubst` s4, env''''')
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
--- tiStmts = foldM tiStmt
 tiStmts _ [] = return nullSubst
 tiStmts env (s:ss) = do
     s1 <- tiStmt env s
@@ -348,7 +324,10 @@ tiExp env (Exp o e1 e2) = do
         Nothing -> return (substFull, t3)
         Just ts -> do
             s5 <- mgu t1' t2'
-            if t1' `elem` ts then return (s5 `composeSubst` substFull, t3) else throwError $ "cannot apply " ++ show o ++ " on types " ++ show t1' ++ " and " ++ show t2'
+            -- mapM_ (mgu t1') ts
+            -- mapM_ (mgu t2') ts
+            return (s5 `composeSubst` substFull, t3)
+            -- if t1' `elem` ts then return (s5 `composeSubst` substFull, t3) else throwError $ "cannot apply " ++ show o ++ " on types " ++ show t1' ++ " and " ++ show t2'
 tiExp env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1') <- tiExp env e
