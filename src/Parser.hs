@@ -129,7 +129,7 @@ op2P =  Plus <$ charP '+'
     <|> Product <$ charP '*'
     <|> Division <$ charP '/'
     <|> Modulo <$ charP '%'
-    <|> Eq <$ stringP "=="
+    <|> Equals <$ stringP "=="
     <|> Leq <$ stringP "<="
     <|> Geq <$ stringP ">="
     <|> Smaller <$ charP '<'
@@ -176,7 +176,7 @@ bp :: Op2 -> (Int, Int)
 bp o
   | o `elem` [Plus, Minus] = (9, 10)
   | o `elem` [Product, Division, Modulo] = (11, 12)
-  | o `elem` [Neq, Smaller, Leq, Greater, Eq, Greater, Geq] = (5, 6)
+  | o `elem` [Neq, Smaller, Leq, Greater, Equals, Greater, Geq] = (5, 6)
   | o == And = (4, 3)
   | o == Or = (2, 1)
   | o == Cons = (8, 7)

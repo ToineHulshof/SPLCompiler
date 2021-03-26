@@ -114,7 +114,7 @@ data Op2
   | Product
   | Division
   | Modulo
-  | Eq
+  | Equals
   | Smaller
   | Greater
   | Leq

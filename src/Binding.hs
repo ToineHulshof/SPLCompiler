@@ -16,16 +16,16 @@ btDecl (DeclVarDecl v) = btVarDecl v
 btDecl (DeclFunDecl f) = btFunDecl f
 
 btVarDecl :: VarDecl -> TI TypeEnv
-btVarDecl (VarDeclVar s _) = TypeEnv . M.singleton (Var, s) . Scheme [] <$> newTyVar "a"
-btVarDecl (VarDeclType t s _) = return $ TypeEnv $ M.singleton (Var, s) (Scheme [] t)
+btVarDecl (VarDeclVar s _) = TypeEnv . M.singleton (Var, s) . Scheme Nothing [] <$> newTyVar "a"
+btVarDecl (VarDeclType t s _) = return $ TypeEnv $ M.singleton (Var, s) (Scheme Nothing [] t)
 
 btFunDecl :: FunDecl -> TI TypeEnv
 btFunDecl (FunDecl s args Nothing _ _) = do
     nvars <- mapM newTyVar args
     ret <- newTyVar "r"
     let t = foldr1 TypeFun $ nvars ++ [ret]
-    return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-btFunDecl (FunDecl s _ (Just t) _ _) = return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
+    return $ TypeEnv $ M.singleton (Fun, s) (Scheme Nothing [] t)
+btFunDecl (FunDecl s _ (Just t) _ _) = return $ TypeEnv $ M.singleton (Fun, s) (Scheme Nothing [] t)
 
 ti :: SPL -> TypeEnv -> IO ()
 ti spl e = do

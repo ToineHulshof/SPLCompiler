@@ -10,9 +10,10 @@ import qualified Data.Set as S
 import Grammar
 import Debug.Trace ( trace )
 
-data Scheme = Scheme [String] Type deriving (Show)
+data Scheme = Scheme (Maybe Condition) [String] Type deriving (Show)
 type Subst = M.Map String Type
 data Kind = Var | Fun deriving (Eq, Ord, Show)
+data Condition = Eq | Ord deriving (Eq, Ord, Show)
 
 class Types a where
   ftv :: a -> S.Set String
@@ -36,8 +37,8 @@ instance Types Type where
   apply _ Void = Void
 
 instance Types Scheme where
-  ftv (Scheme vars t) = ftv t `S.intersection` S.fromList vars
-  apply s (Scheme vars t) = Scheme vars (apply (foldr M.delete s vars) t)
+  ftv (Scheme _ vars t) = ftv t `S.intersection` S.fromList vars
+  apply s (Scheme c vars t) = Scheme c vars (apply (foldr M.delete s vars) t)
 
 instance Types a => Types [a] where
   apply s = map (apply s)
@@ -55,7 +56,10 @@ composeSubst s1 s2 = M.map (apply s1) s2 `M.union` s1
 newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme)
 
 instance Show TypeEnv where
-    show (TypeEnv env) = unlines $ map (\((k, n), Scheme _ t) -> show k ++ " " ++ n ++ " :: " ++ show t) $ M.toList env
+    show (TypeEnv env) = unlines $ map (\((k, n), Scheme c _ t) -> show k ++ " " ++ n ++ " :: " ++ cString c ++ show t) $ M.toList env
+        where
+            cString Nothing = ""
+            cString (Just c) = show c ++ " => "
 
 emptyEnv :: TypeEnv
 emptyEnv = TypeEnv M.empty
@@ -72,7 +76,7 @@ instance Types TypeEnv where
     apply s (TypeEnv env) = TypeEnv (M.map (apply s) env)
 
 generalize :: TypeEnv -> Type -> Scheme
-generalize env t = Scheme vars t
+generalize env t = Scheme Nothing vars t
     where vars = S.toList (ftv t `S.intersection` ftv env)
 
 data TIEnv = TIEnv { }
@@ -92,7 +96,7 @@ newTyVar prefix = do
     return (TypeID (prefix ++ show (tiSupply s)))
 
 instantiate :: Scheme -> TI Type
-instantiate (Scheme vars t) = do
+instantiate (Scheme _ vars t) = do
     nvars <- mapM newTyVar vars
     let s = M.fromList (zip vars nvars)
     return $ apply s t
@@ -186,7 +190,7 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
     | l1 /= l2 = throwError $ show n ++ " got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments"
     | otherwise = do
         let TypeEnv env1 = removeAll env Var args
-        let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args (funTypeToList t)
+        let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme Nothing [] t)) args (funTypeToList t)
         let env2 = TypeEnv (env1 `M.union` argsTvMap)
         env3 <- tiVarDecls env2 vars
         s2 <- tiStmts env3 stmts
@@ -210,7 +214,7 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
         tvs <- mapM newTyVar args
         let env1 = remove env Fun n
         let TypeEnv env2 = removeAll env Var args
-        let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args tvs
+        let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme Nothing [] t)) args tvs
         let env3 = TypeEnv $ env2 `M.union` argsTvMap
         env4 <- tiVarDecls env3 vars
         s1 <- tiStmts env3 stmts
@@ -219,13 +223,13 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
         case listToMaybe returns of
             Nothing -> do
                 let t = foldr1 TypeFun (ts ++ [Void])
-                let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
+                let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme Nothing [] t))
                 return $ apply s1 env5
             Just r -> do
                 (_, t2) <- returnType env4 r
                 mapM_ (checkReturn env3 t2) returns
                 let t = foldr1 TypeFun (ts ++ [t2])
-                let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
+                let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme Nothing [] t))
                 return $ apply s1 env5
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
@@ -321,13 +325,13 @@ tiOp1 :: Op1 -> (Type, Type)
 tiOp1 Min = (TypeBasic IntType, TypeBasic IntType)
 tiOp1 Not = (TypeBasic BoolType, TypeBasic BoolType)
 
-tiOp2 :: TypeEnv -> Op2 -> TI (Subst, Type, Type, Type, Maybe [Type])
+tiOp2 :: TypeEnv -> Op2 -> TI (Subst, Type, Type, Type, Maybe Condition)
 tiOp2 env o
     | o `elem` [Plus, Minus, Product, Division, Modulo] = return (nullSubst, TypeBasic IntType, TypeBasic IntType, TypeBasic IntType, Nothing)
     | o `elem` [And, Or] = return (nullSubst, TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType, Nothing)
     | o == Cons = newTyVar "c" >>= (\t -> return (nullSubst, t, TypeArray t, TypeArray t, Nothing))
-    | o `elem` [Eq, Neq] = newTyVar "e" >>= (\t -> return (nullSubst, t, t, TypeBasic BoolType, Just [TypeBasic BoolType, TypeBasic IntType, TypeBasic CharType]))
-    | o `elem` [Leq, Geq, Smaller, Greater] = newTyVar "e" >>= (\t -> return (nullSubst, t, t, TypeBasic BoolType, Just [TypeBasic IntType, TypeBasic CharType]))
+    | o `elem` [Equals, Neq] = newTyVar "e" >>= (\t -> return (nullSubst, t, t, TypeBasic BoolType, Just Eq))
+    | o `elem` [Leq, Geq, Smaller, Greater] = newTyVar "e" >>= (\t -> return (nullSubst, t, t, TypeBasic BoolType, Just Ord))
 
 tiExp :: TypeEnv -> Exp -> TI (Subst, Type)
 tiExp env (Exp o e1 e2) = do
