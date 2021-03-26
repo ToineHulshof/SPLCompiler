@@ -359,8 +359,7 @@ tiExp (TypeEnv env) (ExpField s fs) = case M.lookup (Var, s) env of
     Nothing -> throwError $ s ++ " is not defined"
     Just sigma -> do
         t <- instantiate sigma
-        x <- tiFields t fs
-        trace (show x) return x
+        tiFields t fs
 tiExp _ (ExpInt _) = return (nullSubst, TypeBasic IntType)
 tiExp _ (ExpBool _) = return (nullSubst, TypeBasic BoolType)
 tiExp _ (ExpChar _) = return (nullSubst, TypeBasic CharType)
