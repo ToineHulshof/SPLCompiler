@@ -27,8 +27,8 @@ instance Types Type where
   ftv Void = S.empty
 
   apply s (TypeID c n) = case M.lookup n s of
-    Nothing -> TypeID Nothing n
-    Just t -> t
+    Nothing -> TypeID c n
+    Just t -> addCondition c t
   apply _ (TypeBasic t) = TypeBasic t
   apply s (TypeArray t) = TypeArray (apply s t)
   apply s (TypeFun t1 t2) = TypeFun (apply s t1) (apply s t2)
@@ -54,8 +54,22 @@ composeSubst s1 s2 = M.map (apply s1) s2 `M.union` s1
 
 newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme)
 
+conditions :: Type -> [(String, Condition)]
+conditions (TypeBasic _) = []
+conditions (TypeTuple t1 t2) = conditions t1 ++ conditions t2
+conditions (TypeArray t) = conditions t
+conditions (TypeID Nothing _) = []
+conditions (TypeID (Just c) n) = [(n, c)]
+conditions (TypeFun t1 t2) = conditions t1 ++ conditions t2
+conditions Void = []
+
+showConditions :: [(String, Condition)] -> String
+showConditions [] = ""
+showConditions [(s, c)] = show c ++ " " ++ s ++ " => "
+showConditions ((s, c):cs) = show c ++ " " ++ s ++ ", " ++ showConditions cs 
+
 instance Show TypeEnv where
-    show (TypeEnv env) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ show t) $ M.toList env
+    show (TypeEnv env) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (conditions t) ++ show t) $ M.toList env
 
 emptyEnv :: TypeEnv
 emptyEnv = TypeEnv M.empty
@@ -89,16 +103,13 @@ newTyVar :: Maybe Condition -> String -> TI Type
 newTyVar c prefix = do
     s <- get
     put s { tiSupply = tiSupply s + 1 }
-    return (TypeID c (prefix ++ show (tiSupply s)))
+    return (TypeID c (prefix ++ (if tiSupply s == 0 then "" else show (tiSupply s))))
 
 instantiate :: Scheme -> TI Type
 instantiate (Scheme vars t) = do
     nvars <- mapM (newTyVar Nothing) vars
     let s = M.fromList (zip vars nvars)
     return $ apply s t
-
--- Eq x mgu y
--- subst y voor Eq y
 
 mgu :: Type -> Type -> TI Subst
 mgu (TypeFun l1 r1) (TypeFun l2 r2) = do
@@ -121,18 +132,19 @@ mgu Void Void = return nullSubst
 mgu t1 t2 = throwError $ "types do not unify: " ++ show t1 ++ " vs. " ++ show t2
 
 addCondition :: Maybe Condition -> Type -> Type
-addCondition c (TypeID Nothing n) = TypeID c n
-addCondition Nothing (TypeID c n) = TypeID c n
-addCondition (Just c1) (TypeID (Just c2) n)
-    | c1 > c2 = TypeID (Just c1) n
-    | otherwise = TypeID (Just c2) n
+addCondition c (TypeID (Just Ord) n) = TypeID (Just Ord) n
+-- addCondition (Just c) (TypeID Nothing n) = TypeID (Just c) n
+-- addCondition Nothing (TypeID c n) = TypeID c n
+-- addCondition (Just c1) (TypeID (Just c2) n)
+--     | c1 > c2 = TypeID (Just c1) n
+--     | otherwise = TypeID (Just c2) n
 addCondition _ t = t
 
 varBind :: String -> Maybe Condition -> Type -> TI Subst
 varBind u c t
     | TypeID c u == t = return nullSubst
     | u `S.member` ftv t = throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
-    | otherwise = return (M.singleton u $ addCondition c t)
+    | otherwise = return (M.singleton u t)
 
 tiSPL :: TypeEnv -> SPL -> TI TypeEnv
 tiSPL env (SPL ds) = tiDecls env ds
@@ -301,7 +313,7 @@ tiStmt env (StmtReturn sr) = do
         Nothing -> return nullSubst
         Just e -> do
             (s, t) <- tiExp env e
-            return s
+            trace (show s) return s
 
 retType :: Type -> Type
 retType (TypeFun t1 t2) = retType t2
@@ -350,11 +362,6 @@ tiExp env (Exp o e1 e2) = do
     s4 <- mgu t2 t2'
     let substFull = s4 `composeSubst` s3 `composeSubst` s2 `composeSubst` s1
     return (substFull, t3)
-    -- case mc of
-    --     Nothing -> return (substFull, t3)
-    --     Just c -> do
-    --         s5 <- mgu t1' t2'
-    --         trace (show s5) return (s5 `composeSubst` substFull, t3)
 tiExp env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1') <- tiExp env e

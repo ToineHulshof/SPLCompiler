@@ -1,3 +1,4 @@
 f(x) { return x:[]; }
 f(x) { return 1:x; }
 f(x) { return x.fst; }
+f(x) { return x == x && x < x; }
