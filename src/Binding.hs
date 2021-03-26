@@ -42,7 +42,7 @@ ti spl e = do
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of
     Left e -> print e
-    Right (c, s) -> if not $ null c then putStrLn "Did not finish parsing" else ti s env
+    Right (c, s) -> if not $ null c then putStrLn ("Did not finish parsing" ++ " " ++ map fst3 c) else ti s env
 
 test :: String -> IO ()
 test = testEnv emptyEnv

@@ -297,7 +297,7 @@ parseFile = parseFileP splP result
 
 -- A helper function to test if a parser behaves correctly on a given input.
 testP :: Parser a -> String -> Either [Error] (Code, a)
-testP p = parse p . code
+testP p s = comments False 0 (code s) >>= parse p
 
 p :: String -> Either [Error] (Code, SPL)
 p = parse splP . code
