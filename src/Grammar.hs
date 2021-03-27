@@ -72,7 +72,7 @@ instance Show Type where
   show (TypeTuple t1 t2) = "(" ++ show t1 ++ ", " ++ show t2 ++ ")"
   show (TypeArray t) = "[" ++ show t ++ "]"
   show (TypeID Nothing s) = s
-  show (TypeID (Just c) s) = s --show c ++ " " ++
+  show (TypeID (Just c) s) = show c ++ " " ++ s
   show (TypeFun t1 t2) = show t1 ++ " -> " ++ show t2
   show Void = "Void"
 

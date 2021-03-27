@@ -37,7 +37,7 @@ ti spl e = do
             (res, _) <- runTI $ tiSPL (e `combine` env) spl
             case res of
                 Left err -> putStrLn err
-                Right e -> putStrLn $ "Program is correctly typed\nenv:\n" ++ show e
+                Right e -> putStr $ "Program is correctly typed\n" ++ show e
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of

@@ -103,7 +103,7 @@ newTyVar :: Maybe Condition -> String -> TI Type
 newTyVar c prefix = do
     s <- get
     put s { tiSupply = tiSupply s + 1 }
-    return (TypeID c (prefix ++ (if tiSupply s == 0 then "" else show (tiSupply s))))
+    return (TypeID c (prefix ++ show (tiSupply s)))
 
 instantiate :: Scheme -> TI Type
 instantiate (Scheme vars t) = do
@@ -121,10 +121,10 @@ mgu (TypeTuple l1 r1) (TypeTuple l2 r2) = do
     s1 <- mgu l1 l2
     s2 <- mgu (apply s1 r1) (apply s1 r2)
     return $ s1 `composeSubst` s2
-mgu (TypeID c1 u1) (TypeID Nothing u2) = return $ M.singleton u2 (TypeID c1 u2)
-mgu (TypeID Nothing u1) (TypeID c2 u2) = return $ M.singleton u1 (TypeID c2 u2)
-mgu (TypeID c u) t = varBind u c t
-mgu t (TypeID c u) = varBind u c t
+-- mgu (TypeID c1 u1) (TypeID Nothing u2) = return $ M.singleton u2 (TypeID c1 u2)
+-- mgu (TypeID Nothing u1) (TypeID c2 u2) = return $ M.singleton u1 (TypeID c2 u2)
+mgu (TypeID c u) t = varBind u c t-- trace (show c ++ ", " ++ show u ++ ", " ++ show t)
+mgu t (TypeID c u) = varBind u c t-- trace (show c ++ ", " ++ show u ++ ", " ++ show t)
 mgu (TypeBasic t1) (TypeBasic t2)
     | t1 == t2 = return nullSubst
     | otherwise = throwError $ "types do not unify: " ++ show t1 ++ " vs. " ++ show t2
@@ -132,12 +132,10 @@ mgu Void Void = return nullSubst
 mgu t1 t2 = throwError $ "types do not unify: " ++ show t1 ++ " vs. " ++ show t2
 
 addCondition :: Maybe Condition -> Type -> Type
-addCondition c (TypeID (Just Ord) n) = TypeID (Just Ord) n
--- addCondition (Just c) (TypeID Nothing n) = TypeID (Just c) n
--- addCondition Nothing (TypeID c n) = TypeID c n
--- addCondition (Just c1) (TypeID (Just c2) n)
---     | c1 > c2 = TypeID (Just c1) n
---     | otherwise = TypeID (Just c2) n
+addCondition (Just Ord) (TypeID _ n) = TypeID (Just Ord) n
+addCondition Nothing (TypeID c n) = TypeID c n
+addCondition c (TypeID Nothing n) = TypeID c n
+addCondition _ (TypeID c n) = TypeID c n
 addCondition _ t = t
 
 varBind :: String -> Maybe Condition -> Type -> TI Subst
@@ -244,7 +242,7 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
                 return $ apply s1 env5
             Just r -> do
-                (_, t2) <- returnType env4 r
+                (_, t2) <- returnType (apply s1 env4) r
                 mapM_ (checkReturn env3 t2) returns
                 let t = foldr1 TypeFun (ts ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
@@ -260,21 +258,21 @@ tiStmts env (s:ss) = do
 tiField :: Type -> Field -> TI (Subst, Type)
 tiField t Head = do
     t1 <- newTyVar Nothing "f"
-    s <- mgu t (TypeArray t1)
+    s <- mgu (TypeArray t1) t
     return (s, apply s t1)
 tiField t Tail = do
     t1 <- newTyVar Nothing "f"
-    s <- mgu t (TypeArray t1)
+    s <- mgu (TypeArray t1) t
     return (s, apply s $ TypeArray t1)
 tiField t First = do
     t1 <- newTyVar Nothing "f"
     t2 <- newTyVar Nothing "f"
-    s <- mgu t (TypeTuple t1 t2)
+    s <- mgu (TypeTuple t1 t2) t
     return (s, apply s t1)
 tiField t Second = do
     t1 <- newTyVar Nothing "f"
     t2 <- newTyVar Nothing "f"
-    s <- mgu t (TypeTuple t1 t2)
+    s <- mgu (TypeTuple t1 t2) t  
     return (s, apply s t2)
 
 tiFields :: Type -> [Field] -> TI (Subst, Type)
@@ -313,8 +311,8 @@ tiStmt env (StmtReturn sr) = do
         Nothing -> return nullSubst
         Just e -> do
             (s, t) <- tiExp env e
-            trace (show s) return s
-
+            return s
+ 
 retType :: Type -> Type
 retType (TypeFun t1 t2) = retType t2
 retType t = t
@@ -345,23 +343,26 @@ tiOp1 :: Op1 -> (Type, Type)
 tiOp1 Min = (TypeBasic IntType, TypeBasic IntType)
 tiOp1 Not = (TypeBasic BoolType, TypeBasic BoolType)
 
-tiOp2 :: TypeEnv -> Op2 -> TI (Type, Type, Type)
-tiOp2 env o
-    | o `elem` [Plus, Minus, Product, Division, Modulo] = return (TypeBasic IntType, TypeBasic IntType, TypeBasic IntType)
-    | o `elem` [And, Or] = return (TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType)
-    | o == Cons = newTyVar Nothing "c" >>= (\t -> return (t, TypeArray t, TypeArray t))
-    | o `elem` [Equals, Neq] = newTyVar (Just Eq) "e" >>= (\t -> return (t, t, TypeBasic BoolType))
-    | o `elem` [Leq, Geq, Smaller, Greater] = newTyVar (Just Ord) "e" >>= (\t -> return (t, t, TypeBasic BoolType))
+tiOp2 :: Op2 -> TI (Type, Type, Type, Bool)
+tiOp2 o
+    | o `elem` [Plus, Minus, Product, Division, Modulo] = return (TypeBasic IntType, TypeBasic IntType, TypeBasic IntType, False)
+    | o `elem` [And, Or] = return (TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType, False)
+    | o == Cons = newTyVar Nothing "c" >>= (\t -> return (t, TypeArray t, TypeArray t, False))
+    | o `elem` [Equals, Neq] = newTyVar (Just Eq) "e" >>= (\t -> return (t, t, TypeBasic BoolType, True))
+    | o `elem` [Leq, Geq, Smaller, Greater] = newTyVar (Just Ord) "e" >>= (\t -> return (t, t, TypeBasic BoolType, True))
 
 tiExp :: TypeEnv -> Exp -> TI (Subst, Type)
 tiExp env (Exp o e1 e2) = do
-    (t1, t2, t3) <- tiOp2 env o
+    (t1, t2, t3, b) <- tiOp2 o
     (s1, t1') <- tiExp env e1
     (s2, t2') <- tiExp (apply s1 env) e2
-    s3 <- mgu t1 t1'
-    s4 <- mgu t2 t2'
-    let substFull = s4 `composeSubst` s3 `composeSubst` s2 `composeSubst` s1
+    s3 <- mgu t1' t1
+    s4 <- mgu t2' t2
+    let substFull = s1 `composeSubst` s2 `composeSubst` s3 `composeSubst` s4
     return (substFull, t3)
+    -- if not b then return (substFull, t3) else do
+    --     s5 <- mgu t1' t2'
+    --     return (s5 `composeSubst` substFull, t3)
 tiExp env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1') <- tiExp env e
