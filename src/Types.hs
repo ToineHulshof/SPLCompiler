@@ -359,7 +359,7 @@ tiExp env (Exp o e1 e2) = do
     s3 <- mgu t1' t1
     s4 <- mgu t2' t2
     let substFull = s1 `composeSubst` s2 `composeSubst` s3 `composeSubst` s4
-    return (substFull, t3)
+    trace (show (apply substFull env)) return (substFull, apply substFull t3)
     -- if not b then return (substFull, t3) else do
     --     s5 <- mgu t1' t2'
     --     return (s5 `composeSubst` substFull, t3)
