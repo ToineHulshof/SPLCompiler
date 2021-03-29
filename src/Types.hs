@@ -148,29 +148,31 @@ tiSPL :: TypeEnv -> SPL -> TI TypeEnv
 tiSPL env (SPL ds) = tiDecls env ds
 
 tiDecl :: TypeEnv -> Decl -> TI TypeEnv
-tiDecl env (DeclVarDecl v) = tiVarDecl env v
+tiDecl env (DeclVarDecl v) = do
+    (_ ,env1) <- tiVarDecl env v
+    return env1
 tiDecl e (DeclFunDecl f) = tiFunDecl e f
 
-tiVarDecl :: TypeEnv -> VarDecl -> TI TypeEnv
-tiVarDecl env@(TypeEnv e) (VarDeclVar s ex) = do
+tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, TypeEnv)
+tiVarDecl env (VarDeclVar s ex) = do
     (s1, t1) <- tiExp env ex
+    let env1@(TypeEnv e) = apply s1 env
     case M.lookup (Var, s) e of 
         Nothing -> do
-            let t' = generalize env t1
-            let TypeEnv env1 = remove env Var s
-            let env2 = TypeEnv (M.insert (Var, s) t' env1)
-            return $ apply s1 env2
+            let t' = generalize env1 t1
+            let TypeEnv env2 = remove env1 Var s
+            return (s1, TypeEnv (M.insert (Var, s) t' env2))
         Just v -> do
             vt <- instantiate v
             s2 <- mgu vt t1
-            return $ apply (s1 `composeSubst` s2) env
+            return (s1, apply (s1 `composeSubst` s2) env1)
 tiVarDecl env (VarDeclType t s e) = do
     (s1, t1) <- tiExp env e
     s2 <- mgu t1 t
     let t' = generalize (apply (s1 `composeSubst` s2) env) t1
     let TypeEnv env1 = remove env Var s
     let env2 = TypeEnv (M.insert (Var, s) t' env1)
-    return $ apply (s1 `composeSubst` s2) env2
+    return (s1 `composeSubst` s2, apply (s1 `composeSubst` s2) env2)
 
 tiDecls :: TypeEnv -> [Decl] -> TI TypeEnv
 tiDecls = foldM tiDecl
@@ -179,13 +181,22 @@ nameOfVarDecl :: VarDecl -> String
 nameOfVarDecl (VarDeclVar n _) = n
 nameOfVarDecl (VarDeclType _ n _) = n
 
-tiVarDecls :: TypeEnv -> [VarDecl] -> TI TypeEnv
-tiVarDecls = foldM tiVarDecl
+tiVarDecls :: TypeEnv -> [VarDecl] -> TI (Subst, TypeEnv)
+tiVarDecls env [] = return (nullSubst, env)
+tiVarDecls env (v:vs) = do
+    (s1, env1) <- tiVarDecl env v
+    (s2, env2) <- tiVarDecls env1 vs
+    return (s1 `composeSubst` s2, env2)
+
+-- Return statements moeten hetzelfde type hebben, maar kunnen niet zomaar alles unifien.
+-- Moeten we iets voor fixen.
+-- Voorbeeld: f(x) { return x.snd; return x.fst; }
 
 checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
 checkReturn _ t (StmtReturn Nothing) = mgu t Void
 checkReturn env t (StmtReturn (Just e)) = do
     (s1, t1) <- tiExp env e
+    -- if t1 /= t then throwError "Returns statements do not have the same type." else return s1
     s2 <- mgu t t1
     return $ s1 `composeSubst` s2
 
@@ -210,12 +221,12 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
         let TypeEnv env1 = removeAll env Var args
         let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args (funTypeToList t)
         let env2 = TypeEnv (env1 `M.union` argsTvMap)
-        env3 <- tiVarDecls env2 vars
+        (s1, env3) <- tiVarDecls env2 vars
         s2 <- tiStmts env3 stmts
         let returns = allReturns stmts
         if null returns then do
             s3 <- mgu (retType t) Void 
-            let substFull = s2 `composeSubst` s3 
+            let substFull = s1 `composeSubst` s2 `composeSubst` s3 
             return $ apply substFull env
         else do
             ss <- mapM (checkReturn (apply s2 env3) $ retType t) returns
@@ -232,21 +243,22 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
         let TypeEnv env2 = removeAll env Var args
         let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args tvs
         let env3 = TypeEnv $ env2 `M.union` argsTvMap
-        env4 <- tiVarDecls env3 vars
-        s1 <- tiStmts env4 stmts
-        let returns = trace ("HALLO") allReturns stmts
-        let ts = map (apply s1) tvs
+        (s1, env4) <- tiVarDecls env3 vars
+        s2 <- tiStmts env4 stmts
+        let s3 = s1 `composeSubst` s2
+        let returns = allReturns stmts
+        let ts = map (apply s3) tvs
         case listToMaybe returns of
             Nothing -> do
                 let t = foldr1 TypeFun (ts ++ [Void])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
-                return $ apply s1 env5
+                return $ apply s3 env5
             Just r -> do
-                (s2, t2) <- returnType (apply s1 env4) r
-                mapM_ (checkReturn (apply s2 env3) t2) returns
+                (s4, t2) <- returnType (apply s2 env4) r
+                mapM_ (checkReturn (apply (s2 `composeSubst` s4) env4) t2) returns
                 let t = foldr1 TypeFun (ts ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
-                return $ apply (s1 `composeSubst` s2) env5
+                return $ apply (s3 `composeSubst` s4) env5
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
 tiStmts _ [] = return nullSubst
@@ -280,7 +292,7 @@ tiFields t [] = return (nullSubst, t)
 tiFields t (f:fs) = do
     (s1, t1) <- tiField t f
     (s2, t2) <- tiFields t1 fs
-    return (s2 `composeSubst` s1, t2)
+    return (s1 `composeSubst` s2, t2)
 
 tiStmt :: TypeEnv -> Stmt -> TI Subst
 tiStmt env (StmtIf e ss1 ss2) = do
