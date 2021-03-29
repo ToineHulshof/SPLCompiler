@@ -242,11 +242,11 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
                 return $ apply s1 env5
             Just r -> do
-                (_, t2) <- returnType (apply s1 env4) r
-                mapM_ (checkReturn env3 t2) returns
+                (s2, t2) <- returnType (apply s1 env4) r
+                mapM_ (checkReturn (apply s2 env3) t2) returns
                 let t = foldr1 TypeFun (ts ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
-                return $ apply s1 env5
+                return $ apply (s1 `composeSubst` s2) env5
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
 tiStmts _ [] = return nullSubst
@@ -359,7 +359,7 @@ tiExp env (Exp o e1 e2) = do
     s3 <- mgu t1' t1
     s4 <- mgu t2' t2
     let substFull = s1 `composeSubst` s2 `composeSubst` s3 `composeSubst` s4
-    trace (show (apply substFull env)) return (substFull, apply substFull t3)
+    return (substFull, apply substFull t3)
     -- if not b then return (substFull, t3) else do
     --     s5 <- mgu t1' t2'
     --     return (s5 `composeSubst` substFull, t3)
