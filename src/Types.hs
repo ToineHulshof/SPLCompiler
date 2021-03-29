@@ -3,8 +3,8 @@ module Types where
 import Control.Monad.Except ( zipWithM, foldM, runExceptT, MonadError(throwError), ExceptT )
 import Control.Monad.Reader ( ReaderT(runReaderT) )
 import Control.Monad.State ( MonadState(put, get), StateT(runStateT) )
-import Data.Functor ( (<&>) )
 import Data.Maybe ( fromMaybe, listToMaybe )
+import Data.List ( group, sort )
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Grammar
@@ -69,7 +69,7 @@ showConditions [(s, c)] = show c ++ " " ++ s ++ " => "
 showConditions ((s, c):cs) = show c ++ " " ++ s ++ ", " ++ showConditions cs 
 
 instance Show TypeEnv where
-    show (TypeEnv env) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (conditions t) ++ show t) $ M.toList env
+    show (TypeEnv env) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (map head $ group $ sort $ conditions t) ++ show t) $ M.toList env
 
 emptyEnv :: TypeEnv
 emptyEnv = TypeEnv M.empty
@@ -233,8 +233,8 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
         let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args tvs
         let env3 = TypeEnv $ env2 `M.union` argsTvMap
         env4 <- tiVarDecls env3 vars
-        s1 <- tiStmts env3 stmts
-        let returns = allReturns stmts
+        s1 <- tiStmts env4 stmts
+        let returns = trace ("HALLO") allReturns stmts
         let ts = map (apply s1) tvs
         case listToMaybe returns of
             Nothing -> do
@@ -343,22 +343,22 @@ tiOp1 :: Op1 -> (Type, Type)
 tiOp1 Min = (TypeBasic IntType, TypeBasic IntType)
 tiOp1 Not = (TypeBasic BoolType, TypeBasic BoolType)
 
-tiOp2 :: Op2 -> TI (Type, Type, Type, Bool)
+tiOp2 :: Op2 -> TI (Type, Type, Type)
 tiOp2 o
-    | o `elem` [Plus, Minus, Product, Division, Modulo] = return (TypeBasic IntType, TypeBasic IntType, TypeBasic IntType, False)
-    | o `elem` [And, Or] = return (TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType, False)
-    | o == Cons = newTyVar Nothing "c" >>= (\t -> return (t, TypeArray t, TypeArray t, False))
-    | o `elem` [Equals, Neq] = newTyVar (Just Eq) "e" >>= (\t -> return (t, t, TypeBasic BoolType, True))
-    | o `elem` [Leq, Geq, Smaller, Greater] = newTyVar (Just Ord) "e" >>= (\t -> return (t, t, TypeBasic BoolType, True))
+    | o `elem` [Plus, Minus, Product, Division, Modulo] = return (TypeBasic IntType, TypeBasic IntType, TypeBasic IntType)
+    | o `elem` [And, Or] = return (TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType)
+    | o == Cons = newTyVar Nothing "c" >>= (\t -> return (t, TypeArray t, TypeArray t))
+    | o `elem` [Equals, Neq] = newTyVar (Just Eq) "e" >>= (\t -> return (t, t, TypeBasic BoolType))
+    | o `elem` [Leq, Geq, Smaller, Greater] = newTyVar (Just Ord) "e" >>= (\t -> return (t, t, TypeBasic BoolType))
 
 tiExp :: TypeEnv -> Exp -> TI (Subst, Type)
 tiExp env (Exp o e1 e2) = do
-    (t1, t2, t3, b) <- tiOp2 o
+    (t1, t2, t3) <- tiOp2 o
     (s1, t1') <- tiExp env e1
     (s2, t2') <- tiExp (apply s1 env) e2
     s3 <- mgu t1' t1
     s4 <- mgu t2' t2
-    let substFull = s1 `composeSubst` s2 `composeSubst` s3 `composeSubst` s4
+    let substFull = (s4 `composeSubst` s3)`composeSubst` (s2 `composeSubst` s1)
     return (substFull, apply substFull t3)
     -- if not b then return (substFull, t3) else do
     --     s5 <- mgu t1' t2'
