@@ -71,7 +71,7 @@ showConditions ((s, c):cs) = show c ++ " " ++ s ++ ", " ++ showConditions cs
 instance Show TypeEnv where
     show env = help funs ++ "\n" ++ help vars
         where
-            help (TypeEnv e) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (map head $ group $ sort $ conditions t) ++ show t) $ M.toList e
+            help (TypeEnv e) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (map head $ group $ sort $ conditions t) ++ show t) $ filter (\((_, n), _) -> n `notElem` ["print", "isEmpty"]) $ M.toList e
             (funs, vars) = woFun env
 
 emptyEnv :: TypeEnv
@@ -204,7 +204,7 @@ checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
 checkReturn _ t (StmtReturn Nothing) = mgu t Void
 checkReturn env t (StmtReturn (Just e)) = do
     (s1, t1) <- tiExp env e
-    s2 <- mgu t t1
+    s2 <- trace (show s1) mgu t t1
     return $ s1 `composeSubst` s2
 
 getReturns :: Stmt -> [Stmt]
@@ -252,7 +252,7 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
         let env3 = TypeEnv $ env2 `M.union` argsTvMap
         (s1, env4) <- tiVarDecls env3 vars
         s2 <- tiStmts env4 stmts
-        let cs1 = s1 `composeSubst` s2
+        let cs1 = s2 `composeSubst` s1
         let returns = allReturns stmts
         case listToMaybe returns of
             Nothing -> do
@@ -261,9 +261,9 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
                 return $ apply cs1 env5
             Just r -> do
                 (s3, t2) <- returnType (apply cs1 env4) r
-                let cs2 = trace (show t2) s3 `composeSubst` cs1
+                let cs2 = s3 `composeSubst` cs1
                 ss <- mapM (checkReturn (apply cs2 env4) t2) returns
-                let s4 = foldl composeSubst nullSubst ss
+                let s4 = foldl1 composeSubst ss
                 let cs3 = s4 `composeSubst` cs2
                 let t = foldr1 TypeFun $ apply cs3 (tvs ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
@@ -379,9 +379,9 @@ tiExp env (Exp o e1 e2) = do
     s2 <- mgu t1' (apply s1 t1)
     let cs1 = s1 `composeSubst` s2
     (s3, t2') <- tiExp (apply cs1 env) e2
-    let cs2 = s3 `composeSubst` cs1
+    let cs2 = cs1 `composeSubst` s3
     s4 <- mgu (apply cs2 t2') (apply cs2 t2)
-    let cs3 = s4 `composeSubst` cs2
+    let cs3 = cs2 `composeSubst` s4
     return (cs3, apply cs3 t3)
 tiExp env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
