@@ -368,7 +368,7 @@ tiExp env (Exp o e1 e2) = do
     (s1, t1') <- tiExp env e1
     s2 <- mgu t1' (apply s1 t1)
     let cs1 = s2 `composeSubst` s1
-    (s3, t2') <- tiExp (apply (s1 `composeSubst` s2) env) e2
+    (s3, t2') <- tiExp (apply cs1 env) e2
     let cs2 = s3 `composeSubst` cs1
     s4 <- mgu (apply cs2 t2') (apply cs2 t2)
     let cs3 = s4 `composeSubst` cs2
