@@ -186,15 +186,10 @@ tiVarDecls env (v:vs) = do
     (s2, env2) <- tiVarDecls env1 vs
     return (s1 `composeSubst` s2, env2)
 
--- Return statements moeten hetzelfde type hebben, maar kunnen niet zomaar alles unifien.
--- Moeten we iets voor fixen.
--- Voorbeeld: f(x) { return x.snd; return x.fst; }
-
 checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
 checkReturn _ t (StmtReturn Nothing) = mgu t Void
 checkReturn env t (StmtReturn (Just e)) = do
     (s1, t1) <- tiExp env e
-    -- if t1 /= t then throwError "Returns statements do not have the same type." else return s1
     s2 <- mgu t t1
     return $ s1 `composeSubst` s2
 
