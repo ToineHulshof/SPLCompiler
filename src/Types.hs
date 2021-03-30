@@ -152,7 +152,7 @@ composeConditions _ c = c
 varBind :: String -> Maybe Condition -> Type -> TI Subst
 varBind u c t
     | b = return $ M.singleton u (TypeID (composeConditions c c1) u)
-    | u `S.member` ftv t = trace (show u ++ ", " ++ show c ++ ", " ++ show t) throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
+    | u `S.member` ftv t = throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
     | otherwise = return (M.singleton u t)
     where (c1, b) = condition t u
 
@@ -254,19 +254,18 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
         s2 <- tiStmts env4 stmts
         let cs1 = s1 `composeSubst` s2
         let returns = allReturns stmts
-        let ts = map (apply cs1) tvs
         case listToMaybe returns of
             Nothing -> do
-                let t = foldr1 TypeFun (ts ++ [Void])
+                let t = foldr1 TypeFun (apply cs1 tvs ++ [Void])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
                 return $ apply cs1 env5
             Just r -> do
                 (s3, t2) <- returnType (apply cs1 env4) r
-                let cs2 = s3 `composeSubst` cs1
+                let cs2 = trace (show t2) s3 `composeSubst` cs1
                 ss <- mapM (checkReturn (apply cs2 env4) t2) returns
                 let s4 = foldl composeSubst nullSubst ss
                 let cs3 = s4 `composeSubst` cs2
-                let t = foldr1 TypeFun $ apply cs3 (ts ++ [t2])
+                let t = foldr1 TypeFun $ apply cs3 (tvs ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
                 return $ apply cs3 env5
 
@@ -378,7 +377,7 @@ tiExp env (Exp o e1 e2) = do
     (t1, t2, t3) <- tiOp2 o
     (s1, t1') <- tiExp env e1
     s2 <- mgu t1' (apply s1 t1)
-    let cs1 = s2 `composeSubst` s1
+    let cs1 = s1 `composeSubst` s2
     (s3, t2') <- tiExp (apply cs1 env) e2
     let cs2 = s3 `composeSubst` cs1
     s4 <- mgu (apply cs2 t2') (apply cs2 t2)
