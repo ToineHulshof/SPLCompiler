@@ -2,7 +2,7 @@
 // f(x) { return 1:x; }
 // f(x) { return x.fst; }
 // f(x) { return x == x && x < x; }
-f(x) { return x == (x == 1); }
+// f(x) { return x == (x == 1); }
 // f(x) { var y = x.hd; return y; }
 // f(x) { return x; return x.hd; }
 f(x) { return x.snd; return x.fst; }

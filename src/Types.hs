@@ -121,10 +121,8 @@ mgu (TypeTuple l1 r1) (TypeTuple l2 r2) = do
     s1 <- mgu l1 l2
     s2 <- mgu (apply s1 r1) (apply s1 r2)
     return $ s1 `composeSubst` s2
--- mgu (TypeID c1 u1) (TypeID Nothing u2) = return $ M.singleton u2 (TypeID c1 u2)
--- mgu (TypeID Nothing u1) (TypeID c2 u2) = return $ M.singleton u1 (TypeID c2 u2)
-mgu (TypeID c u) t = varBind u c t-- trace (show c ++ ", " ++ show u ++ ", " ++ show t)
-mgu t (TypeID c u) = varBind u c t-- trace (show c ++ ", " ++ show u ++ ", " ++ show t)
+mgu (TypeID c u) t = varBind u c t
+mgu t (TypeID c u) = varBind u c t
 mgu (TypeBasic t1) (TypeBasic t2)
     | t1 == t2 = return nullSubst
     | otherwise = throwError $ "types do not unify: " ++ show t1 ++ " vs. " ++ show t2
@@ -245,20 +243,21 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
         let env3 = TypeEnv $ env2 `M.union` argsTvMap
         (s1, env4) <- tiVarDecls env3 vars
         s2 <- tiStmts env4 stmts
-        let s3 = s1 `composeSubst` s2
+        let cs1 = s1 `composeSubst` s2
         let returns = allReturns stmts
-        let ts = map (apply s3) tvs
+        let ts = map (apply cs1) tvs
         case listToMaybe returns of
             Nothing -> do
                 let t = foldr1 TypeFun (ts ++ [Void])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
-                return $ apply s3 env5
+                return $ apply cs1 env5
             Just r -> do
-                (s4, t2) <- returnType (apply s2 env4) r
-                mapM_ (checkReturn (apply (s2 `composeSubst` s4) env4) t2) returns
+                (s3, t2) <- returnType (apply cs1 env4) r
+                let cs2 = s3 `composeSubst` cs1
+                mapM_ (checkReturn (apply cs2 env4) t2) returns
                 let t = foldr1 TypeFun (ts ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
-                return $ apply (s3 `composeSubst` s4) env5
+                return $ apply cs2 env5
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
 tiStmts _ [] = return nullSubst
@@ -367,14 +366,13 @@ tiExp :: TypeEnv -> Exp -> TI (Subst, Type)
 tiExp env (Exp o e1 e2) = do
     (t1, t2, t3) <- tiOp2 o
     (s1, t1') <- tiExp env e1
-    (s2, t2') <- tiExp (apply s1 env) e2
-    s3 <- mgu t1' t1
-    s4 <- mgu t2' t2
-    let substFull = (s4 `composeSubst` s3)`composeSubst` (s2 `composeSubst` s1)
-    return (substFull, apply substFull t3)
-    -- if not b then return (substFull, t3) else do
-    --     s5 <- mgu t1' t2'
-    --     return (s5 `composeSubst` substFull, t3)
+    s2 <- mgu t1' (apply s1 t1)
+    let cs1 = s2 `composeSubst` s1
+    (s3, t2') <- tiExp (apply (s1 `composeSubst` s2) env) e2
+    let cs2 = s3 `composeSubst` cs1
+    s4 <- mgu (apply cs2 t2') (apply cs2 t2)
+    let cs3 = s4 `composeSubst` cs2
+    return (cs3, apply cs3 t3)
 tiExp env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1') <- tiExp env e
