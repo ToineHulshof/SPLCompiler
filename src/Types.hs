@@ -125,12 +125,12 @@ mgu :: Type -> Type -> TI Subst
 mgu (TypeFun l1 r1) (TypeFun l2 r2) = do
     s1 <- mgu l1 l2
     s2 <- mgu (apply s1 r1) (apply s1 r2)
-    return $ s1 `composeSubst` s2
+    return $ s2 `composeSubst` s1
 mgu (TypeArray t1) (TypeArray t2) = mgu t1 t2
 mgu (TypeTuple l1 r1) (TypeTuple l2 r2) = do
     s1 <- mgu l1 l2
     s2 <- mgu (apply s1 r1) (apply s1 r2)
-    return $ s1 `composeSubst` s2
+    return $ s2 `composeSubst` s1
 mgu (TypeID c u) t = varBind u c t
 mgu t (TypeID c u) = varBind u c t
 mgu (TypeBasic t1) (TypeBasic t2)
@@ -177,14 +177,16 @@ tiVarDecl env (VarDeclVar s ex) = do
         Just v -> do
             vt <- instantiate v
             s2 <- mgu vt t1
-            return (s1, apply (s1 `composeSubst` s2) env1)
+            let cs1 = s2 `composeSubst` s1
+            return (cs1, apply cs1 env1)
 tiVarDecl env (VarDeclType t s e) = do
     (s1, t1) <- tiExp env e
     s2 <- mgu t1 t
-    let t' = generalize (apply (s1 `composeSubst` s2) env) t1
+    let cs1 = s2 `composeSubst` s1
+    let t' = generalize (apply cs1 env) t1
     let TypeEnv env1 = remove env Var s
     let env2 = TypeEnv (M.insert (Var, s) t' env1)
-    return (s1 `composeSubst` s2, apply (s1 `composeSubst` s2) env2)
+    return (cs1, apply cs1 env2)
 
 tiDecls :: TypeEnv -> [Decl] -> TI TypeEnv
 tiDecls = foldM tiDecl
@@ -198,14 +200,14 @@ tiVarDecls env [] = return (nullSubst, env)
 tiVarDecls env (v:vs) = do
     (s1, env1) <- tiVarDecl env v
     (s2, env2) <- tiVarDecls env1 vs
-    return (s1 `composeSubst` s2, env2)
+    return (s2 `composeSubst` s1, env2)
 
 checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
 checkReturn _ t (StmtReturn Nothing) = mgu t Void
 checkReturn env t (StmtReturn (Just e)) = do
     (s1, t1) <- tiExp env e
     s2 <- trace (show s1) mgu t t1
-    return $ s1 `composeSubst` s2
+    return $ s2 `composeSubst` s1
 
 getReturns :: Stmt -> [Stmt]
 getReturns (StmtIf _ s1 s2) = allReturns s1 ++ allReturns (fromMaybe [] s2)
@@ -233,11 +235,11 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
         let returns = allReturns stmts
         if null returns then do
             s3 <- mgu (retType t) Void 
-            let substFull = s1 `composeSubst` s2 `composeSubst` s3 
+            let substFull = s3 `composeSubst` s2 `composeSubst` s1
             return $ apply substFull env
         else do
             ss <- mapM (checkReturn (apply s2 env3) $ retType t) returns
-            let substFull = foldl composeSubst nullSubst ss
+            let substFull = foldr1 composeSubst ss
             return $ apply substFull env
     where
         l1 = length (funTypeToList t) - 1
@@ -263,7 +265,7 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
                 (s3, t2) <- returnType (apply cs1 env4) r
                 let cs2 = s3 `composeSubst` cs1
                 ss <- mapM (checkReturn (apply cs2 env4) t2) returns
-                let s4 = foldl1 composeSubst ss
+                let s4 = foldr1 composeSubst ss
                 let cs3 = s4 `composeSubst` cs2
                 let t = foldr1 TypeFun $ apply cs3 (tvs ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
@@ -274,7 +276,7 @@ tiStmts _ [] = return nullSubst
 tiStmts env (s:ss) = do
     s1 <- tiStmt env s
     s2 <- tiStmts (apply s1 env) ss
-    return (s1 `composeSubst` s2)
+    return (s2 `composeSubst` s1)
 
 tiField :: Type -> Field -> TI (Subst, Type)
 tiField t Head = do
@@ -301,7 +303,7 @@ tiFields t [] = return (nullSubst, t)
 tiFields t (f:fs) = do
     (s1, t1) <- tiField t f
     (s2, t2) <- tiFields t1 fs
-    return (s1 `composeSubst` s2, t2)
+    return (s2 `composeSubst` s1, t2)
 
 tiStmt :: TypeEnv -> Stmt -> TI Subst
 tiStmt env (StmtIf e ss1 ss2) = do
@@ -309,12 +311,12 @@ tiStmt env (StmtIf e ss1 ss2) = do
     s1 <- mgu (TypeBasic BoolType) t1
     s2 <- tiStmts env ss1
     s3 <- tiStmts (apply s1 env) (fromMaybe [] ss2)
-    return (s1 `composeSubst` s2 `composeSubst` s3)
+    return (s3 `composeSubst` s2 `composeSubst` s1)
 tiStmt env (StmtWhile e ss) = do
     (s1, t1) <- tiExp env e
     s1 <- mgu (TypeBasic BoolType) t1
     s2 <- tiStmts env ss
-    return (s1 `composeSubst` s2)
+    return (s2 `composeSubst` s1)
 tiStmt e@(TypeEnv env) (StmtField n fs ex) = do
     (s1, t1) <- tiExp e ex
     case M.lookup (Var, n) env of
@@ -323,7 +325,7 @@ tiStmt e@(TypeEnv env) (StmtField n fs ex) = do
             t <- instantiate sigma
             (s2, t') <- tiFields t fs
             s3 <- mgu t1 t'
-            return (s1 `composeSubst` s2 `composeSubst` s3)
+            return (s3 `composeSubst` s2 `composeSubst` s1)
 tiStmt env (StmtFunCall f) = do
     (s, _) <- tiFunCall env f
     return s
@@ -377,21 +379,21 @@ tiExp env (Exp o e1 e2) = do
     (t1, t2, t3) <- tiOp2 o
     (s1, t1') <- tiExp env e1
     s2 <- mgu t1' (apply s1 t1)
-    let cs1 = s1 `composeSubst` s2
+    let cs1 = s2 `composeSubst` s1
     (s3, t2') <- tiExp (apply cs1 env) e2
-    let cs2 = cs1 `composeSubst` s3
+    let cs2 = s3 `composeSubst` cs1
     s4 <- mgu (apply cs2 t2') (apply cs2 t2)
-    let cs3 = cs2 `composeSubst` s4
+    let cs3 = s4 `composeSubst` cs2
     return (cs3, apply cs3 t3)
 tiExp env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1') <- tiExp env e
     s2 <- mgu t1 t1'
-    return (s1 `composeSubst` s2, t2)
+    return (s2 `composeSubst` s1, t2)
 tiExp env (ExpTuple (e1, e2)) = do
     (s1, t1) <- tiExp env e1
     (s2, t2) <- tiExp (apply s1 env) e2
-    return (s1 `composeSubst` s2, TypeTuple t1 t2)
+    return (s2 `composeSubst` s1, TypeTuple t1 t2)
 tiExp env (ExpBrackets e) = tiExp env e
 tiExp (TypeEnv env) (ExpField s fs) = case M.lookup (Var, s) env of
     Nothing -> throwError $ s ++ " is not defined"
