@@ -15,5 +15,5 @@ testAllFiles = forM (map ("../test/testfiles/"++) testFiles) (readFile Control.M
 testFile :: FilePath -> IO ()
 testFile = readFile Control.Monad.>=> test
 
-main :: IO [()]
-main = testAllFiles
+main :: IO ()
+main = putStrLn "Tests not implemented yet" --testAllFiles

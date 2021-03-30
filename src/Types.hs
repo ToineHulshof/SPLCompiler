@@ -310,8 +310,9 @@ tiStmt env (StmtIf e ss1 ss2) = do
     (s1, t1) <- tiExp env e
     s1 <- mgu (TypeBasic BoolType) t1
     s2 <- tiStmts env ss1
-    s3 <- tiStmts (apply s1 env) (fromMaybe [] ss2)
-    return (s3 `composeSubst` s2 `composeSubst` s1)
+    let cs1 = s2 `composeSubst` s1
+    s3 <- tiStmts (apply cs1 env) (fromMaybe [] ss2)
+    trace (show ss2) return (s3 `composeSubst` cs1)
 tiStmt env (StmtWhile e ss) = do
     (s1, t1) <- tiExp env e
     s1 <- mgu (TypeBasic BoolType) t1
