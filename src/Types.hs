@@ -254,8 +254,9 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
             Just r -> do
                 (s3, t2) <- returnType (apply cs1 env4) r
                 let cs2 = s3 `composeSubst` cs1
-                mapM_ (checkReturn (apply cs2 env4) t2) returns
-                let t = foldr1 TypeFun (ts ++ [t2])
+                ss <- mapM (checkReturn (apply cs2 env4) t2) returns
+                let s4 = foldl composeSubst nullSubst ss
+                let t = foldr1 TypeFun $ apply s4 (ts ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
                 return $ apply cs2 env5
 
