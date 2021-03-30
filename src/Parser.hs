@@ -250,23 +250,6 @@ result (Left es) = join "\n" $ map show es
 -- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
 -- The boolean argument is true when the parser is currently in a line comment and false otherwise
 -- The integer argument represents the current "level" of recursive block comments, e.g. 0 when you are not in a /* */ comment, 1 if you are and 2 if you are in a comment inside a comment
--- comments :: Bool -> Int -> Code -> Either [Error] Code
--- comments _ d []
---   | d == 0 = Right [] -- Parser is done and the parser is not currently in a block comment 
---   | otherwise = Left ("Did not close all comments", 0, 0) -- Parser is done, but is currently in a block comment
--- comments s d (('/', l1, c1) : ('/', l2, c2) : xs) = comments True d xs
--- comments s d (('/', l1, c1) : ('*', l2, c2) : xs) = comments s (d + 1) xs
--- comments s d (('*', l1, c1) : ('/', l2, c2) : xs)
---   | d /= 0 = comments s (d - 1) xs
---   | otherwise = Left ("Trying to close comment that doesn't exist", l2, c2)
--- comments s d ((x1, l1, c1) : (x2, l2, c2) : xs)
---   | l2 > l1 && s = comments False d ((x2, l2, c2) : xs)
---   | s || (d > 0) = comments s d ((x2, l2, c2) : xs)
--- comments s d ((x1, l1, c1) : xs) = (:) (x1, l1, c1) <$> comments s d xs
-
--- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
--- The boolean argument is true when the parser is currently in a line comment and false otherwise
--- The integer argument represents the current "level" of recursive block comments, e.g. 0 when you are not in a /* */ comment, 1 if you are and 2 if you are in a comment inside a comment
 comments :: Bool -> Int -> Code -> Either [Error] Code 
 comments _ d []
     | d == 0 = Right [] -- Parser is done and the parser is not currently in a block comment 

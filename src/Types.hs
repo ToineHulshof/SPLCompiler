@@ -28,7 +28,7 @@ instance Types Type where
 
   apply s (TypeID c n) = case M.lookup n s of
     Nothing -> TypeID c n
-    Just t -> addCondition c t
+    Just t -> t
   apply _ (TypeBasic t) = TypeBasic t
   apply s (TypeArray t) = TypeArray (apply s t)
   apply s (TypeFun t1 t2) = TypeFun (apply s t1) (apply s t2)
@@ -129,18 +129,22 @@ mgu (TypeBasic t1) (TypeBasic t2)
 mgu Void Void = return nullSubst
 mgu t1 t2 = throwError $ "types do not unify: " ++ show t1 ++ " vs. " ++ show t2
 
-addCondition :: Maybe Condition -> Type -> Type
-addCondition (Just Ord) (TypeID _ n) = TypeID (Just Ord) n
-addCondition Nothing (TypeID c n) = TypeID c n
-addCondition c (TypeID Nothing n) = TypeID c n
-addCondition _ (TypeID c n) = TypeID c n
-addCondition _ t = t
+condition :: Type -> String -> (Maybe Condition, Bool)
+condition (TypeID c n) s = (c, n == s)
+condition _ _ = (Nothing, False)
+
+composeConditions :: Maybe Condition -> Maybe Condition -> Maybe Condition
+composeConditions Nothing c = c
+composeConditions (Just Ord) _ = Just Ord
+composeConditions c Nothing = c
+composeConditions _ c = c
 
 varBind :: String -> Maybe Condition -> Type -> TI Subst
 varBind u c t
-    | TypeID c u == t = return nullSubst
-    | u `S.member` ftv t = throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
+    | b = return $ M.singleton u (TypeID (composeConditions c c1) u)
+    | u `S.member` ftv t = trace (show u ++ ", " ++ show c ++ ", " ++ show t) throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
     | otherwise = return (M.singleton u t)
+    where (c1, b) = condition t u
 
 tiSPL :: TypeEnv -> SPL -> TI TypeEnv
 tiSPL env (SPL ds) = tiDecls env ds
@@ -251,9 +255,10 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
                 let cs2 = s3 `composeSubst` cs1
                 ss <- mapM (checkReturn (apply cs2 env4) t2) returns
                 let s4 = foldl composeSubst nullSubst ss
-                let t = foldr1 TypeFun $ apply s4 (ts ++ [t2])
+                let cs3 = s4 `composeSubst` cs2
+                let t = foldr1 TypeFun $ apply cs3 (ts ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
-                return $ apply cs2 env5
+                return $ apply cs3 env5
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
 tiStmts _ [] = return nullSubst
