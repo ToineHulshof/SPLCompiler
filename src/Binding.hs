@@ -6,6 +6,12 @@ import Types
 import Control.Monad (foldM, forM)
 import qualified Data.Map as M
 
+stdlib :: TypeEnv
+stdlib = TypeEnv $ M.fromList [
+    ((Fun, "print"), Scheme [] (TypeFun (TypeID Nothing "t") Void)),
+    ((Fun, "isEmpty"), Scheme [] (TypeFun (TypeArray $ TypeID Nothing "t") (TypeBasic BoolType)))
+    ]
+
 btSPL :: SPL -> TI TypeEnv
 btSPL (SPL ds) = do
     x <- mapM btDecl ds
@@ -33,8 +39,7 @@ ti spl e = do
     case bt of
         Left err -> putStrLn err
         Right env -> do
-            -- print env
-            (res, _) <- runTI $ tiSPL (e `combine` env) spl
+            (res, _) <- runTI $ tiSPL (stdlib `combine` e `combine` env) spl
             case res of
                 Left err -> putStrLn err
                 Right e -> putStr $ "Program is correctly typed\n" ++ show e

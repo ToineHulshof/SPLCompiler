@@ -69,7 +69,10 @@ showConditions [(s, c)] = show c ++ " " ++ s ++ " => "
 showConditions ((s, c):cs) = show c ++ " " ++ s ++ ", " ++ showConditions cs 
 
 instance Show TypeEnv where
-    show (TypeEnv env) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (map head $ group $ sort $ conditions t) ++ show t) $ M.toList env
+    show env = help funs ++ "\n" ++ help vars
+        where
+            help (TypeEnv e) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (map head $ group $ sort $ conditions t) ++ show t) $ M.toList e
+            (funs, vars) = woFun env
 
 emptyEnv :: TypeEnv
 emptyEnv = TypeEnv M.empty
@@ -79,11 +82,18 @@ remove (TypeEnv env) k var = TypeEnv $ M.delete (k, var) env
 
 removeAll :: TypeEnv -> Kind -> [String] -> TypeEnv
 removeAll env _ [] = env
-removeAll env k (v:vars) = removeAll (remove env k v) k vars 
+removeAll env k (v:vars) = removeAll (remove env k v) k vars
+
+woFun :: TypeEnv -> (TypeEnv, TypeEnv)
+woFun (TypeEnv env) = (help Fun, help Var)
+    where
+        help :: Kind -> TypeEnv
+        help k = TypeEnv $ M.fromList $ filter (\((k1, _), _) -> k1 == k) (M.toList env)
 
 instance Types TypeEnv where
     ftv (TypeEnv env) = ftv (M.elems env)
-    apply s (TypeEnv env) = TypeEnv (M.map (apply s) env)
+    apply s env = fun `combine` TypeEnv (M.map (apply s) var)
+        where (fun, TypeEnv var) = woFun env
 
 generalize :: TypeEnv -> Type -> Scheme
 generalize env t = Scheme vars t
