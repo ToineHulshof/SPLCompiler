@@ -206,7 +206,7 @@ checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
 checkReturn _ t (StmtReturn Nothing) = mgu t Void
 checkReturn env t (StmtReturn (Just e)) = do
     (s1, t1) <- tiExp env e
-    s2 <- trace (show s1) mgu t t1
+    s2 <- mgu t t1
     return $ s2 `composeSubst` s1
 
 getReturns :: Stmt -> [Stmt]
