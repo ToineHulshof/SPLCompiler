@@ -10,7 +10,7 @@ import qualified Data.Set as S
 import Grammar
 import Debug.Trace ( trace )
 
-data Scheme = Scheme [String] Type deriving (Show)
+data Scheme = Scheme [String] Type deriving (Eq, Show)
 type Subst = M.Map String Type
 data Kind = Var | Fun deriving (Eq, Ord, Show)
 
@@ -52,7 +52,7 @@ combine (TypeEnv env1) (TypeEnv env2) = TypeEnv $ env1 `M.union` env2
 composeSubst :: Subst -> Subst -> Subst
 composeSubst s1 s2 = M.map (apply s1) s2 `M.union` s1
 
-newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme)
+newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme) deriving Eq
 
 conditions :: Type -> [(String, Condition)]
 conditions (TypeBasic _) = []
@@ -174,13 +174,11 @@ varBind u c t
     | otherwise = return (M.singleton u t)
     where (c1, b) = condition t u
 
-tiSPL :: TypeEnv -> SPL -> TI TypeEnv
+tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv)
 tiSPL env (SPL ds) = tiDecls env ds
 
-tiDecl :: TypeEnv -> Decl -> TI TypeEnv
-tiDecl env (DeclVarDecl v) = do
-    (_ ,env1) <- tiVarDecl env v
-    return env1
+tiDecl :: TypeEnv -> Decl -> TI (Subst, TypeEnv)
+tiDecl env (DeclVarDecl v) = tiVarDecl env v
 tiDecl e (DeclFunDecl f) = tiFunDecl e f
 
 tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, TypeEnv)
@@ -206,8 +204,12 @@ tiVarDecl env (VarDeclType t s e) = do
     let env2 = TypeEnv (M.insert (Var, s) t' env1)
     return (cs1, apply cs1 env2)
 
-tiDecls :: TypeEnv -> [Decl] -> TI TypeEnv
-tiDecls = foldM tiDecl
+tiDecls :: TypeEnv -> [Decl] -> TI (Subst, TypeEnv)
+tiDecls env [] = return (nullSubst, env)
+tiDecls env (d:ds) = do
+    (s1, env1) <- tiDecl env d
+    (s2, env2) <- tiDecls env1 ds
+    return (s2 `composeSubst` s1, env2)
 
 nameOfVarDecl :: VarDecl -> String
 nameOfVarDecl (VarDeclVar n _) = n
@@ -250,7 +252,7 @@ returnType :: TypeEnv -> Stmt -> TI (Subst, Type)
 returnType _ (StmtReturn Nothing) = return (nullSubst, Void)
 returnType env (StmtReturn (Just e)) = tiExp env e
 
-tiFunDecl :: TypeEnv -> FunDecl -> TI TypeEnv
+tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, TypeEnv)
 tiFunDecl env (FunDecl n args (Just t) vars stmts)
     | l1 /= l2 = throwError $ show n ++ " got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments"
     | otherwise = do
@@ -263,12 +265,12 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
         if null returns then do
             s3 <- mgu (retType t) Void 
             let substFull = s3 `composeSubst` s2 `composeSubst` s1
-            return $ apply substFull env
+            return (substFull, apply substFull env)
         else do
             if not $ correctReturn stmts then throwError "Not every path has a return statment" else do
             ss <- mapM (checkReturn (apply s2 env3) $ retType t) returns
             let substFull = foldr1 composeSubst ss
-            return $ apply substFull env
+            return (substFull, apply substFull env)
     where
         l1 = length (funTypeToList t) - 1
         l2 = length args
@@ -288,7 +290,7 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
             Nothing -> do
                 let t = foldr1 TypeFun (apply cs1 tvs ++ [Void])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
-                return $ apply cs1 env5
+                return (cs1, apply cs1 env5)
             Just r -> do
                 if not $ correctReturn stmts then throwError "Not every path has a return statment" else do
                 (s3, t2) <- returnType (apply cs1 env4) r
@@ -298,7 +300,7 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
                 let cs3 = s4 `composeSubst` cs2
                 let t = foldr1 TypeFun $ apply cs3 (tvs ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
-                return $ apply cs3 env5
+                return (cs3, apply cs3 env5)
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
 tiStmts _ [] = return nullSubst
