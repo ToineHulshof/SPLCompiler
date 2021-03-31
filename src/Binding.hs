@@ -63,5 +63,5 @@ testEnv env s = case testP splP s of
     Left e -> print e
     Right (c, s) -> if not $ null c then putStrLn ("Did not finish parsing" ++ " " ++ map fst3 c) else tiResult s env
 
-test :: String -> IO ()
-test = testEnv emptyEnv
+check :: String -> IO ()
+check = testEnv emptyEnv
