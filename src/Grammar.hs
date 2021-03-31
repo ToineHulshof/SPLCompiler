@@ -71,10 +71,9 @@ instance Show Type where
   show (TypeBasic b) = show b
   show (TypeTuple t1 t2) = "(" ++ show t1 ++ ", " ++ show t2 ++ ")"
   show (TypeArray t) = "[" ++ show t ++ "]"
-  show (TypeID Nothing s) = s
-  show (TypeID (Just c) s) = show c ++ " " ++ s
+  show (TypeID _ s) = "\x1b[36m" ++ s ++ "\x1b[0m"
   show (TypeFun t1 t2) = show t1 ++ " -> " ++ show t2
-  show Void = "Void"
+  show Void = "\x1b[34mVoid\x1b[0m"
 
 data BasicType
   = IntType
@@ -83,9 +82,9 @@ data BasicType
   deriving (Eq)
 
 instance Show BasicType where
-  show IntType = "Int"
-  show BoolType = "Bool"
-  show CharType = "Char"
+  show IntType = "\x1b[34mInt\x1b[0m"
+  show BoolType = "\x1b[34mBool\x1b[0m"
+  show CharType = "\x1b[34mChar\x1b[0m"
 
 -- Recursive definition of Field is already defined here, not in Field
 data Stmt

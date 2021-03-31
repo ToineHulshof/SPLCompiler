@@ -12,7 +12,11 @@ import Debug.Trace ( trace )
 
 data Scheme = Scheme [String] Type deriving (Show)
 type Subst = M.Map String Type
-data Kind = Var | Fun deriving (Eq, Ord, Show)
+data Kind = Var | Fun deriving (Eq, Ord)
+
+instance Show Kind where
+    show Var = "\x1b[35mVar\x1b[0m"
+    show Fun = "\x1b[1m\x1b[35mFun\x1b[0m"
 
 class Types a where
   ftv :: a -> S.Set String
@@ -66,10 +70,10 @@ conditions (TypeID (Just c) n) = [(n, c)]
 conditions (TypeFun t1 t2) = conditions t1 ++ conditions t2
 conditions Void = []
 
-showConditions :: [(String, Condition)] -> String
-showConditions [] = ""
-showConditions [(s, c)] = show c ++ " " ++ s ++ " => "
-showConditions ((s, c):cs) = show c ++ " " ++ s ++ ", " ++ showConditions cs 
+showConditions :: M.Map String String -> [(String, Condition)] -> String
+showConditions m [] = ""
+showConditions m [(s, c)] = "\x1b[34m" ++ show c ++ "\x1b[0m \x1b[36m" ++ fromMaybe s (M.lookup s m) ++ "\x1b[0m => "
+showConditions m ((s, c):cs) = "\x1b[34m" ++ show c ++ "\x1b[0m \x1b[36m" ++ fromMaybe s (M.lookup s m) ++ "\x1b[0m, " ++ showConditions m cs 
 
 varStrings :: Type -> S.Set String
 varStrings (TypeID _ s) = S.singleton s
@@ -85,14 +89,14 @@ showType :: M.Map String String -> Type -> String
 showType m (TypeBasic b) = show b
 showType m (TypeTuple t1 t2) = "(" ++ showType m t1 ++ ", " ++ showType m t2 ++ ")"
 showType m (TypeArray t) = "[" ++ showType m t ++ "]"
-showType m (TypeID _ s) = fromMaybe s (M.lookup s m)
+showType m (TypeID _ s) = "\x1b[36m" ++ fromMaybe s (M.lookup s m) ++ "\x1b[0m"
 showType m (TypeFun t1 t2) = showType m t1 ++ " -> " ++ showType m t2
-showType m Void = "Void"
+showType m Void = "\x1b[34mVoid\x1b[0m"
 
 instance Show TypeEnv where
-    show env = help funs ++ "\n" ++ help vars
+    show env = help funs ++ help vars
         where
-            help (TypeEnv e) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (map head $ group $ sort $ conditions t) ++ showType (varsMap t) t) $ filter (\((_, n), _) -> n `notElem` ["print", "isEmpty"]) $ M.toList e
+            help (TypeEnv e) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ "\x1b[33m" ++ n ++ "\x1b[0m" ++ " :: " ++ showConditions (varsMap t) (map head $ group $ sort $ conditions t) ++ showType (varsMap t) t) $ filter (\((_, n), _) -> n `notElem` ["print", "isEmpty"]) $ M.toList e
             (funs, vars) = woFun env
 
 emptyEnv :: TypeEnv
@@ -173,7 +177,7 @@ composeConditions _ c = c
 varBind :: String -> Maybe Condition -> Type -> TI Subst
 varBind u c t
     | b = return $ M.singleton u (TypeID (composeConditions c c1) u)
-    | u `S.member` ftv t = throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
+    | u `S.member` ftv t = throwError $ "occur check fails: \x1b[36m" ++ u ++ "\x1b[0m vs. " ++ show t
     | otherwise = return (M.singleton u t)
     where (c1, b) = condition t u
 

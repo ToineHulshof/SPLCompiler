@@ -49,14 +49,18 @@ finalEnv spl env = do
 ti :: SPL -> TypeEnv -> TI TypeEnv
 ti spl e = do
     bt <- btSPL spl
-    finalEnv spl $ stdlib `combine` e `combine` bt
+    let env = stdlib `combine` e `combine` bt
+    (_, env1) <- tiSPL env spl
+    (_, env2) <- tiSPL env1 spl
+    return env2
+    -- finalEnv spl $ stdlib `combine` e `combine` bt
 
 tiResult :: SPL -> TypeEnv -> IO ()
 tiResult spl e = do
     (bt, _) <- runTI $ ti spl e
     case bt of
-        Left err -> putStrLn err
-        Right env -> putStr $ "Program is correctly typed\n" ++ show env
+        Left err -> putStrLn $ "\x1b[31mError:\x1b[0m " ++ err ++ "\n"
+        Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of

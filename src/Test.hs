@@ -9,13 +9,16 @@ import Grammar
 import Types
 
 testFiles :: [FilePath]
-testFiles = ["2D.spl", "3D.spl", "Example.spl", "SumProduct.spl", "a_bit_of_everything.spl", "arguments.spl", "assignment_to_builtin.spl", "bool.spl", "brainfuck.spl", "comment.spl", "constants.spl", "fac.spl", "identity.spl", "infinite_type_shouldfail.spl", "integers.spl", "list.spl", "lists.spl", "many_parenthesis.spl", "more_parenthesis.spl", "mutrec.spl", "op.spl", "overloading.spl", "polymorphic_value_again_shouldfail.spl", "polymorphic_value_indirect_shouldfail.spl", "polymorphic_value_shouldfail.spl", "problematic.spl", "problematic_programs.spl", "recursion.spl", "return_ill_typed.spl", "return_in_all_code_paths.spl", "return_well_typed.spl", "self_application_shouldfail.spl", "shadow.spl", "sieve.spl", "stress_test.spl", "sum.spl", "unary_minus.spl", "while.spl", "whitespaces.spl", "x.spl"]
+testFiles = ["2D", "3D", "Example", "SumProduct", "a_bit_of_everything", "a_bit_of_everything_no_types", "arguments", "assignment_to_builtin", "bool", "brainfuck", "comment", "constants", "fac", "fout", "identity", "infinite_type_shouldfail", "integers", "list", "lists", "many_parenthesis", "more_parenthesis", "mutrec", "op", "overloading", "polymorphic_value_again_shouldfail", "polymorphic_value_indirect_shouldfail", "polymorphic_value_shouldfail", "problematic", "problematic_programs", "recursion", "return_ill_typed", "return_in_all_code_paths", "return_well_typed", "self_application_shouldfail", "shadow", "sieve", "stress_test", "sum", "unary_minus", "while", "whitespaces", "x"]
 
 testAllFiles :: IO [()]
-testAllFiles = forM (map ("../test/testfiles/"++) testFiles) (readFile Control.Monad.>=> check)
+testAllFiles = forM testFiles testFile
 
 testFile :: FilePath -> IO ()
-testFile = readFile Control.Monad.>=> check
+testFile f = do
+    s <- readFile $ "../test/testfiles/" ++ f ++ ".spl"
+    putStrLn $ f ++ ".spl"
+    check s
 
 main :: IO ()
 main = putStrLn "Tests not implemented yet" --testAllFiles
