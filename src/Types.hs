@@ -308,16 +308,18 @@ tiFields t (f:fs) = do
 tiStmt :: TypeEnv -> Stmt -> TI Subst
 tiStmt env (StmtIf e ss1 ss2) = do
     (s1, t1) <- tiExp env e
-    s1 <- mgu (TypeBasic BoolType) t1
-    s2 <- tiStmts env ss1
+    s2 <- mgu (TypeBasic BoolType) t1
     let cs1 = s2 `composeSubst` s1
-    s3 <- tiStmts (apply cs1 env) (fromMaybe [] ss2)
-    trace (show ss2) return (s3 `composeSubst` cs1)
+    s3 <- tiStmts (apply cs1 env) ss1
+    let cs2 = s3 `composeSubst` cs1
+    s4 <- tiStmts (apply cs2 env) (fromMaybe [] ss2)
+    return (s4 `composeSubst` cs2)
 tiStmt env (StmtWhile e ss) = do
     (s1, t1) <- tiExp env e
-    s1 <- mgu (TypeBasic BoolType) t1
-    s2 <- tiStmts env ss
-    return (s2 `composeSubst` s1)
+    s2 <- mgu (TypeBasic BoolType) t1
+    let cs1 = s2 `composeSubst` s1
+    s3 <- tiStmts (apply cs1 env) ss
+    return (s3 `composeSubst` cs1)
 tiStmt e@(TypeEnv env) (StmtField n fs ex) = do
     (s1, t1) <- tiExp e ex
     case M.lookup (Var, n) env of
@@ -404,7 +406,9 @@ tiExp (TypeEnv env) (ExpField s fs) = case M.lookup (Var, s) env of
 tiExp _ (ExpInt _) = return (nullSubst, TypeBasic IntType)
 tiExp _ (ExpBool _) = return (nullSubst, TypeBasic BoolType)
 tiExp _ (ExpChar _) = return (nullSubst, TypeBasic CharType)
-tiExp env (ExpFunCall f) = tiFunCall env f
+tiExp env (ExpFunCall f) = do
+    x <- tiFunCall env f
+    trace (show env ++ "\n" ++ show (fst x)) return x
 tiExp _ ExpEmptyList = do
     t <- newTyVar Nothing "l"
     return (nullSubst, TypeArray t)
