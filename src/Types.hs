@@ -107,13 +107,13 @@ type TI a = ExceptT String (ReaderT TIEnv (StateT TIState IO)) a
 runTI :: TI a -> IO (Either String a, TIState)
 runTI t = runStateT (runReaderT (runExceptT t) initTIEnv) initTIState
     where initTIEnv = TIEnv { }
-          initTIState = TIState { tiSupply = 0, tiSubst = M.empty }
+          initTIState = TIState { tiSupply = 1, tiSubst = M.empty }
 
 newTyVar :: Maybe Condition -> String -> TI Type
 newTyVar c prefix = do
     s <- get
     put s { tiSupply = tiSupply s + 1 }
-    return (TypeID c (prefix ++ show (tiSupply s)))
+    return (TypeID c ("a" ++ show (tiSupply s)))
 
 instantiate :: Scheme -> TI Type
 instantiate (Scheme vars t) = do
@@ -255,7 +255,7 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
         l1 = length (funTypeToList t) - 1
         l2 = length args
 tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup (Fun, n) envt of
-    Nothing -> throwError "wtf"
+    Nothing -> throwError $ "function " ++ n ++ " was not found in the environment, while it should be present."
     Just s -> do
         tvs <- mapM (newTyVar Nothing) args
         let env1 = remove env Fun n
@@ -417,9 +417,7 @@ tiExp (TypeEnv env) (ExpField s fs) = case M.lookup (Var, s) env of
 tiExp _ (ExpInt _) = return (nullSubst, TypeBasic IntType)
 tiExp _ (ExpBool _) = return (nullSubst, TypeBasic BoolType)
 tiExp _ (ExpChar _) = return (nullSubst, TypeBasic CharType)
-tiExp env (ExpFunCall f) = do
-    x <- tiFunCall env f
-    trace (show env ++ "\n" ++ show (fst x)) return x
+tiExp env (ExpFunCall f) = tiFunCall env f
 tiExp _ ExpEmptyList = do
     t <- newTyVar Nothing "l"
     return (nullSubst, TypeArray t)

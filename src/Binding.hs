@@ -33,21 +33,23 @@ btFunDecl (FunDecl s args Nothing _ _) = do
     return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
 btFunDecl (FunDecl s _ (Just t) _ _) = return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
 
-ti :: SPL -> TypeEnv -> IO ()
+ti :: SPL -> TypeEnv -> TI TypeEnv
 ti spl e = do
-    (bt, _) <- runTI $ btSPL spl
+    bt <- btSPL spl
+    env <- tiSPL (stdlib `combine` e `combine` bt) spl
+    tiSPL env spl
+
+tiResult :: SPL -> TypeEnv -> IO ()
+tiResult spl e = do
+    (bt, _) <- runTI $ ti spl e
     case bt of
         Left err -> putStrLn err
-        Right env -> do
-            (res, _) <- runTI $ tiSPL (stdlib `combine` e `combine` env) spl
-            case res of
-                Left err -> putStrLn err
-                Right e -> putStr $ "Program is correctly typed\n" ++ show e
+        Right env -> putStr $ "Program is correctly typed\n" ++ show env
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of
     Left e -> print e
-    Right (c, s) -> if not $ null c then putStrLn ("Did not finish parsing" ++ " " ++ map fst3 c) else ti s env
+    Right (c, s) -> if not $ null c then putStrLn ("Did not finish parsing" ++ " " ++ map fst3 c) else tiResult s env
 
 test :: String -> IO ()
 test = testEnv emptyEnv

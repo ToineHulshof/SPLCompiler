@@ -8,36 +8,10 @@
 // f(x) { return x.snd; return x.fst; }
 // f(x) { return x.fst.fst; }
 // f(x) { return x.fst.fst.fst.fst; }
-fromTo ( from, to ) {
-    if ( from <= to ) {
-        return from : fromTo ( from + 1, to );
-    } else {
-        return [];
-    }
-}
-
-if (x) {
-    return 2;
-}
-return 1;
-
-kijken of in de top level een return zit.
-als dat niet zo is:
-    
-of in beide een return
-
-f(x) {
-    if (True) {
-        if (True) {
-            return 3;
-        } else {
-
-        }
-    } else {
-        if (False) {
-            return 1;
-        } else {
-            return 2;
-        }
-    }
-}
+// fromTo ( from, to ) {
+//     if ( from <= to ) {
+//         return from : fromTo ( from + 1, to );
+//     } else {
+//         return [];
+//     }
+// }
