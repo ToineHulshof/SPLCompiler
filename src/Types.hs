@@ -68,10 +68,28 @@ showConditions [] = ""
 showConditions [(s, c)] = show c ++ " " ++ s ++ " => "
 showConditions ((s, c):cs) = show c ++ " " ++ s ++ ", " ++ showConditions cs 
 
+varStrings :: Type -> S.Set String
+varStrings (TypeID _ s) = S.singleton s
+varStrings (TypeTuple t1 t2) = varStrings t1 `S.union` varStrings t2
+varStrings (TypeArray t) = varStrings t
+varStrings (TypeFun t1 t2) = varStrings t1 `S.union` varStrings t2
+varStrings _ = S.empty
+
+varsMap :: Type -> M.Map String String
+varsMap t = M.fromList $ zip (S.toList $ varStrings t) (map (: []) ['a' .. 'z'])
+
+showType :: M.Map String String -> Type -> String
+showType m (TypeBasic b) = show b
+showType m (TypeTuple t1 t2) = "(" ++ showType m t1 ++ ", " ++ showType m t2 ++ ")"
+showType m (TypeArray t) = "[" ++ showType m t ++ "]"
+showType m (TypeID _ s) = fromMaybe s (M.lookup s m)
+showType m (TypeFun t1 t2) = showType m t1 ++ " -> " ++ showType m t2
+showType m Void = "Void"
+
 instance Show TypeEnv where
     show env = help funs ++ "\n" ++ help vars
         where
-            help (TypeEnv e) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (map head $ group $ sort $ conditions t) ++ show t) $ filter (\((_, n), _) -> n `notElem` ["print", "isEmpty"]) $ M.toList e
+            help (TypeEnv e) = unlines $ map (\((k, n), Scheme c t) -> show k ++ " " ++ n ++ " :: " ++ showConditions (map head $ group $ sort $ conditions t) ++ showType (varsMap t) t) $ filter (\((_, n), _) -> n `notElem` ["print", "isEmpty"]) $ M.toList e
             (funs, vars) = woFun env
 
 emptyEnv :: TypeEnv
@@ -372,7 +390,7 @@ tiFunCall e@(TypeEnv env) f@(FunCall n es) = case M.lookup (Fun, n) env of
             Nothing -> if null es then return (nullSubst, retType t) else throwError $ "Number of arguments of " ++ show f ++ " does not correspond with its type"
             Just funT -> if length es /= length (funTypeToList funT) then throwError $ show n ++ " got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments" else do
                 ts <- mapM (tiExp e) es
-                s <- zipWithM mgu (map snd ts) (funTypeToList funT)
+                s <- zipWithM mgu (funTypeToList funT) (map snd ts)
                 let s1 = foldr1 composeSubst $ map fst ts ++ s
                 return (s1, retType t)
 

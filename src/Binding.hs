@@ -37,7 +37,8 @@ ti :: SPL -> TypeEnv -> TI TypeEnv
 ti spl e = do
     bt <- btSPL spl
     env <- tiSPL (stdlib `combine` e `combine` bt) spl
-    tiSPL env spl
+    env1 <- tiSPL env spl
+    tiSPL env1 spl
 
 tiResult :: SPL -> TypeEnv -> IO ()
 tiResult spl e = do
