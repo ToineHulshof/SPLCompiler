@@ -17,7 +17,7 @@ testAllFiles = forM testFiles testFile
 testFile :: FilePath -> IO ()
 testFile f = do
     s <- readFile $ "../test/testfiles/" ++ f ++ ".spl"
-    putStrLn $ f ++ ".spl"
+    putStrLn $ "\x1b[3m" ++ f ++ ".spl \x1b[0m"
     check s
 
 main :: IO ()

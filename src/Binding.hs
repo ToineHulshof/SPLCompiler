@@ -52,20 +52,21 @@ ti spl e = do
     let env = stdlib `combine` e `combine` bt
     (_, env1) <- tiSPL env spl
     (_, env2) <- tiSPL env1 spl
-    return env2
+    (_, env3) <- tiSPL env2 spl
+    return env3
     -- finalEnv spl $ stdlib `combine` e `combine` bt
 
 tiResult :: SPL -> TypeEnv -> IO ()
 tiResult spl e = do
     (bt, _) <- runTI $ ti spl e
     case bt of
-        Left err -> putStrLn $ "\x1b[31mError:\x1b[0m " ++ err ++ "\n"
+        Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
         Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of
-    Left e -> print e
-    Right (c, s) -> if not $ null c then putStrLn ("Did not finish parsing" ++ " " ++ map fst3 c) else tiResult s env
+    Left e -> putStrLn $ "\x1b[31mParseError:\x1b[0m" ++ show e ++ "\n"
+    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0m Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult s env
 
 check :: String -> IO ()
 check = testEnv emptyEnv

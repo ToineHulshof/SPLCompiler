@@ -1,4 +1,4 @@
-function (n, b, l) :: Int Bool [Int] -> [Int] 
+function (n, b, l) :: Int Bool [Int] -> Void 
 {
     print(n);
     print(b);

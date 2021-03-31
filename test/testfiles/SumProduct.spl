@@ -13,7 +13,7 @@ sum(list) :: [Bool] -> Bool {
 	return list.hd || sum(list.tl);
 }
 
-product(list) :: [Bool] -> Bool {
-	if (isEmpty(list)) { return True;	}
-	return list.hd && sum(list.tl);
-}
+// product(list) :: [Bool] -> Bool {
+// 	if (isEmpty(list)) { return True;	}
+// 	return list.hd && sum(list.tl);
+// }

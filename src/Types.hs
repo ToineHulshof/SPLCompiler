@@ -263,7 +263,8 @@ tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, TypeEnv)
 tiFunDecl env (FunDecl n args (Just t) vars stmts)
     | l1 /= l2 = throwError $ show n ++ " got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments"
     | otherwise = do
-        let TypeEnv env1 = removeAll env Var args
+        let env0 = env--remove env Fun n
+        let TypeEnv env1 = removeAll env0 Var args
         let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args (funTypeToList t)
         let env2 = TypeEnv (env1 `M.union` argsTvMap)
         (s1, env3) <- tiVarDecls env2 vars
