@@ -60,6 +60,7 @@ test-suite SPLCompiler-test
   type: exitcode-stdio-1.0
   main-is: Test.hs
   other-modules:
+      Spec
       Paths_SPLCompiler
   hs-source-dirs:
       test
