@@ -219,6 +219,15 @@ getReturns r = [r]
 allReturns :: [Stmt] -> [Stmt]
 allReturns = concatMap getReturns
 
+hasReturn :: Stmt -> Bool
+hasReturn (StmtIf _ ss1 ss2) = correctReturn ss1 && correctReturn (fromMaybe [] ss2)
+hasReturn (StmtWhile _ ss) = correctReturn ss
+hasReturn StmtReturn {} = True
+hasReturn _ = False
+
+correctReturn :: [Stmt] -> Bool
+correctReturn = any hasReturn
+
 returnType :: TypeEnv -> Stmt -> TI (Subst, Type)
 returnType _ (StmtReturn Nothing) = return (nullSubst, Void)
 returnType env (StmtReturn (Just e)) = tiExp env e
@@ -238,6 +247,7 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
             let substFull = s3 `composeSubst` s2 `composeSubst` s1
             return $ apply substFull env
         else do
+            if not $ correctReturn stmts then throwError "Not every path has a return statment" else do
             ss <- mapM (checkReturn (apply s2 env3) $ retType t) returns
             let substFull = foldr1 composeSubst ss
             return $ apply substFull env
@@ -262,6 +272,7 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
                 return $ apply cs1 env5
             Just r -> do
+                if not $ correctReturn stmts then throwError "Not every path has a return statment" else do
                 (s3, t2) <- returnType (apply cs1 env4) r
                 let cs2 = s3 `composeSubst` cs1
                 ss <- mapM (checkReturn (apply cs2 env4) t2) returns
