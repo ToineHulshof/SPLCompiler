@@ -30,7 +30,6 @@ library
       Grammar
       Parser
       Printer
-      Test
       Types
   other-modules:
       Paths_SPLCompiler
@@ -60,6 +59,7 @@ test-suite SPLCompiler-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Test
       Paths_SPLCompiler
   hs-source-dirs:
       test
