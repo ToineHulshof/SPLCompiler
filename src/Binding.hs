@@ -44,17 +44,12 @@ effect s = any hasEffect $ M.toList s
 finalEnv :: SPL -> TypeEnv -> TI TypeEnv
 finalEnv spl env = do
     (s, env') <- tiSPL env spl
-    if not $ effect s then return env' else finalEnv spl env'
+    if env == env' then return env' else finalEnv spl env'
 
 ti :: SPL -> TypeEnv -> TI TypeEnv
 ti spl e = do
     bt <- btSPL spl
-    let env = stdlib `combine` e `combine` bt
-    (_, b) <- tiSPL env spl
-    (s1, c) <- tiSPL b spl
-    (s2, d) <- tiSPL c spl
-    trace (show s2) return d
-    -- finalEnv spl env
+    finalEnv spl $ stdlib `combine` e `combine` bt
 
 tiResult :: SPL -> TypeEnv -> IO ()
 tiResult spl e = do

@@ -10,7 +10,7 @@ import qualified Data.Set as S
 import Grammar
 import Debug.Trace ( trace )
 
-data Scheme = Scheme [String] Type deriving (Eq, Show)
+data Scheme = Scheme [String] Type deriving (Show)
 type Subst = M.Map String Type
 data Kind = Var | Fun deriving (Eq, Ord, Show)
 
@@ -52,7 +52,10 @@ combine (TypeEnv env1) (TypeEnv env2) = TypeEnv $ env1 `M.union` env2
 composeSubst :: Subst -> Subst -> Subst
 composeSubst s1 s2 = M.map (apply s1) s2 `M.union` s1
 
-newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme) deriving Eq
+newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme)
+
+instance Eq TypeEnv where
+    e1 == e2 = show e1 == show e2
 
 conditions :: Type -> [(String, Condition)]
 conditions (TypeBasic _) = []
