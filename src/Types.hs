@@ -75,15 +75,21 @@ showConditions m [] = ""
 showConditions m [(s, c)] = "\x1b[34m" ++ show c ++ "\x1b[0m \x1b[36m" ++ fromMaybe s (M.lookup s m) ++ "\x1b[0m => "
 showConditions m ((s, c):cs) = "\x1b[34m" ++ show c ++ "\x1b[0m \x1b[36m" ++ fromMaybe s (M.lookup s m) ++ "\x1b[0m, " ++ showConditions m cs 
 
-varStrings :: Type -> S.Set String
-varStrings (TypeID _ s) = S.singleton s
-varStrings (TypeTuple t1 t2) = varStrings t1 `S.union` varStrings t2
+varStrings :: Type -> [String]
+varStrings (TypeID _ s) = [s]
+varStrings (TypeTuple t1 t2) = varStrings t1 ++ varStrings t2
 varStrings (TypeArray t) = varStrings t
-varStrings (TypeFun t1 t2) = varStrings t1 `S.union` varStrings t2
-varStrings _ = S.empty
+varStrings (TypeFun t1 t2) = varStrings t1 ++ varStrings t2
+varStrings _ = []
+
+removeDuplicates :: Eq a => [a] -> [a]
+removeDuplicates [] = []
+removeDuplicates (x:xs)
+    | x `elem` xs = removeDuplicates xs
+    | otherwise = x : removeDuplicates xs
 
 varsMap :: Type -> M.Map String String
-varsMap t = M.fromList $ zip (S.toList $ varStrings t) (map (: []) ['a' .. 'z'])
+varsMap t = M.fromList $ zip (reverse $ removeDuplicates $ reverse $ varStrings t) (map (: []) ['a' .. 'z'])
 
 showType :: M.Map String String -> Type -> String
 showType m (TypeBasic b) = show b
