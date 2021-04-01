@@ -16,5 +16,5 @@
 //     }
 // }
 Overloading (SumProduct.spl)
-f0(x) { return (x, x); }
-f1(x) { return f0(f0(x)); }
+// f0(x) { return (x, x); }
+// f1(x) { return f0(f0(x)); }

@@ -396,7 +396,8 @@ tiExps _ [] = return (nullSubst, [])
 tiExps env (e:es) = do
     (s1, t1) <- tiExp env e
     (s2, t2) <- tiExps (apply s1 env) es
-    return (s2 `composeSubst` s1, t1 : t2)
+    let cs1 = s2 `composeSubst` s1
+    return (cs1, t1 : t2)
 
 tiFunCall :: TypeEnv -> FunCall -> TI (Subst, Type)
 tiFunCall e@(TypeEnv env) f@(FunCall n es) = case M.lookup (Fun, n) env of
@@ -407,9 +408,10 @@ tiFunCall e@(TypeEnv env) f@(FunCall n es) = case M.lookup (Fun, n) env of
             Nothing -> if null es then return (nullSubst, retType t) else throwError $ "Number of arguments of " ++ show f ++ " does not correspond with its type"
             Just funT -> if length es /= length (funTypeToList funT) then throwError $ show n ++ " got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments" else do
                 (s1, ts) <- tiExps e es
-                s <- zipWithM mgu (apply s1 $ funTypeToList funT) ts
+                s <- zipWithM mgu (funTypeToList funT) ts
                 let s2 = foldr1 composeSubst s
-                return (s2 `composeSubst` s1, retType t)
+                let cs1 = s1 `composeSubst` s2
+                return (cs1, apply cs1 $ retType t)
 
 tiOp1 :: Op1 -> (Type, Type)
 tiOp1 Min = (TypeBasic IntType, TypeBasic IntType)
