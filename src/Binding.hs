@@ -61,7 +61,7 @@ tiResult spl e = do
     (bt, _) <- runTI $ ti spl e
     case bt of
         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
-        Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+        Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n"-- ++ show env ++ "\n"
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of
