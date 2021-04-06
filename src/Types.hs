@@ -1,6 +1,6 @@
 module Types where
 
-import Control.Monad.Except ( zipWithM, foldM, runExceptT, MonadError(throwError), ExceptT )
+import Control.Monad.Except ( zipWithM, runExceptT, MonadError(throwError), ExceptT )
 import Control.Monad.Reader ( ReaderT(runReaderT) )
 import Control.Monad.State ( MonadState(put, get), StateT(runStateT) )
 import Data.Maybe ( fromMaybe, listToMaybe )
@@ -177,7 +177,9 @@ tiSPL env (SPL ds) = tiDecls env ds
 
 tiDecl :: TypeEnv -> Decl -> TI (Subst, TypeEnv)
 tiDecl env (DeclVarDecl v) = tiVarDecl env v
-tiDecl e (DeclFunDecl f) = tiFunDecl e f
+tiDecl e (DeclFunDecl f) = do
+    (s, _, e) <- tiFunDecl e f
+    return (s, e)
 
 tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, TypeEnv)
 tiVarDecl env (VarDeclVar s ex) = do
@@ -247,26 +249,16 @@ returnType :: TypeEnv -> Stmt -> TI (Subst, Type)
 returnType _ (StmtReturn Nothing) = return (nullSubst, Void)
 returnType env (StmtReturn (Just e)) = tiExp env e
 
-tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, TypeEnv)
+tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type, TypeEnv)
 tiFunDecl env (FunDecl n args (Just t) vars stmts)
     | l1 /= l2 = throwError $ show n ++ " got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments"
     | otherwise = do
-        let env0 = env--remove env Fun n
-        let TypeEnv env1 = removeAll env0 Var args
-        let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), t)) args (funTypeToList t)
-        let env2 = TypeEnv (env1 `M.union` argsTvMap)
-        (s1, env3) <- tiVarDecls env2 vars
-        s2 <- tiStmts env3 stmts
-        let returns = allReturns stmts
-        if null returns then do
-            s3 <- mgu (retType t) Void 
-            let substFull = s3 `composeSubst` s2 `composeSubst` s1
-            return (substFull, apply substFull env)
-        else do
-            if not $ correctReturn stmts then throwError "Not every path has a return statment" else do
-            ss <- mapM (checkReturn (apply s2 env3) $ retType t) returns
-            let substFull = foldr1 composeSubst ss
-            return (substFull, apply substFull env)
+        (s1, t1, env1) <- tiFunDecl env (FunDecl n args Nothing vars stmts)
+        s2 <- mgu t1 t
+        let t2 = apply s2 t
+        let env2 = remove env1 Fun n
+        let env3 = env2 `combine` TypeEnv (M.singleton (Fun, n) t2)
+        return (s2 `composeSubst` s1, t2, env3)
     where
         l1 = length (funTypeToList t) - 1
         l2 = length args
@@ -286,7 +278,7 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
             Nothing -> do
                 let t = foldr1 TypeFun (apply cs1 tvs ++ [Void])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) t)
-                return (cs1, apply cs1 env5)
+                return (cs1, t, apply cs1 env5)
             Just r -> do
                 if not $ correctReturn stmts then throwError "Not every path has a return statment" else do
                 (s3, t2) <- returnType (apply cs1 env4) r
@@ -296,7 +288,7 @@ tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup
                 let cs3 = s4 `composeSubst` cs2
                 let t = foldr1 TypeFun $ apply cs3 (tvs ++ [t2])
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) t)
-                return (cs3, apply cs3 env5)
+                return (cs3, t, apply cs3 env5)
 
 tiStmts :: TypeEnv -> [Stmt] -> TI Subst
 tiStmts _ [] = return nullSubst
