@@ -1,27 +1,66 @@
+{-# LANGUAGE TupleSections #-}
+
 module Binding where
 
 import Parser
 import Grammar
 import Control.Monad.Except ( MonadError(throwError) )
 import Types
-import Data.Maybe ( fromMaybe )
+import Data.Maybe ( fromMaybe, fromJust, maybeToList )
 import Control.Monad (foldM, forM)
 import qualified Data.Map as M
 import Debug.Trace ( trace )
-import Data.Graph
+import Data.Graph ( buildG, Vertex, scc, Edge, Forest )
+import Data.Tuple ( swap )
 
-graph :: SPL -> Graph
-graph spl = buildG (0, 0) []
-    where
-        m = idMap 0 spl
+type CallTree = M.Map (Kind, String) Int
+type DeclMap = M.Map Int Decl
 
-idMap :: Int -> SPL -> M.Map (Kind, String) Int
-idMap i (SPL []) = M.empty
-idMap i (SPL (d:ds)) = help i d `M.union` idMap (i + 1) (SPL ds)
+components :: SPL -> Forest Decl
+components spl = (fmap . fmap) (\v -> fromJust $ M.lookup v dm) <$> scc $ buildG (0, M.size ct - 1) e
     where
-        help :: Int -> Decl -> M.Map (Kind, String) Int
-        help i (DeclVarDecl (VarDecl _ n _)) = M.singleton (Var, n) i
-        help i (DeclFunDecl (FunDecl n _ _ _ _)) = M.singleton (Fun, n) i
+        (ct, dm) = idMap 0 spl
+        e = callTree ct spl
+
+callTree :: CallTree -> SPL -> [Edge]
+callTree ct (SPL ds) = concatMap (ctDecl ct) ds
+
+ctDecl :: CallTree -> Decl -> [Edge]
+ctDecl ct (DeclVarDecl (VarDecl _ n e)) = map (fromJust $ M.lookup (Var, n) ct,) $ ctExp ct [] e
+ctDecl ct (DeclFunDecl (FunDecl n args _ vars stmts)) = map (fromJust $ M.lookup (Fun, n) ct,) (ctStmts ct args stmts ++ concatMap (\(VarDecl _ _ e) -> ctExp ct args e) vars)
+
+ctStmts :: CallTree -> [String] -> [Stmt] -> [Vertex]
+ctStmts ct args = concatMap $ ctStmt ct args
+
+ctStmt :: CallTree -> [String] -> Stmt -> [Vertex]
+ctStmt ct args (StmtIf e ss1 ss2) = ctExp ct args e ++ ctStmts ct args ss1 ++ ctStmts ct args (fromMaybe [] ss2)
+ctStmt ct args (StmtWhile e ss) = ctExp ct args e ++ ctStmts ct args ss
+ctStmt ct args (StmtField n _ e)
+    | n `elem` args = []
+    | otherwise = maybeToList $ M.lookup (Var, n) ct
+ctStmt ct args (StmtFunCall (FunCall n es)) = maybeToList $ M.lookup (Fun, n) ct
+ctStmt _ _ (StmtReturn Nothing) = []
+ctStmt ct args (StmtReturn (Just e)) = ctExp ct args e
+
+ctExp :: CallTree -> [String] -> Exp -> [Vertex]
+ctExp ct args (Exp _ e1 e2) = ctExp ct args e1 ++ ctExp ct args e2
+ctExp ct args (ExpOp1 _ e) = ctExp ct args e
+ctExp ct args (ExpTuple (e1, e2)) = ctExp ct args e1 ++ ctExp ct args e2
+ctExp ct args (ExpBrackets e) = ctExp ct args e
+ctExp ct args (ExpField n _)
+    | n `elem` args = []
+    | otherwise = maybeToList $ M.lookup (Var, n) ct
+ctExp ct args (ExpFunCall (FunCall n es)) = maybeToList $ M.lookup (Fun, n) ct
+ctExp _ _ _ = []
+
+idMap :: Int -> SPL -> (CallTree, DeclMap)
+idMap i (SPL []) = (M.empty, M.empty)
+idMap i (SPL (d:ds)) = help i d `concatTuple` idMap (i + 1) (SPL ds)
+    where
+        help :: Int -> Decl -> (CallTree, DeclMap)
+        help i d@(DeclVarDecl (VarDecl _ n _)) = (M.singleton (Var, n) i, M.singleton i d)
+        help i d@(DeclFunDecl (FunDecl n _ _ _ _)) = (M.singleton (Fun, n) i, M.singleton i d)
+        concatTuple (ct1, dm1) (ct2, dm2) = (ct1 `M.union` ct2, dm1 `M.union` dm2)
 
 stdlib :: TypeEnv
 stdlib = TypeEnv $ M.fromList [
@@ -64,6 +103,9 @@ finalEnv spl env = do
     (s, env') <- tiSPL env spl
     if env == env' then return env' else finalEnv spl env'
 
+tix :: Forest Decl
+tix = undefined
+
 ti :: SPL -> TypeEnv -> TI TypeEnv
 ti spl e = do
     bt <- btSPL emptyEnv spl
@@ -78,13 +120,13 @@ tiResult :: SPL -> TypeEnv -> IO ()
 tiResult spl e = do
     (bt, _) <- runTI $ ti spl e
     case bt of
-        Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
-        Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+        Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0ct " ++ err ++ "\n"
+        Right env -> putStr $ "\x1b[32mProgract is correctly typed\x1b[0m\n" ++ show env ++ "\n"
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of
     Left e -> putStrLn $ "\x1b[31mParseError:\x1b[0m" ++ show e ++ "\n"
-    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0m Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult s env
+    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0ct Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult s env
 
 check :: String -> IO ()
 check = testEnv emptyEnv
