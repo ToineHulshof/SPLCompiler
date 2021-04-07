@@ -48,8 +48,7 @@ data Decl
   deriving (Show)
 
 data VarDecl
-  = VarDeclVar String Exp
-  | VarDeclType Type String Exp
+  = VarDecl (Maybe Type) String Exp
   deriving (Show)
 
 data FunDecl
@@ -65,7 +64,15 @@ data Type
   | TypeID (Maybe Condition) String
   | TypeFun Type Type
   | Void
-  deriving (Eq)
+
+instance Eq Type where
+  TypeBasic b1 == TypeBasic b2 = b1 == b2
+  TypeTuple l1 r1 == TypeTuple l2 r2 = l1 == l2 && r1 == r2
+  TypeArray t1 == TypeArray t2 = t1 == t2
+  TypeID {} == TypeID {} = True
+  TypeFun l1 r1 == TypeFun l2 r2 = l1 == l2 && r1 == r2
+  Void == Void = True
+  _ == _ = False
 
 instance Show Type where
   show (TypeBasic b) = show b

@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module Types where
 
 import Control.Monad.Except ( zipWithM, runExceptT, MonadError(throwError), ExceptT )
@@ -182,7 +184,7 @@ tiDecl e (DeclFunDecl f) = do
     return (s, e)
 
 tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, TypeEnv)
-tiVarDecl env (VarDeclVar s ex) = do
+tiVarDecl env (VarDecl Nothing s ex) = do
     (s1, t1) <- tiExp env ex
     let env1@(TypeEnv e) = apply s1 env
     case M.lookup (Var, s) e of 
@@ -193,7 +195,7 @@ tiVarDecl env (VarDeclVar s ex) = do
             s2 <- mgu v t1
             let cs1 = s2 `composeSubst` s1
             return (cs1, apply cs1 env1)
-tiVarDecl env (VarDeclType t s e) = do
+tiVarDecl env (VarDecl (Just t) s e) = do
     (s1, t1) <- tiExp env e
     s2 <- mgu t1 t
     let cs1 = s2 `composeSubst` s1
@@ -207,10 +209,6 @@ tiDecls env (d:ds) = do
     (s1, env1) <- tiDecl env d
     (s2, env2) <- tiDecls env1 ds
     return (s2 `composeSubst` s1, env2)
-
-nameOfVarDecl :: VarDecl -> String
-nameOfVarDecl (VarDeclVar n _) = n
-nameOfVarDecl (VarDeclType _ n _) = n
 
 tiVarDecls :: TypeEnv -> [VarDecl] -> TI (Subst, TypeEnv)
 tiVarDecls env [] = return (nullSubst, env)
@@ -435,10 +433,3 @@ tiExp env (ExpFunCall f) = tiFunCall env f
 tiExp _ ExpEmptyList = do
     t <- newTyVar Nothing "l"
     return (nullSubst, TypeArray t)
-
-testExp :: Exp -> IO ()
-testExp e = do
-    (res, _) <- runTI $ tiExp (TypeEnv M.empty) e
-    case res of
-        Left err -> putStrLn $ "error: " ++ err
-        Right t -> putStrLn $ show e ++ " :: " ++ show t

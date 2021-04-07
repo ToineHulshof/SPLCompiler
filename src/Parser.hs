@@ -88,10 +88,10 @@ varDeclP :: Parser VarDecl
 varDeclP = (varDeclVarP <|> varDeclTypeP) <* c ';'
 
 varDeclVarP :: Parser VarDecl
-varDeclVarP = VarDeclVar <$> (stringP "var" *> w idP <* charP '=' <* ws) <*> expP
+varDeclVarP = VarDecl Nothing <$> (stringP "var" *> w idP <* charP '=' <* ws) <*> expP
 
 varDeclTypeP :: Parser VarDecl
-varDeclTypeP = VarDeclType <$> typeP <*> (w idP <* charP '=' <* ws) <*> expP
+varDeclTypeP = VarDecl . Just <$> typeP <*> (w idP <* charP '=' <* ws) <*> expP
 
 retTypeP :: Parser Type
 retTypeP = voidP <|> retTypeTypeP
