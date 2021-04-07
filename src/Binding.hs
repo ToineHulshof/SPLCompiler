@@ -10,57 +10,39 @@ import Data.Maybe ( fromMaybe, fromJust, maybeToList )
 import Control.Monad (foldM, forM)
 import qualified Data.Map as M
 import Debug.Trace ( trace )
-import Data.Graph ( buildG, Vertex, scc, Edge, Forest )
+import Data.Graph ( stronglyConnCompR, SCC, Forest )
 import Data.Tuple ( swap )
 
-type CallTree = M.Map (Kind, String) Int
-type DeclMap = M.Map Int Decl
+components :: SPL -> [SCC (Decl, (Kind, String), [(Kind, String)])]
+components (SPL ds) = stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
 
-components :: SPL -> Forest Decl
-components spl = (fmap . fmap) (\v -> fromJust $ M.lookup v dm) <$> scc $ buildG (0, M.size ct - 1) e
-    where
-        (ct, dm) = idMap 0 spl
-        e = callTree ct spl
+ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
+ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)
+ctDecl (DeclFunDecl (FunDecl n args _ vars stmts)) = ((Fun, n), ctStmts args stmts ++ concatMap (\(VarDecl _ _ e) -> ctExp args e) vars)
 
-callTree :: CallTree -> SPL -> [Edge]
-callTree ct (SPL ds) = concatMap (ctDecl ct) ds
+ctStmts :: [String] -> [Stmt] -> [(Kind, String)]
+ctStmts args = concatMap (ctStmt args)
 
-ctDecl :: CallTree -> Decl -> [Edge]
-ctDecl ct (DeclVarDecl (VarDecl _ n e)) = map (fromJust $ M.lookup (Var, n) ct,) $ ctExp ct [] e
-ctDecl ct (DeclFunDecl (FunDecl n args _ vars stmts)) = map (fromJust $ M.lookup (Fun, n) ct,) (ctStmts ct args stmts ++ concatMap (\(VarDecl _ _ e) -> ctExp ct args e) vars)
-
-ctStmts :: CallTree -> [String] -> [Stmt] -> [Vertex]
-ctStmts ct args = concatMap $ ctStmt ct args
-
-ctStmt :: CallTree -> [String] -> Stmt -> [Vertex]
-ctStmt ct args (StmtIf e ss1 ss2) = ctExp ct args e ++ ctStmts ct args ss1 ++ ctStmts ct args (fromMaybe [] ss2)
-ctStmt ct args (StmtWhile e ss) = ctExp ct args e ++ ctStmts ct args ss
-ctStmt ct args (StmtField n _ e)
+ctStmt :: [String] -> Stmt -> [(Kind, String)]
+ctStmt args (StmtIf e ss1 ss2) = ctExp args e ++ ctStmts args ss1 ++ ctStmts args (fromMaybe [] ss2)
+ctStmt args (StmtWhile e ss) = ctExp args e ++ ctStmts args ss
+ctStmt args (StmtField n _ e)
     | n `elem` args = []
-    | otherwise = maybeToList $ M.lookup (Var, n) ct
-ctStmt ct args (StmtFunCall (FunCall n es)) = maybeToList $ M.lookup (Fun, n) ct
-ctStmt _ _ (StmtReturn Nothing) = []
-ctStmt ct args (StmtReturn (Just e)) = ctExp ct args e
+    | otherwise = [(Var, n)]
+ctStmt args (StmtFunCall (FunCall n es)) = [(Fun, n)]
+ctStmt args (StmtReturn Nothing) = []
+ctStmt args (StmtReturn (Just e)) = ctExp args e
 
-ctExp :: CallTree -> [String] -> Exp -> [Vertex]
-ctExp ct args (Exp _ e1 e2) = ctExp ct args e1 ++ ctExp ct args e2
-ctExp ct args (ExpOp1 _ e) = ctExp ct args e
-ctExp ct args (ExpTuple (e1, e2)) = ctExp ct args e1 ++ ctExp ct args e2
-ctExp ct args (ExpBrackets e) = ctExp ct args e
-ctExp ct args (ExpField n _)
+ctExp :: [String] -> Exp -> [(Kind, String)]
+ctExp args (Exp _ e1 e2) = ctExp args e1 ++ ctExp args e2
+ctExp args (ExpOp1 _ e) = ctExp args e
+ctExp args (ExpTuple (e1, e2)) = ctExp args e1 ++ ctExp args e2
+ctExp args (ExpBrackets e) = ctExp args e
+ctExp args (ExpField n _)
     | n `elem` args = []
-    | otherwise = maybeToList $ M.lookup (Var, n) ct
-ctExp ct args (ExpFunCall (FunCall n es)) = maybeToList $ M.lookup (Fun, n) ct
-ctExp _ _ _ = []
-
-idMap :: Int -> SPL -> (CallTree, DeclMap)
-idMap i (SPL []) = (M.empty, M.empty)
-idMap i (SPL (d:ds)) = help i d `concatTuple` idMap (i + 1) (SPL ds)
-    where
-        help :: Int -> Decl -> (CallTree, DeclMap)
-        help i d@(DeclVarDecl (VarDecl _ n _)) = (M.singleton (Var, n) i, M.singleton i d)
-        help i d@(DeclFunDecl (FunDecl n _ _ _ _)) = (M.singleton (Fun, n) i, M.singleton i d)
-        concatTuple (ct1, dm1) (ct2, dm2) = (ct1 `M.union` ct2, dm1 `M.union` dm2)
+    | otherwise = [(Var, n)]
+ctExp args (ExpFunCall (FunCall n es)) = [(Fun, n)]
+ctExp _ _ = []
 
 stdlib :: TypeEnv
 stdlib = TypeEnv $ M.fromList [
