@@ -10,11 +10,11 @@ import Data.Maybe ( fromMaybe, fromJust, maybeToList )
 import Control.Monad (foldM, forM)
 import qualified Data.Map as M
 import Debug.Trace ( trace )
-import Data.Graph ( stronglyConnCompR, SCC, Forest )
+import Data.Graph ( stronglyConnCompR, SCC(..) )
 import Data.Tuple ( swap )
 
-components :: SPL -> [SCC (Decl, (Kind, String), [(Kind, String)])]
-components (SPL ds) = stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
+components :: SPL -> [SCC Decl]
+components (SPL ds) = map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
 
 ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
 ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)
@@ -85,25 +85,30 @@ finalEnv spl env = do
     (s, env') <- tiSPL env spl
     if env == env' then return env' else finalEnv spl env'
 
-tix :: Forest Decl
-tix = undefined
+repeatDecl :: Int -> TypeEnv -> [Decl] -> TI TypeEnv
+repeatDecl 0 env _ = return env
+repeatDecl i env ds = do
+    env1 <- snd <$> tiDecls env ds
+    repeatDecl (i - 1) env1 ds
 
-ti :: SPL -> TypeEnv -> TI TypeEnv
-ti spl e = do
+tiComp :: TypeEnv -> SCC Decl -> TI TypeEnv
+tiComp env (AcyclicSCC d) = snd <$> tiDecl env d
+tiComp env (CyclicSCC ds) = repeatDecl (length ds) env ds
+
+tiComps :: TypeEnv -> [SCC Decl] -> TI TypeEnv
+tiComps = foldM tiComp
+
+ti' :: SPL -> TypeEnv -> TI TypeEnv
+ti' spl e = do
     bt <- btSPL emptyEnv spl
-    -- let env = stdlib `combine` e `combine` bt
-    -- (_, env1) <- tiSPL env spl
-    -- (_, env2) <- tiSPL env1 spl
-    -- (_, env3) <- tiSPL env2 spl
-    -- return env3
-    finalEnv spl $ stdlib `combine` e `combine` bt
+    tiComps (stdlib `combine` e `combine` bt) $ components spl
 
 tiResult :: SPL -> TypeEnv -> IO ()
 tiResult spl e = do
-    (bt, _) <- runTI $ ti spl e
+    (bt, _) <- runTI $ ti' spl e
     case bt of
         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0ct " ++ err ++ "\n"
-        Right env -> putStr $ "\x1b[32mProgract is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+        Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of
