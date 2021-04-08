@@ -293,7 +293,7 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
         s2 <- mgu t1 t
         let t2 = apply s2 t
         let env2 = remove env1 Fun n
-        let env3 = env2 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t2))
+        let env3 = env2 `combine` TypeEnv (M.singleton (Fun, n) (generalize env2 t2))
         return (s2 `composeSubst` s1, t2, env3)
     where
         l1 = length (funTypeToList t) - 1

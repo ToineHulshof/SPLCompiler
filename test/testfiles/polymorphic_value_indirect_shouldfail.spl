@@ -7,7 +7,7 @@ var list = [];
 assign(l)
 {
   list = l;
-  return;
+  return; 
 }
 
 main()
