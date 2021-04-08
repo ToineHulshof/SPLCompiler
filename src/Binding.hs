@@ -46,8 +46,8 @@ ctExp _ _ = []
 
 stdlib :: TypeEnv
 stdlib = TypeEnv $ M.fromList [
-    ((Fun, "print"), TypeFun (TypeID Nothing "t") Void),
-    ((Fun, "isEmpty"), TypeFun (TypeArray $ TypeID Nothing "t") (TypeBasic BoolType))
+    ((Fun, "print"), Scheme ["t"] $ TypeFun (TypeID Nothing "t") Void),
+    ((Fun, "isEmpty"), Scheme ["t"] $ TypeFun (TypeArray $ TypeID Nothing "t") (TypeBasic BoolType))
     ]
 
 btSPL :: TypeEnv -> SPL -> TI TypeEnv
@@ -62,16 +62,16 @@ btDecl _ (DeclVarDecl v) = btVarDecl v
 btDecl env (DeclFunDecl f) = btFunDecl env f
 
 btVarDecl :: VarDecl -> TI TypeEnv
-btVarDecl (VarDecl Nothing s _) = TypeEnv . M.singleton (Var, s) <$> newTyVar Nothing "a"
-btVarDecl (VarDecl (Just t) s _) = return $ TypeEnv $ M.singleton (Var, s) t
+btVarDecl (VarDecl Nothing s _) = TypeEnv . M.singleton (Var, s) . Scheme [] <$> newTyVar Nothing "a"
+btVarDecl (VarDecl (Just t) s _) = return $ TypeEnv $ M.singleton (Var, s) (Scheme [] t)
 
 btFunDecl :: TypeEnv -> FunDecl -> TI TypeEnv
 btFunDecl env (FunDecl s args Nothing _ _) = do
     nvars <- mapM (newTyVar Nothing) args
     ret <- newTyVar Nothing "r"
     let t = foldr1 TypeFun $ nvars ++ [ret]
-    return $ TypeEnv $ M.singleton (Fun, s) t
-btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _) = return $ TypeEnv $ M.singleton (Fun, s) t
+    return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
+btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _) = return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
 
 hasEffect :: (String, Type) -> Bool
 hasEffect (s, TypeID _ n) = n /= s
