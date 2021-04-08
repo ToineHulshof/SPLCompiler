@@ -15,6 +15,9 @@
 //         return [];
 //     }
 // }
-Overloading (SumProduct.spl)
+Overloading (SumProduct.spl) -> optional
 // f0(x) { return (x, x); }
 // f1(x) { return f0(f0(x)); }
+f(x) { return x == x; } g(x) { return f(x); }
+// vars in cycles
+"polymorphic_value_indirect_shouldfail" -> Mart mailen

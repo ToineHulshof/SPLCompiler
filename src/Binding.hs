@@ -98,22 +98,30 @@ tiComp env (CyclicSCC ds) = repeatDecl (length ds) env ds
 tiComps :: TypeEnv -> [SCC Decl] -> TI TypeEnv
 tiComps = foldM tiComp
 
+varCycle :: SCC Decl -> Bool
+varCycle (AcyclicSCC _) = False
+varCycle (CyclicSCC ds) = any isVarDecl ds where
+    isVarDecl DeclFunDecl {} = False
+    isVarDecl DeclVarDecl {} = True
+
 ti' :: SPL -> TypeEnv -> TI TypeEnv
 ti' spl e = do
     bt <- btSPL emptyEnv spl
-    tiComps (stdlib `combine` e `combine` bt) $ components spl
+    let comps = components spl
+    if any varCycle comps then throwError "Stuk" else
+        tiComps (stdlib `combine` e `combine` bt) comps
 
 tiResult :: SPL -> TypeEnv -> IO ()
 tiResult spl e = do
     (bt, _) <- runTI $ ti' spl e
     case bt of
-        Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0ct " ++ err ++ "\n"
+        Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
         Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of
     Left e -> putStrLn $ "\x1b[31mParseError:\x1b[0m" ++ show e ++ "\n"
-    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0ct Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult s env
+    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0m Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult s env
 
 check :: String -> IO ()
 check = testEnv emptyEnv

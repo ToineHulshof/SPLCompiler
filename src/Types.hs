@@ -5,7 +5,7 @@ module Types where
 import Control.Monad.Except ( zipWithM, runExceptT, MonadError(throwError), ExceptT )
 import Control.Monad.Reader ( ReaderT(runReaderT) )
 import Control.Monad.State ( MonadState(put, get), StateT(runStateT) )
-import Data.Maybe ( fromMaybe, listToMaybe )
+import Data.Maybe ( fromMaybe, listToMaybe, isJust )
 import Data.List ( group, sort )
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -33,7 +33,10 @@ instance Types Type where
 
   apply s (TypeID c n) = case M.lookup n s of
     Nothing -> TypeID c n
-    Just t -> t
+    Just t -> x t
+        where
+            x (TypeID c1 n) = TypeID (composeConditions c c1) n
+            x t = t
   apply _ (TypeBasic t) = TypeBasic t
   apply s (TypeArray t) = TypeArray (apply s t)
   apply s (TypeFun t1 t2) = TypeFun (apply s t1) (apply s t2)
@@ -149,6 +152,7 @@ mgu (TypeTuple l1 r1) (TypeTuple l2 r2) = do
     s1 <- mgu l1 l2
     s2 <- mgu (apply s1 r1) (apply s1 r2)
     return $ s2 `composeSubst` s1
+mgu (TypeID c1 u1) (TypeID c2 u2) = return $ M.singleton u1 (TypeID (composeConditions c1 c2) u2)
 mgu (TypeID c u) t = varBind u c t
 mgu t (TypeID c u) = varBind u c t
 mgu (TypeBasic t1) (TypeBasic t2)
@@ -167,12 +171,30 @@ composeConditions (Just Ord) _ = Just Ord
 composeConditions c Nothing = c
 composeConditions _ c = c
 
+test1 :: IO ()
+test1 = do
+    (x, _) <- runTI $ mgu (TypeID Nothing "a") (TypeTuple (TypeID Nothing "a") (TypeID Nothing "a"))
+    case x of
+        Left err -> putStrLn err
+        Right s -> print s
+     
 varBind :: String -> Maybe Condition -> Type -> TI Subst
+varBind u (Just Eq) t
+    | isBasicType t = return $ M.singleton u t
+    | otherwise = throwError $ show t ++ " is not Eq"
+    where
+        isBasicType (TypeBasic _) = True
+        isBasicType _ = False
+varBind u (Just Ord) t
+    | isOrd t = return $ M.singleton u t
+    | otherwise = throwError $ show t ++ " is not Ord"
+    where
+        isOrd (TypeBasic IntType) = True
+        isOrd (TypeBasic CharType) = True
+        isOrd _ = False
 varBind u c t
-    | b = return $ M.singleton u (TypeID (composeConditions c c1) u)
     | u `S.member` ftv t = throwError $ "occur check fails: \x1b[36m" ++ u ++ "\x1b[0m vs. " ++ show t
-    | otherwise = return (M.singleton u t)
-    where (c1, b) = condition t u
+    | otherwise = return $ M.singleton u t
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv)
 tiSPL env (SPL ds) = tiDecls env ds
@@ -337,9 +359,10 @@ tiStmt env (StmtWhile e ss) = do
     let cs1 = s2 `composeSubst` s1
     s3 <- tiStmts (apply cs1 env) ss
     return (s3 `composeSubst` cs1)
-tiStmt e@(TypeEnv env) (StmtField n fs ex) = do
+tiStmt e (StmtField n fs ex) = do
     (s1, t1) <- tiExp e ex
-    case M.lookup (Var, n) env of
+    let TypeEnv env1 = apply s1 e
+    case M.lookup (Var, n) env1 of
         Nothing -> throwError $ n ++ " is not defined"
         Just t -> do
             (s2, t') <- tiFields t fs
@@ -384,10 +407,10 @@ tiFunCall e@(TypeEnv env) f@(FunCall n es) = case M.lookup (Fun, n) env of
             Nothing -> if null es then return (nullSubst, retType t) else throwError $ "Number of arguments of " ++ show f ++ " does not correspond with its type"
             Just funT -> if length es /= length (funTypeToList funT) then throwError $ show n ++ " got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments" else do
                 (s1, ts) <- tiExps e es
-                s <- zipWithM mgu (funTypeToList funT) ts
+                s <- zipWithM mgu ts (apply s1 $ funTypeToList funT)
                 let s2 = foldr1 composeSubst s
-                let cs1 = s1 `composeSubst` s2
-                return (cs1, apply cs1 $ retType t)
+                let cs1 = s2 `composeSubst` s1
+                trace (show cs1) return (cs1, apply cs1 $ retType t)
 
 tiOp1 :: Op1 -> (Type, Type)
 tiOp1 Min = (TypeBasic IntType, TypeBasic IntType)
