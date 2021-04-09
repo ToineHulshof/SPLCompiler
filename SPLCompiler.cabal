@@ -26,7 +26,6 @@ source-repository head
 library
   exposed-modules:
       Binding
-      Errors
       Grammar
       Main
       Parser
