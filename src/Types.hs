@@ -184,13 +184,6 @@ composeConditions Nothing c = c
 composeConditions (Just Ord) _ = Just Ord
 composeConditions c Nothing = c
 composeConditions _ c = c
-
-test1 :: IO ()
-test1 = do
-    (x, _) <- runTI $ mgu (TypeID Nothing "a") (TypeTuple (TypeID Nothing "a") (TypeID Nothing "a"))
-    case x of
-        Left err -> putStrLn err
-        Right s -> print s
      
 varBind :: String -> Maybe Condition -> Type -> TI Subst
 varBind u (Just Eq) t
@@ -375,7 +368,7 @@ tiStmt env (StmtWhile e ss) = do
     s3 <- tiStmts (apply cs1 env) ss
     return (s3 `composeSubst` cs1)
 tiStmt e (StmtField n fs ex) = do
-    (s1, t1) <- tiExp' True e ex
+    (s1, t1) <- tiExp' False e ex
     let TypeEnv env1 = apply s1 e
     case M.lookup (Var, n) env1 of
         Nothing -> throwError $ n ++ " is not defined"
@@ -451,37 +444,37 @@ tiOp2 o
 tiExp :: TypeEnv -> Exp -> TI (Subst, Type)
 tiExp = tiExp' False
 
-refresh :: TypeEnv -> Bool -> Type -> TI Type
-refresh env False t = return t
-refresh env True t = instantiate $ generalize env t
+refresh :: Bool -> Type -> TI Type
+refresh False t = return t
+refresh True t = instantiate $ generalize emptyEnv t
 
 tiExp' :: Bool -> TypeEnv -> Exp -> TI (Subst, Type)
-tiExp' _ env (Exp o e1 e2) = do
+tiExp' b env (Exp o e1 e2) = do
     (t1, t2, t3) <- tiOp2 o
-    (s1, t1') <- tiExp env e1
+    (s1, t1') <- tiExp' b env e1
     s2 <- mgu t1' (apply s1 t1)
     let cs1 = s2 `composeSubst` s1
-    (s3, t2') <- tiExp (apply cs1 env) e2
+    (s3, t2') <- tiExp' b (apply cs1 env) e2
     let cs2 = s3 `composeSubst` cs1
     s4 <- mgu (apply cs2 t2') (apply cs2 t2)
     let cs3 = s4 `composeSubst` cs2
     return (cs3, apply cs3 t3)
-tiExp' _ env (ExpOp1 o e) = do
+tiExp' b env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
-    (s1, t1') <- tiExp env e
+    (s1, t1') <- tiExp' b env e
     s2 <- mgu t1 t1'
     return (s2 `composeSubst` s1, t2)
-tiExp' _ env (ExpTuple (e1, e2)) = do
-    (s1, t1) <- tiExp env e1
-    (s2, t2) <- tiExp (apply s1 env) e2
+tiExp' b env (ExpTuple (e1, e2)) = do
+    (s1, t1) <- tiExp' b env e1
+    (s2, t2) <- tiExp' b (apply s1 env) e2
     return (s2 `composeSubst` s1, TypeTuple t1 t2)
-tiExp' _ env (ExpBrackets e) = tiExp env e
-tiExp' b e@(TypeEnv env) (ExpField s fs) = case M.lookup (Var, s) env of
+tiExp' b env (ExpBrackets e) = tiExp' b env e
+tiExp' b (TypeEnv env) (ExpField s fs) = case M.lookup (Var, s) env of
     Nothing -> throwError $ s ++ " is not defined"
     Just sigma -> do
         t <- instantiate sigma
-        t <- refresh e b t
-        tiFields t fs
+        t' <- refresh b t
+        tiFields t' fs
 tiExp' _ _ (ExpInt _) = return (nullSubst, TypeBasic IntType)
 tiExp' _ _ (ExpBool _) = return (nullSubst, TypeBasic BoolType)
 tiExp' _ _ (ExpChar _) = return (nullSubst, TypeBasic CharType)
