@@ -34,10 +34,10 @@ instance Types Type where
 
   apply s (TypeID c n) = case M.lookup n s of
     Nothing -> TypeID c n
-    Just t -> x t
+    Just t -> checkConditions t
         where
-            x (TypeID c1 n) = TypeID (composeConditions c c1) n
-            x t = t
+            checkConditions (TypeID c1 n) = TypeID (composeConditions c c1) n
+            checkConditions t = t
   apply _ (TypeBasic t) = TypeBasic t
   apply s (TypeArray t) = TypeArray (apply s t)
   apply s (TypeFun t1 t2) = TypeFun (apply s t1) (apply s t2)
@@ -124,8 +124,7 @@ woFun (TypeEnv env) = (help Fun, help Var)
 
 instance Types TypeEnv where
     ftv (TypeEnv env) = ftv (M.elems env)
-    apply s env = fun `combine` TypeEnv (M.map (apply s) var)
-        where (fun, TypeEnv var) = woFun env
+    apply s (TypeEnv env) = TypeEnv (M.map (apply s) env)
 
 instance Types Scheme where
   ftv (Scheme vars t) = ftv t `S.difference` S.fromList vars
@@ -416,6 +415,14 @@ tiExps env (e:es) = do
     let cs1 = s2 `composeSubst` s1
     return (cs1, t1 : t2)
 
+mguList :: [Type] -> [Type] -> TI Subst
+mguList [] _ = return nullSubst
+mguList _ [] = return nullSubst
+mguList (a:as) (b:bs) = do
+    s1 <- mgu a b
+    s2 <- mguList as bs
+    return $ s2 `composeSubst` s1
+
 tiFunCall :: TypeEnv -> FunCall -> TI (Subst, Type)
 tiFunCall e@(TypeEnv env) f@(FunCall n es) = case M.lookup (Fun, n) env of
     Nothing -> throwError $ "function " ++ n ++ " doesn't exist"
@@ -425,8 +432,7 @@ tiFunCall e@(TypeEnv env) f@(FunCall n es) = case M.lookup (Fun, n) env of
             Nothing -> if null es then return (nullSubst, retType t) else throwError $ "Number of arguments of " ++ show f ++ " does not correspond with its type"
             Just funT -> if length es /= length (funTypeToList funT) then throwError $ show n ++ " got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments" else do
                 (s1, ts) <- tiExps e es
-                s <- zipWithM mgu ts (apply s1 $ funTypeToList funT)
-                let s2 = foldr1 composeSubst s
+                s2 <- mguList ts (apply s1 $ funTypeToList funT)
                 let cs1 = s2 `composeSubst` s1
                 return (cs1, apply cs1 $ retType t)
 

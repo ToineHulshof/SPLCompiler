@@ -78,7 +78,7 @@ instance Show Type where
   show (TypeBasic b) = show b
   show (TypeTuple t1 t2) = "(" ++ show t1 ++ ", " ++ show t2 ++ ")"
   show (TypeArray t) = "[" ++ show t ++ "]"
-  show (TypeID c s) = show c ++ ", " ++ "\x1b[36m" ++ s ++ "\x1b[0m"
+  show (TypeID c s) = "\x1b[36m" ++ s ++ "\x1b[0m"
   show (TypeFun t1 t2) = show t1 ++ " -> " ++ show t2
   show Void = "\x1b[34mVoid\x1b[0m"
 
