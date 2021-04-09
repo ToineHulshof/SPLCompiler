@@ -2,7 +2,7 @@
 
 module Binding where
 
-import Parser
+import Parser ( splP, testP, fst3 )
 import Grammar
 import Control.Monad.Except ( MonadError(throwError) )
 import Types
