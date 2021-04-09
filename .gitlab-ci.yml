@@ -2,4 +2,4 @@ image: haskell:8.6.5
 
 test:
   script:
-    - ghc test/Spec.hs && test/Spec
+    - cd src && ghc Main.hs && Main && cd ..

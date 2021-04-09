@@ -2,4 +2,7 @@
 test/*.hi
 test/*.o
 test/*.
+src/*.hi
+src/*.o
+src/*.
 *~
