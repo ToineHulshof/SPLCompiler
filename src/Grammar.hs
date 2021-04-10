@@ -2,17 +2,8 @@
 
 module Grammar where
 
+import Errors
 import Control.Applicative (Alternative (empty, (<|>)))
-
--- Code is the list of chars in a program including its position, where the integers are the line and column respectively
-type Code = [(Char, Int, Int)]
-
--- Error is a datatype to store an error message as a String with its position, where the integers are the line and column respectively
-data Error
-  = Error String Int Int
-
-instance Show Error where
-  show (Error e l c) = "\x1b[31mError\x1b[0m " ++ e ++ " " ++ show l ++ ":" ++ show c
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
 newtype Parser a = Parser {parse :: Code -> Either [Error] (Code, a)}

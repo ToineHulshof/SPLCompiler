@@ -5,7 +5,7 @@
 module Parser where
 
 import Grammar
--- import Types
+import Errors
 import Control.Applicative (Alternative ((<|>), many, some))
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 import Data.Maybe (isNothing)

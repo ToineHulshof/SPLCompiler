@@ -3,6 +3,7 @@
 module Printer where
 
 import Grammar
+import Errors
 import Parser (code, expP, parseFileP, splP, testP, funDeclP)
 import Text.Printf (printf)
 
@@ -20,12 +21,6 @@ pp = parseFileP splP result'
 -- Pretty prints n tabs
 tab :: Int -> String
 tab n = replicate n '\t'
-
--- Joins a list of strings with a given seperator
-join :: String -> [String] -> String
-join _ [] = []
-join _ [x] = x
-join s (x : xs) = x ++ s ++ join s xs
 
 -- All the pretty print functions for the implemented grammer
 -- These are all pretty self-explanatory
