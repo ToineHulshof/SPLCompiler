@@ -2,16 +2,21 @@
 
 module Binding where
 
-import Parser ( splP, testP, fst3 )
+import Parser ( splP, testP )
 import Grammar
+import Errors
 import Control.Monad.Except ( MonadError(throwError) )
 import Types
 import Data.Maybe ( fromMaybe, fromJust, maybeToList )
+import Data.Array
 import Control.Monad (foldM, forM)
 import qualified Data.Map as M
 import Debug.Trace ( trace )
 import Data.Graph ( stronglyConnCompR, SCC(..) )
 import Data.Tuple ( swap )
+
+fst3 :: (a, b, c) -> a
+fst3 (a, b, c) = a
 
 components :: SPL -> [SCC Decl]
 components (SPL ds) = map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
@@ -118,10 +123,14 @@ tiResult spl e = do
         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
         Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
 
-testEnv :: TypeEnv -> String -> IO ()
-testEnv env s = case testP splP s of
-    Left e -> putStrLn $ "\x1b[31mParseError:\x1b[0m" ++ show e ++ "\n"
-    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0m Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult s env
+testEnv :: TypeEnv -> FilePath -> String -> IO ()
+testEnv env f s = case testP splP s of
+    Left e -> print (Errors f (listArray (1, length l) l) e)
+        where l = lines s
+    Right (_, spl) -> tiResult spl env
+
+checkFile :: FilePath -> String -> IO ()
+checkFile = testEnv emptyEnv
 
 check :: String -> IO ()
-check = testEnv emptyEnv
+check = checkFile "<interactive>"

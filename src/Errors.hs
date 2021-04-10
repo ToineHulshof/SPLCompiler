@@ -8,7 +8,7 @@ type Positioned a = (a, (Int, Int))
 type Code = [Positioned Char]
 
 -- Error is a datatype to store an error message as a String with its position, where the integers are the line and column respectively
-data Error = Error ErrorKind String (Positioned String)
+data Error = Error ErrorKind String (Positioned String) deriving Show
 
 data Errors = Errors FilePath (Array Int String) [Error]
 

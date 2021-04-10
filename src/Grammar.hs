@@ -22,7 +22,7 @@ instance Applicative Parser where
 
 -- Proof that our Parser is an Alternative
 instance Alternative Parser where
-  empty = Parser . const $ Left [Error "" 0 0] --("Failed", 0, 0)
+  empty = Parser . const $ Left []
   (Parser p1) <|> (Parser p2) = Parser $ \code -> p1 code <> p2 code
 
 -- Our defined types in the Grammar (pretty similar to the given grammar; implementation details are mentioned in the code or in the report)
