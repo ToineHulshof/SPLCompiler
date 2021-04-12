@@ -3,27 +3,40 @@
 module Grammar where
 
 import Errors
-import Control.Applicative (Alternative (empty, (<|>)))
+import Control.Applicative
+
+data Accum e a = ALeft e | ARight a
+
+instance Functor (Accum e) where
+  fmap f (ARight x) = ARight (f x)
+  fmap _ (ALeft e)  = ALeft e
+
+instance Monoid e => Applicative (Accum e) where
+  pure = ARight
+  ARight f <*> ARight x = ARight (f x)
+  ALeft e  <*> ALeft e' = ALeft (e <> e')
+  ALeft e  <*> _        = ALeft e
+  _        <*> ALeft e  = ALeft e
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
-newtype Parser a = Parser {parse :: Code -> Either [Error] (Code, a)}
+-- newtype Parser a = Parser { parse :: Code -> Accum [Error] (Code, a) }
+newtype Parser a = Parser { parse :: Code -> ([Error], [(Code, a)]) }
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
-  fmap f (Parser p) = Parser $ fmap (f <$>) . p
+  fmap f (Parser p) = Parser $ fmap (fmap (fmap f)) . p
 
 -- Proof that our Parser is an Applicative
 instance Applicative Parser where
-  pure x = Parser $ \code -> Right (code, x)
-  (Parser p1) <*> (Parser p2) = Parser $ \code -> do
-    (code', f) <- p1 code
-    (code'', a) <- p2 code'
-    Right (code'', f a)
+  pure x = Parser $ \code -> ([], [(code, x)])
+  (Parser p1) <*> (Parser p2) = Parser $ \c -> (\(e1, (c', f):_) -> (\(e2, (c'', x):_) -> (e1 ++ e2, [(c'', f x)])) (p2 c')) (p1 c)
 
 -- Proof that our Parser is an Alternative
 instance Alternative Parser where
-  empty = Parser . const $ Left []
-  (Parser p1) <|> (Parser p2) = Parser $ \code -> p1 code <> p2 code
+  empty = Parser . const $ ([], [])
+  (Parser p1) <|> (Parser p2) = Parser $ \code -> case p1 code of
+    (_, []) -> p2 code
+    res -> res
 
 -- Our defined types in the Grammar (pretty similar to the given grammar; implementation details are mentioned in the code or in the report)
 -- Our naming convention for the constructors: if there is only one, simply use the same name;

@@ -8,7 +8,7 @@ import Grammar
 import Errors
 import Control.Applicative (Alternative ((<|>), many, some))
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
-import Data.Maybe (isNothing)
+import Data.Maybe (isNothing, listToMaybe)
 import Data.List (isPrefixOf)
 
 -- Several definitions of helper functions which are used in the "real" parsers
@@ -40,19 +40,19 @@ stringP = traverse charP
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = Parser $ \case
   (y, (l, c)) : xs
-    | p y -> Right (xs, y)
-    | otherwise -> Left [Error ParseError [y] ([y], (l, c))]
-  [] -> Left [Error ParseError "Unexpected EOF" ("", (1, 1))]
+    | p y -> ([], [(xs, y)])
+    | otherwise -> ([Error ParseError [y] ([y], (l, c))], [])
+  [] -> ([Error ParseError "Unexpected EOF" ("", (1, 1))], [])
 
 -- Creates a Parser that parses all the consecutive Chars that satisfy the given requirement
 spanP :: (Char -> Bool) -> Parser String
-spanP p = Parser $ \code -> let (token, rest) = span (p . fst) code in Right (rest, map fst token)
+spanP p = Parser $ \code -> let (token, rest) = span (p . fst) code in ([], [(rest, map fst token)])
 
 -- Extends the given Parser with the functionality to return an Error when zero characters are parsed
 notNull :: Parser [a] -> Parser [a]
-notNull (Parser p) = Parser $ \code -> do
-  (code', xs) <- p code
-  if null xs then Left [Error ParseError "Found 0, while at least 1 is expected." ("", (1, 1))] else Right (code', xs)
+notNull (Parser p) = Parser $ \code -> let (e, (code', xs):_) = p code in if null xs then ([Error ParseError "Found 0, while at least 1 is expected." ("", snd $ head code')], []) else (e, [(code', xs)])
+  -- (code', xs) <- p code
+  -- if null xs then ALeft [Error ParseError "Found 0, while at least 1 is expected." ("", snd $ head code')] else ARight (code', xs)
 
 -- Parses at least 1 element of Parser b seperated by Parser a
 sepBy1 :: Parser a -> Parser b -> Parser [b]
@@ -144,29 +144,36 @@ expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunC
 expOp2P :: Parser Exp 
 expOp2P = Parser $ expBP 0
 
-expBP :: Int -> Code -> Either [Error] (Code, Exp)
-expBP minBP c = do
-  (c', lhs) <- parse (expBracketsP <|> expTupleP <|> expNOp2P) c
-  (c'', lhs') <- lhsP 0 minBP lhs c'
-  return (c'', lhs')
-
-lhsP :: Int -> Int -> Exp -> Code -> Either [Error] (Code, Exp)
-lhsP l m e c = do
-  (c', o') <- help $ parse (w op2P) c
-  case o' of
-    Nothing -> Right (c, e)
-    Just o -> do
-      let (lBP, rBP) = bp o
-      if lBP < m then
-        Right (c, e)
-      else do
-        (c'', rhs) <- expBP rBP c'
-        (c''', lhs) <- lhsP lBP m (Exp o e rhs) c''
-        return (c''', lhs)
+expBP :: Int -> Code -> ([Error], [(Code, Exp)])
+expBP minBP c = (e1 ++ e2, [(c'', lhs')])
   where
-    help :: Either [Error] (Code, Op2) -> Either [Error] (Code, Maybe Op2)
-    help (Left _) = Right ([], Nothing)
-    help (Right (c, o)) = Right (c, Just o)
+    (e1, (c', lhs):_) = parse (expBracketsP <|> expTupleP <|> expNOp2P) c
+    (e2, (c'', lhs'):_) = lhsP 0 minBP lhs c'
+
+lhsP :: Int -> Int -> Exp -> Code -> ([Error], [(Code, Exp)])
+lhsP l m e c = case listToMaybe r of
+  Nothing -> (e1, [(c, e)])
+  Just (c1', o) -> _a
+  where
+    (e1, r) = parse (w op2P) c
+
+  -- | lBP < m = ([], [(c, e)])
+  -- | otherwise = ([], [(c''', lhs)])
+  -- (c', o') <- help $ parse (w op2P) c
+  -- case o' of
+  --   Nothing -> ARight (c, e)
+  --   Just o -> do
+  --     let (lBP, rBP) = bp o
+  --     if lBP < m then
+  --       ARight (c, e)
+  --     else do
+  --       (c'', rhs) <- expBP rBP c'
+  --       (c''', lhs) <- lhsP lBP m (Exp o e rhs) c''
+  --       return (c''', lhs)
+  -- where
+    -- help :: ([Error], (Code, Op2)) -> Accum [Error] (Code, Maybe Op2)
+    -- help (ALeft _) = ARight ([], Nothing)
+    -- help (ARight (c, o)) = ARight (c, Just o)
 
 bp :: Op2 -> (Int, Int)
 bp o
@@ -231,35 +238,35 @@ typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID Nothin
 -- Several functions to easily apply the parser to certain programs
 
 -- Maps the result of the parsed program to a string which describes the result
-result :: Show a => Either [Error] (Code, a) -> String
-result (Right (c, a))
+result :: Show a => Accum [Error] (Code, a) -> String
+result (ARight (c, a))
   | null c = "Parsed succesfully" -- ++ show a
-  | otherwise = show $ Error ParseError "Did not complete parsing" (map fst c, (1, 1))
-result (Left es) = join "\n" $ map show es
+  | otherwise = show $ Error ParseError "Did not complete parsing" (map fst c, snd $ head c)
+result (ALeft es) = join "\n" $ map show es
 
 -- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
 -- The boolean argument is true when the parser is currently in a line comment and false otherwise
 -- The integer argument represents the current "level" of recursive block comments, e.g. 0 when you are not in a /* */ comment, 1 if you are and 2 if you are in a comment inside a comment
-comments :: Bool -> Int -> Code -> Either [Error] Code 
+comments :: Bool -> Int -> Code -> Accum [Error] Code 
 comments _ d []
-    | d == 0 = Right [] -- Parser is done and the parser is not currently in a block comment 
-    | otherwise = Left [Error ParseError "Did not close all comments" ("", (1, 1))] -- Parser is done, but is currently in a block comment
+    | d == 0 = ARight [] -- Parser is done and the parser is not currently in a block comment 
+    | otherwise = ALeft [Error ParseError "Did not close all comments" ("", (1, 1))] -- Parser is done, but is currently in a block comment
 comments s d [(x, (l, c))]
-    | d /= 0 = Left [Error ParseError "Did not close all comments" ("", (l, c))] -- Parser only has one character left, but it is still in a block comment, so this can't be closed
-    | s = Right [] -- Parser only has one character left and is currently in a line comment
-    | otherwise = Right [(x, (l, c))] -- Parser has only one character left and isn't in a comment
+    | d /= 0 = ALeft [Error ParseError "Did not close all comments" ("", (l, c))] -- Parser only has one character left, but it is still in a block comment, so this can't be closed
+    | s = ARight [] -- Parser only has one character left and is currently in a line comment
+    | otherwise = ARight [(x, (l, c))] -- Parser has only one character left and isn't in a comment
 comments s d ((x1, (l1, c1)) : (x2, (l2, c2)) : xs)
     | t == "//" = comments True d xs -- Parser recognizes it is in a line comment
     | t == "/*" = comments s (d + 1) xs -- Parser starts a new recursive block comment
     | t == "*/" && (d /= 0) = comments s (d - 1) xs -- Parser closes a valid recursive block comment 
-    | t == "*/" && (d == 0) = Left [Error ParseError "Trying to close comment that doesn't exist" ("*/", (l2, c2))] -- Parser closes an invalid recursive block comment
+    | t == "*/" && (d == 0) = ALeft [Error ParseError "Trying to close comment that doesn't exist" ("*/", (l2, c2))] -- Parser closes an invalid recursive block comment
     | l2 > l1 && s = comments False d ((x2, (l2, c2)) : xs) -- The end of line is reached, so the line comment is reset if it was active
     | s || (d > 0) = comments s d ((x2, (l2, c2)) : xs) -- Parser is currently in a comment and ignores the next character
     | otherwise = (:) (x1, (l1, c1)) <$> comments s d ((x2, (l2, c2)) : xs) -- Parser isn't in a comment currently and adds the current character to the returned Code
     where t = [x1, x2]
 
 -- A function that parses a file for a given parser
-parseFileP :: Show a => Parser a -> (Either [Error] (Code, a) -> String) -> FilePath -> IO ()
+parseFileP :: Show a => Parser a -> (Accum [Error] (Code, a) -> String) -> FilePath -> IO ()
 parseFileP p r f = readFile f >>= putStrLn . help where
   help :: String -> String
   help s = r $ comments False 0 (code s) >>= parse p --(++ " " ++ f) $ 
@@ -269,15 +276,15 @@ parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP result
 
 -- A helper function to test if a parser behaves correctly on a given input.
-testP :: Parser a -> String -> Either [Error] (Code, a)
+testP :: Parser a -> String -> Accum [Error] (Code, a)
 testP p s = comments False 0 (code s) >>= parse p
 
-p :: String -> Either [Error] (Code, SPL)
+p :: String -> Accum [Error] (Code, SPL)
 p s = case parse splP $ code s of
-  Left es -> Left es
-  Right (c, s) -> if not $ null c then
-    Left [Error ParseError "Did not finish parsing" (map fst c, (1, 1))] else
-    Right (c, s)
+  ALeft es -> ALeft es
+  ARight (c, s) -> if not $ null c then
+    ALeft [Error ParseError "Did not finish parsing" (map fst c, snd $ head c)] else
+    ARight (c, s)
 
 -- A function that transforms a string to a list of tuples with (character, line, column)
 code :: String -> Code

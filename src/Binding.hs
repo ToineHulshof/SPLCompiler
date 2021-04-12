@@ -2,7 +2,7 @@
 
 module Binding where
 
-import Parser ( splP, testP )
+import Parser ( p, testP )
 import Grammar
 import Errors
 import Control.Monad.Except ( MonadError(throwError) )
@@ -124,7 +124,7 @@ tiResult spl e = do
         Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
 
 testEnv :: TypeEnv -> FilePath -> String -> IO ()
-testEnv env f s = case testP splP s of
+testEnv env f s = case p s of
     Left e -> print (Errors f (listArray (1, length l) l) e)
         where l = lines s
     Right (_, spl) -> tiResult spl env
