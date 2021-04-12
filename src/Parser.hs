@@ -10,6 +10,7 @@ import Control.Applicative (Alternative ((<|>), many, some))
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 import Data.Maybe (isNothing, listToMaybe)
 import Data.List (isPrefixOf)
+import Debug.Trace ( trace )
 
 -- Several definitions of helper functions which are used in the "real" parsers
 
@@ -40,17 +41,24 @@ stringP = traverse charP
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = Parser $ \case
   (y, (l, c)) : xs
-    | p y -> ([], [(xs, y)])
-    | otherwise -> ([Error ParseError [y] ([y], (l, c))], [])
-  [] -> ([Error ParseError "Unexpected EOF" ("", (1, 1))], [])
+    | p y -> ([], Just (xs, y))
+    | otherwise -> ([Error ParseError [y] ([y], (l, c))], Nothing)
+  [] -> ([Error ParseError "Unexpected EOF" ("", (1, 1))], Nothing)
 
 -- Creates a Parser that parses all the consecutive Chars that satisfy the given requirement
 spanP :: (Char -> Bool) -> Parser String
-spanP p = Parser $ \code -> let (token, rest) = span (p . fst) code in ([], [(rest, map fst token)])
+spanP p = Parser $ \code -> let (token, rest) = span (p . fst) code in ([], Just (rest, map fst token))
 
 -- Extends the given Parser with the functionality to return an Error when zero characters are parsed
 notNull :: Parser [a] -> Parser [a]
-notNull (Parser p) = Parser $ \code -> let (e, (code', xs):_) = p code in if null xs then ([Error ParseError "Found 0, while at least 1 is expected." ("", snd $ head code')], []) else (e, [(code', xs)])
+notNull (Parser p) = Parser help
+  where
+    help c = case r of
+      Nothing -> (e, Nothing)
+      Just (c', xs) -> if null xs then ([Error ParseError "Found 0, while at least 1 is expected." ("", snd $ head c')], Nothing) else (e, Just (c', xs))
+      where
+        (e, r) = p c
+  -- let (e, (code', xs):_) = p code in if null xs then ([Error ParseError "Found 0, while at least 1 is expected." ("", snd $ head code')], []) else (e, [(code', xs)])
   -- (code', xs) <- p code
   -- if null xs then ALeft [Error ParseError "Found 0, while at least 1 is expected." ("", snd $ head code')] else ARight (code', xs)
 
@@ -144,20 +152,30 @@ expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunC
 expOp2P :: Parser Exp 
 expOp2P = Parser $ expBP 0
 
-expBP :: Int -> Code -> ([Error], [(Code, Exp)])
-expBP minBP c = (e1 ++ e2, [(c'', lhs')])
+expBP :: Int -> Code -> ([Error], Maybe (Code, Exp))
+expBP minBP c = case r1 of
+  Nothing -> (e1, Nothing)
+  Just (c', lhs) -> case r2 of
+    Nothing -> (e2, Nothing)
+    Just (c'', lhs') -> ([], Just (c'', lhs'))
+    where
+      (e2, r2) = lhsP 0 minBP lhs c'
   where
-    (e1, (c', lhs):_) = parse (expBracketsP <|> expTupleP <|> expNOp2P) c
-    (e2, (c'', lhs'):_) = lhsP 0 minBP lhs c'
+    (e1, r1) = parse (expBracketsP <|> expTupleP <|> expNOp2P) c
 
-lhsP :: Int -> Int -> Exp -> Code -> ([Error], [(Code, Exp)])
-lhsP l m e c = case listToMaybe r of
-  Nothing -> (e1, [(c, e)])
-  Just (c', o) -> if lBP < m then (e1, [(c, e)]) else (e1 ++ e2 ++ e3, [(c''', lhs)])
+lhsP :: Int -> Int -> Exp -> Code -> ([Error], Maybe (Code, Exp))
+lhsP l m e c = case r of
+  Nothing -> (e1, Just (c, e))
+  Just (c', o) -> if lBP < m then (e1, Just (c, e)) else case r2 of
+    Nothing -> (e2, Nothing)
+    Just (c'', rhs) -> case r3 of
+      Nothing -> (e3, Nothing)
+      Just (c''', lhs) -> ([], Just (c''', lhs))
+      where
+        (e3, r3) = lhsP lBP m (Exp o e rhs) c''
     where
       (lBP, rBP) = bp o
-      (e2, (c'', rhs):_) = expBP rBP c'
-      (e3, (c''', lhs):_) = lhsP lBP m (Exp o e rhs) c''
+      (e2, r2) = expBP rBP c'
   where
     (e1, r) = parse (w op2P) c
 
@@ -224,8 +242,8 @@ typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID Nothin
 -- Several functions to easily apply the parser to certain programs
 
 -- Maps the result of the parsed program to a string which describes the result
-result :: Show a => ([Error], [(Code, a)]) -> String
-result ([], (c, a):_)
+result :: Show a => ([Error], Maybe (Code, a)) -> String
+result ([], Just (c, a))
   | null c = "Parsed succesfully" -- ++ show a
   | otherwise = show $ Error ParseError "Did not complete parsing" (map fst c, snd $ head c)
 result (es, _) = join "\n" $ map show es
@@ -252,7 +270,7 @@ comments s d ((x1, (l1, c1)) : (x2, (l2, c2)) : xs)
     where t = [x1, x2]
 
 -- A function that parses a file for a given parser
-parseFileP :: Show a => Parser a -> (([Error], [(Code, a)]) -> String) -> FilePath -> IO ()
+parseFileP :: Show a => Parser a -> (([Error], Maybe (Code, a)) -> String) -> FilePath -> IO ()
 parseFileP p r f = readFile f >>= putStrLn . help where
   help :: String -> String
   help s = r $ comments False 0 (code s) >>= parse p
@@ -262,16 +280,17 @@ parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP result
 
 -- A helper function to test if a parser behaves correctly on a given input.
-testP :: Parser a -> String -> ([Error], [(Code, a)])
+testP :: Parser a -> String -> ([Error], Maybe (Code, a))
 testP p s = comments False 0 (code s) >>= parse p
 
-p :: String -> ([Error], [(Code, SPL)])
+p :: String -> ([Error], Maybe (Code, SPL))
 p s
-  | not $ null e = (e, [])
-  | not $ null c = (e ++ [Error ParseError "Did not finish parsing" (map fst c, snd $ head c)], [(c, spl)])
-  | otherwise = (e, [(c, spl)])
+  | not $ null e = (e, Nothing)
+  | otherwise = case r of
+    Nothing -> (e, Nothing)
+    Just (c, spl) -> if not $ null c then (e ++ [Error ParseError "Did not finish parsing" (map fst c, snd $ head c)], Just (c, spl)) else ([], Just (c, spl))
   where
-    (e, (c, spl):_) = parse splP $ code s
+    (e, r) = testP splP s
 
 -- A function that transforms a string to a list of tuples with (character, line, column)
 code :: String -> Code

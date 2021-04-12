@@ -120,15 +120,17 @@ tiResult :: SPL -> TypeEnv -> IO ()
 tiResult spl e = do
     (bt, _) <- runTI $ ti' spl e
     case bt of
-        Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
-        Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+        Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err
+        Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env
 
 testEnv :: TypeEnv -> FilePath -> String -> IO ()
 testEnv env f s
     | not $ null e = print (Errors f (listArray (1, length l) l) e)
-    | otherwise = tiResult spl env
+    | otherwise = case r of
+        Nothing -> print e
+        Just (_, spl) -> tiResult spl env
     where
-        (e, (_, spl):_) = p s
+        (e, r) = p s
         l = lines s
 
 checkFile :: FilePath -> String -> IO ()

@@ -10,8 +10,8 @@ import Text.Printf (printf)
 type Depth = Int
 
 -- A function that either prints the Error or pretty prints the parsed code
-result' :: ([Error], [(Code, SPL)]) -> String
-result' ([], (_, a):_) = ppSPL a
+result' :: ([Error], Maybe (Code, SPL)) -> String
+result' ([], Just (_, a)) = ppSPL a
 result' (e, _) = show e
 
 -- Pretty prints the program in the provided filepath

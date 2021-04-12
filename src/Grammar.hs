@@ -6,7 +6,7 @@ import Errors
 import Control.Applicative
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
-newtype Parser a = Parser { parse :: Code -> ([Error], [(Code, a)]) }
+newtype Parser a = Parser { parse :: Code -> ([Error], Maybe (Code, a)) }
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
@@ -14,14 +14,24 @@ instance Functor Parser where
 
 -- Proof that our Parser is an Applicative
 instance Applicative Parser where
-  pure x = Parser $ \code -> ([], [(code, x)])
-  (Parser p1) <*> (Parser p2) = Parser $ \c -> (\(e1, (c', f):_) -> (\(e2, (c'', x):_) -> (e1 ++ e2, [(c'', f x)])) (p2 c')) (p1 c)
+  pure x = Parser $ \code -> ([], Just (code, x))
+  (Parser p1) <*> (Parser p2) = Parser help
+    where
+      help c = case r1 of
+        Nothing -> (e1, Nothing)
+        Just (c', f) -> case r2 of
+          Nothing -> (e2, Nothing)
+          Just (c'', x) -> ([], Just (c'', f x))
+          where
+            (e2, r2) = p2 c'
+        where
+          (e1, r1) = p1 c
 
 -- Proof that our Parser is an Alternative
 instance Alternative Parser where
-  empty = Parser . const $ ([], [])
+  empty = Parser . const $ ([], Nothing)
   (Parser p1) <|> (Parser p2) = Parser $ \code -> case p1 code of
-    (_, []) -> p2 code
+    (_, Nothing) -> p2 code
     res -> res
 
 -- Our defined types in the Grammar (pretty similar to the given grammar; implementation details are mentioned in the code or in the report)
