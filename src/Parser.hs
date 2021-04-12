@@ -153,27 +153,13 @@ expBP minBP c = (e1 ++ e2, [(c'', lhs')])
 lhsP :: Int -> Int -> Exp -> Code -> ([Error], [(Code, Exp)])
 lhsP l m e c = case listToMaybe r of
   Nothing -> (e1, [(c, e)])
-  Just (c1', o) -> _a
+  Just (c', o) -> if lBP < m then (e1, [(c, e)]) else (e1 ++ e2 ++ e3, [(c''', lhs)])
+    where
+      (lBP, rBP) = bp o
+      (e2, (c'', rhs):_) = expBP rBP c'
+      (e3, (c''', lhs):_) = lhsP lBP m (Exp o e rhs) c''
   where
     (e1, r) = parse (w op2P) c
-
-  -- | lBP < m = ([], [(c, e)])
-  -- | otherwise = ([], [(c''', lhs)])
-  -- (c', o') <- help $ parse (w op2P) c
-  -- case o' of
-  --   Nothing -> ARight (c, e)
-  --   Just o -> do
-  --     let (lBP, rBP) = bp o
-  --     if lBP < m then
-  --       ARight (c, e)
-  --     else do
-  --       (c'', rhs) <- expBP rBP c'
-  --       (c''', lhs) <- lhsP lBP m (Exp o e rhs) c''
-  --       return (c''', lhs)
-  -- where
-    -- help :: ([Error], (Code, Op2)) -> Accum [Error] (Code, Maybe Op2)
-    -- help (ALeft _) = ARight ([], Nothing)
-    -- help (ARight (c, o)) = ARight (c, Just o)
 
 bp :: Op2 -> (Int, Int)
 bp o
@@ -238,53 +224,54 @@ typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID Nothin
 -- Several functions to easily apply the parser to certain programs
 
 -- Maps the result of the parsed program to a string which describes the result
-result :: Show a => Accum [Error] (Code, a) -> String
-result (ARight (c, a))
+result :: Show a => ([Error], [(Code, a)]) -> String
+result ([], (c, a):_)
   | null c = "Parsed succesfully" -- ++ show a
   | otherwise = show $ Error ParseError "Did not complete parsing" (map fst c, snd $ head c)
-result (ALeft es) = join "\n" $ map show es
+result (es, _) = join "\n" $ map show es
 
 -- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
 -- The boolean argument is true when the parser is currently in a line comment and false otherwise
 -- The integer argument represents the current "level" of recursive block comments, e.g. 0 when you are not in a /* */ comment, 1 if you are and 2 if you are in a comment inside a comment
-comments :: Bool -> Int -> Code -> Accum [Error] Code 
+comments :: Bool -> Int -> Code -> ([Error], Code)
 comments _ d []
-    | d == 0 = ARight [] -- Parser is done and the parser is not currently in a block comment 
-    | otherwise = ALeft [Error ParseError "Did not close all comments" ("", (1, 1))] -- Parser is done, but is currently in a block comment
+    | d == 0 = ([], []) -- Parser is done and the parser is not currently in a block comment 
+    | otherwise = ([Error ParseError "Did not close all comments" ("", (1, 1))], []) -- Parser is done, but is currently in a block comment
 comments s d [(x, (l, c))]
-    | d /= 0 = ALeft [Error ParseError "Did not close all comments" ("", (l, c))] -- Parser only has one character left, but it is still in a block comment, so this can't be closed
-    | s = ARight [] -- Parser only has one character left and is currently in a line comment
-    | otherwise = ARight [(x, (l, c))] -- Parser has only one character left and isn't in a comment
+    | d /= 0 = ([Error ParseError "Did not close all comments" ("", (l, c))], []) -- Parser only has one character left, but it is still in a block comment, so this can't be closed
+    | s = ([], []) -- Parser only has one character left and is currently in a line comment
+    | otherwise = ([], [(x, (l, c))]) -- Parser has only one character left and isn't in a comment
 comments s d ((x1, (l1, c1)) : (x2, (l2, c2)) : xs)
     | t == "//" = comments True d xs -- Parser recognizes it is in a line comment
     | t == "/*" = comments s (d + 1) xs -- Parser starts a new recursive block comment
     | t == "*/" && (d /= 0) = comments s (d - 1) xs -- Parser closes a valid recursive block comment 
-    | t == "*/" && (d == 0) = ALeft [Error ParseError "Trying to close comment that doesn't exist" ("*/", (l2, c2))] -- Parser closes an invalid recursive block comment
+    | t == "*/" && (d == 0) = ([Error ParseError "Trying to close comment that doesn't exist" ("*/", (l2, c2))], xs) -- Parser closes an invalid recursive block comment
     | l2 > l1 && s = comments False d ((x2, (l2, c2)) : xs) -- The end of line is reached, so the line comment is reset if it was active
     | s || (d > 0) = comments s d ((x2, (l2, c2)) : xs) -- Parser is currently in a comment and ignores the next character
     | otherwise = (:) (x1, (l1, c1)) <$> comments s d ((x2, (l2, c2)) : xs) -- Parser isn't in a comment currently and adds the current character to the returned Code
     where t = [x1, x2]
 
 -- A function that parses a file for a given parser
-parseFileP :: Show a => Parser a -> (Accum [Error] (Code, a) -> String) -> FilePath -> IO ()
+parseFileP :: Show a => Parser a -> (([Error], [(Code, a)]) -> String) -> FilePath -> IO ()
 parseFileP p r f = readFile f >>= putStrLn . help where
   help :: String -> String
-  help s = r $ comments False 0 (code s) >>= parse p --(++ " " ++ f) $ 
+  help s = r $ comments False 0 (code s) >>= parse p
 
 -- A function that parses the program in the given FilePath
 parseFile :: FilePath -> IO ()
 parseFile = parseFileP splP result
 
 -- A helper function to test if a parser behaves correctly on a given input.
-testP :: Parser a -> String -> Accum [Error] (Code, a)
+testP :: Parser a -> String -> ([Error], [(Code, a)])
 testP p s = comments False 0 (code s) >>= parse p
 
-p :: String -> Accum [Error] (Code, SPL)
-p s = case parse splP $ code s of
-  ALeft es -> ALeft es
-  ARight (c, s) -> if not $ null c then
-    ALeft [Error ParseError "Did not finish parsing" (map fst c, snd $ head c)] else
-    ARight (c, s)
+p :: String -> ([Error], [(Code, SPL)])
+p s
+  | not $ null e = (e, [])
+  | not $ null c = (e ++ [Error ParseError "Did not finish parsing" (map fst c, snd $ head c)], [(c, spl)])
+  | otherwise = (e, [(c, spl)])
+  where
+    (e, (c, spl):_) = parse splP $ code s
 
 -- A function that transforms a string to a list of tuples with (character, line, column)
 code :: String -> Code

@@ -124,10 +124,12 @@ tiResult spl e = do
         Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
 
 testEnv :: TypeEnv -> FilePath -> String -> IO ()
-testEnv env f s = case p s of
-    Left e -> print (Errors f (listArray (1, length l) l) e)
-        where l = lines s
-    Right (_, spl) -> tiResult spl env
+testEnv env f s
+    | not $ null e = print (Errors f (listArray (1, length l) l) e)
+    | otherwise = tiResult spl env
+    where
+        (e, (_, spl):_) = p s
+        l = lines s
 
 checkFile :: FilePath -> String -> IO ()
 checkFile = testEnv emptyEnv
