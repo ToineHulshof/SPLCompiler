@@ -328,7 +328,7 @@ erExp (ExpError s) = [Error ParseError "Incorrect expression" s]
 erExp _ = []
 
 erOp2 :: Op2 -> [Error]
-erOp2 (Op2Error s) = [Error ParseError "Unknown operator" s]
+erOp2 (Op2Error s) = [Error ParseError "Unknown binary operator" s]
 erOp2 _ = []
 
 erStmts :: [Stmt] -> [Error]
