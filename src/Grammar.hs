@@ -132,6 +132,7 @@ data Op2
   | And
   | Or
   | Cons
+  | Op2Error (Positioned String)
   deriving (Eq, Show)
 
 data Op1

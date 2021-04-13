@@ -8,7 +8,7 @@ import Grammar
 import Errors
 import Control.Applicative ( Alternative((<|>), some, many), optional )
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
-import Data.Maybe (isNothing, listToMaybe)
+import Data.Maybe (isNothing, listToMaybe, fromMaybe)
 import Data.List (isPrefixOf)
 import Debug.Trace ( trace )
 
@@ -30,10 +30,6 @@ c x = w (charP x)
 charP :: Char -> Parser Char
 charP x = satisfy (==x) True
 
--- Does not consume the character
-charP' :: Char -> Parser (Positioned Char)
-charP' x = satisfy' (==x) False
-
 -- Creates a Parser that parses the next sequence of Chars that is equal to the String in the Parser
 stringP :: String -> Parser String
 stringP = traverse charP
@@ -54,7 +50,10 @@ satisfy p consume = fst <$> satisfy' p consume
 
 -- Creates a Parser that parses all the consecutive Chars that satisfy the given requirement
 spanP :: (Char -> Bool) -> Parser String
-spanP p = Parser $ \code -> let (token, rest) = span (p . fst) code in ([], Just (rest, map fst token))
+spanP p = map fst <$> spanP' p
+
+spanP' :: (Char -> Bool) -> Parser Code
+spanP' p = Parser $ \code -> let (token, rest) = span (p . fst) code in ([], Just (rest, token))
 
 -- Extends the given Parser with the functionality to return an Error when zero characters are parsed
 notNull :: Parser [a] -> Parser [a]
@@ -81,7 +80,7 @@ splP :: Parser SPL
 splP = some (w declP)
 
 declP :: Parser Decl
-declP = declVarDeclP <|> declFunDeclP <|> DeclError <$> errorP "\n"
+declP = declVarDeclP <|> declFunDeclP <|> DeclError <$> errorP (== '\n') False
 
 declVarDeclP :: Parser Decl
 declVarDeclP = DeclVarDecl <$> varDeclP
@@ -153,19 +152,20 @@ op2P =  Plus <$ charP '+'
     <|> And <$ stringP "&&"
     <|> Or <$ stringP "||"
     <|> Cons <$ charP ':'
+    <|> Op2Error <$> f (\c -> not (isAlpha c) && not (isSpace c) && c /= ';')
+    -- <|> Op2Error <$> errorP (\c -> isAlpha c && not (isSpace c)) True
 
-errorP :: [Char] -> Parser (Positioned String)
-errorP cs = (\s (_, (l, c)) -> (s, (l, c - length s))) <$> spanP (`notElem` cs) <*> charsP cs
+f :: (Char -> Bool) -> Parser (Positioned String)
+f p = (\c -> (map fst c, fromMaybe (1, 1) (listToMaybe (map snd c)))) <$> notNull (spanP' p)
 
-charsP :: [Char] -> Parser (Positioned Char)
-charsP [c] = charP' c
-charsP (c:cs) = charP' c <|> charsP cs
+errorP :: (Char -> Bool) -> Bool -> Parser (Positioned String)
+errorP p consume = (\s (_, (l, c)) -> (s, (l, c - length s))) <$> spanP (not . p) <*> satisfy' p consume
 
 expP :: Parser Exp
 expP = expOp2P <|> expNOp2P
 
 expNOp2P :: Parser Exp 
-expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField <$> idP <*> fieldP <|> expCharP <|> ExpEmptyList <$ w (stringP "[]") <|> (ExpError <$> errorP ";\n")
+expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField <$> idP <*> fieldP <|> expCharP <|> ExpEmptyList <$ w (stringP "[]") <|> (ExpError <$> errorP (\c -> c == ';' || c == '\n') False)
 
 expOp2P :: Parser Exp 
 expOp2P = Parser $ expBP 0
@@ -192,12 +192,13 @@ lhsP l m e c = case r of
       where
         (e3, r3) = lhsP lBP m (Exp o e rhs) c''
     where
-      (lBP, rBP) = bp o
+      (lBP, rBP) = trace (show o) bp o
       (e2, r2) = expBP rBP c'
   where
     (e1, r) = parse (w op2P) c
 
 bp :: Op2 -> (Int, Int)
+bp (Op2Error _) = (9, 10)
 bp o
   | o `elem` [Plus, Minus] = (9, 10)
   | o `elem` [Product, Division, Modulo] = (11, 12)
@@ -314,18 +315,27 @@ extractErrors :: SPL -> [Error]
 extractErrors = concatMap erDecl
 
 erDecl :: Decl -> [Error]
-erDecl (DeclVarDecl (VarDecl _ _ e)) = []
-erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts)) = []
+erDecl (DeclVarDecl (VarDecl _ _ e)) = erExp e
+erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts)) = concatMap (erDecl . DeclVarDecl) vs ++ erStmts stmts
 erDecl (DeclError s) = [Error ParseError "Unknown declaration" s]
 
 erExp :: Exp -> [Error]
-erExp = undefined
+erExp (Exp o e1 e2) = erOp2 o ++ erExp e1 ++ erExp e2
+erExp (ExpOp1 _ e) = erExp e
+erExp (ExpTuple (e1, e2)) = erExp e1 ++ erExp e2
+erExp (ExpBrackets e) = erExp e
+erExp (ExpError s) = [Error ParseError "Incorrect expression" s]
+erExp _ = []
+
+erOp2 :: Op2 -> [Error]
+erOp2 (Op2Error s) = [Error ParseError "Unknown operator" s]
+erOp2 _ = []
 
 erStmts :: [Stmt] -> [Error]
 erStmts = concatMap erStmt
 
 erStmt :: Stmt -> [Error]
-erStmt = undefined
+erStmt _ = []
 
 -- A function that transforms a string to a list of tuples with (character, line, column)
 code :: String -> Code
