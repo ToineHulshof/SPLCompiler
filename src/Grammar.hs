@@ -20,8 +20,8 @@ instance Applicative Parser where
       help c = case r1 of
         Nothing -> (e1, Nothing)
         Just (c', f) -> case r2 of
-          Nothing -> (e2, Nothing)
-          Just (c'', x) -> ([], Just (c'', f x))
+          Nothing -> (e1 ++ e2, Nothing)
+          Just (c'', x) -> (e1 ++ e2, Just (c'', f x))
           where
             (e2, r2) = p2 c'
         where
@@ -38,13 +38,12 @@ instance Alternative Parser where
 -- Our naming convention for the constructors: if there is only one, simply use the same name;
 -- If there are more, the name is AB, where A is the current datatype and B is the next, recursive datatype (DeclVarDecl -> current = Decl and next = VarDecl)
 
-newtype SPL
-  = SPL [Decl]
-  deriving (Show)
+type SPL = [Decl]
 
 data Decl
   = DeclVarDecl VarDecl
   | DeclFunDecl FunDecl
+  | DeclError (Positioned String)
   deriving (Show)
 
 data VarDecl
@@ -115,6 +114,7 @@ data Exp
   | ExpBool Bool
   | ExpFunCall FunCall
   | ExpEmptyList
+  | ExpError (Positioned String)
   deriving (Show)
 
 data Op2

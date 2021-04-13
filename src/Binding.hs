@@ -19,7 +19,7 @@ fst3 :: (a, b, c) -> a
 fst3 (a, b, c) = a
 
 components :: SPL -> [SCC Decl]
-components (SPL ds) = map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
+components ds = map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
 
 ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
 ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)
@@ -56,10 +56,10 @@ stdlib = TypeEnv $ M.fromList [
     ]
 
 btSPL :: TypeEnv -> SPL -> TI TypeEnv
-btSPL env (SPL []) = return env
-btSPL env (SPL (d:ds)) = do
+btSPL env [] = return env
+btSPL env (d:ds) = do
     env1 <- btDecl env d
-    env2 <- btSPL env1 (SPL ds)
+    env2 <- btSPL env1 ds
     return (env1 `combine` env2)
 
 btDecl :: TypeEnv -> Decl -> TI TypeEnv
@@ -84,11 +84,6 @@ hasEffect _ = True
 
 effect :: Subst -> Bool
 effect s = any hasEffect $ M.toList s
-
-finalEnv :: SPL -> TypeEnv -> TI TypeEnv
-finalEnv spl env = do
-    (s, env') <- tiSPL env spl
-    if env == env' then return env' else finalEnv spl env'
 
 repeatDecl :: Int -> TypeEnv -> [Decl] -> TI TypeEnv
 repeatDecl 0 env _ = return env

@@ -26,7 +26,7 @@ tab n = replicate n '\t'
 -- These are all pretty self-explanatory
 
 ppSPL :: SPL -> String
-ppSPL (SPL a) = join "\n\n" $ map (ppDecl 0) a
+ppSPL a = join "\n\n" $ map (ppDecl 0) a
 
 ppDecl :: Depth -> Decl -> String
 ppDecl d (DeclVarDecl vd) = printf "%s%s" (tab d) (ppVarDecl vd)

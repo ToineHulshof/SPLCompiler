@@ -59,9 +59,6 @@ composeSubst s1 s2 = M.map (apply s1) s2 `M.union` s1
 
 newtype TypeEnv = TypeEnv (M.Map (Kind, String) Scheme)
 
-instance Eq TypeEnv where
-    e1 == e2 = show e1 == show e2
-
 conditions :: Type -> [(String, Condition)]
 conditions (TypeBasic _) = []
 conditions (TypeTuple t1 t2) = conditions t1 ++ conditions t2
@@ -204,7 +201,7 @@ varBind u c t
     | otherwise = return $ M.singleton u t
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv)
-tiSPL env (SPL ds) = tiDecls env ds
+tiSPL = tiDecls
 
 tiDecl :: TypeEnv -> Decl -> TI (Subst, TypeEnv)
 tiDecl env (DeclVarDecl v) = tiVarDecl env v

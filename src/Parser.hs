@@ -6,7 +6,7 @@ module Parser where
 
 import Grammar
 import Errors
-import Control.Applicative (Alternative ((<|>), many, some))
+import Control.Applicative ( Alternative((<|>), some, many), optional )
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 import Data.Maybe (isNothing, listToMaybe)
 import Data.List (isPrefixOf)
@@ -28,7 +28,11 @@ c x = w (charP x)
 
 -- Creates a Parser that parses the next Char that is equal to the Char in the Parser
 charP :: Char -> Parser Char
-charP x = satisfy (==x)
+charP x = satisfy (==x) True
+
+-- Does not consume the character
+charP' :: Char -> Parser (Positioned Char)
+charP' x = satisfy' (==x) False
 
 -- Creates a Parser that parses the next sequence of Chars that is equal to the String in the Parser
 stringP :: String -> Parser String
@@ -38,12 +42,15 @@ stringP = traverse charP
 -- If the Char is fulfilling the requirement, return a (Code, Char)
 -- If the Char doesnt fulfill the requirement, return an Error with the Char and its position
 -- If none of the above is the case, return an Error with "Unexpected EOF"
-satisfy :: (Char -> Bool) -> Parser Char
-satisfy p = Parser $ \case
+satisfy' :: (Char -> Bool) -> Bool -> Parser (Positioned Char)
+satisfy' p consume = Parser $ \case
   (y, (l, c)) : xs
-    | p y -> ([], Just (xs, y))
+    | p y -> ([], Just (if consume then xs else (y, (l, c)) : xs, (y, (l, c))))
     | otherwise -> ([Error ParseError [y] ([y], (l, c))], Nothing)
   [] -> ([Error ParseError "Unexpected EOF" ("", (1, 1))], Nothing)
+
+satisfy :: (Char -> Bool) -> Bool -> Parser Char
+satisfy p consume = fst <$> satisfy' p consume
 
 -- Creates a Parser that parses all the consecutive Chars that satisfy the given requirement
 spanP :: (Char -> Bool) -> Parser String
@@ -58,9 +65,6 @@ notNull (Parser p) = Parser help
       Just (c', xs) -> if null xs then ([Error ParseError "Found 0, while at least 1 is expected." ("", snd $ head c')], Nothing) else (e, Just (c', xs))
       where
         (e, r) = p c
-  -- let (e, (code', xs):_) = p code in if null xs then ([Error ParseError "Found 0, while at least 1 is expected." ("", snd $ head code')], []) else (e, [(code', xs)])
-  -- (code', xs) <- p code
-  -- if null xs then ALeft [Error ParseError "Found 0, while at least 1 is expected." ("", snd $ head code')] else ARight (code', xs)
 
 -- Parses at least 1 element of Parser b seperated by Parser a
 sepBy1 :: Parser a -> Parser b -> Parser [b]
@@ -74,10 +78,10 @@ sepBy sep e = sepBy1 (ws *> sep <* ws) e <|> pure []
 -- These are self-explanatory, but the general idea is elaborated in the report
 
 splP :: Parser SPL
-splP = SPL <$> some (w declP)
+splP = some (w declP)
 
 declP :: Parser Decl
-declP = declVarDeclP <|> declFunDeclP
+declP = declVarDeclP <|> declFunDeclP <|> DeclError <$> errorP "\n"
 
 declVarDeclP :: Parser Decl
 declVarDeclP = DeclVarDecl <$> varDeclP
@@ -88,8 +92,15 @@ declFunDeclP = DeclFunDecl <$> funDeclP
 funDeclP :: Parser FunDecl
 funDeclP = FunDecl <$> idP <*> (c '(' *> sepBy (charP ',') idP <* c ')') <*> funTypeP <*> (c '{' *> many varDeclP) <*> (some stmtP <* c '}')
 
+optP :: Char -> Parser Char
+optP ch = Parser $ \case
+  ((x, (l, c)):xs)
+    | x == ch -> ([], Just (xs, ch))
+    | otherwise -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (" ", (l, c))], Just ((x, (l, c)):xs, ch))
+  [] -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (" ", (1, 1))], Just ([], ch))
+
 varDeclP :: Parser VarDecl
-varDeclP = (varDeclVarP <|> varDeclTypeP) <* c ';'
+varDeclP = (varDeclVarP <|> varDeclTypeP) <* optP ';'
 
 varDeclVarP :: Parser VarDecl
 varDeclVarP = VarDecl Nothing <$> (stringP "var" *> w idP <* charP '=' <* ws) <*> expP
@@ -107,7 +118,7 @@ retTypeTypeP :: Parser Type
 retTypeTypeP = typeP
 
 idP :: Parser String
-idP = (:) <$> satisfy isAlpha <*> spanP (\c -> isAlphaNum c || c == '_')
+idP = (:) <$> satisfy isAlpha True <*> spanP (\c -> isAlphaNum c || c == '_')
 
 intP :: Parser Integer
 intP = read <$> digitP <|> (*(-1)) . read <$> (charP '-' *> digitP)
@@ -143,11 +154,18 @@ op2P =  Plus <$ charP '+'
     <|> Or <$ stringP "||"
     <|> Cons <$ charP ':'
 
+errorP :: [Char] -> Parser (Positioned String)
+errorP cs = (\s (_, (l, c)) -> (s, (l, c - length s))) <$> spanP (`notElem` cs) <*> charsP cs
+
+charsP :: [Char] -> Parser (Positioned Char)
+charsP [c] = charP' c
+charsP (c:cs) = charP' c <|> charsP cs
+
 expP :: Parser Exp
 expP = expOp2P <|> expNOp2P
 
 expNOp2P :: Parser Exp 
-expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField <$> idP <*> fieldP <|> expCharP <|> ExpEmptyList <$ w (stringP "[]")
+expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField <$> idP <*> fieldP <|> expCharP <|> ExpEmptyList <$ w (stringP "[]") <|> (ExpError <$> errorP ";\n")
 
 expOp2P :: Parser Exp 
 expOp2P = Parser $ expBP 0
@@ -192,7 +210,7 @@ expBoolP :: Parser Exp
 expBoolP = ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
 
 expCharP :: Parser Exp
-expCharP = ExpChar <$> (charP '\'' *> satisfy (const True) <* charP '\'')
+expCharP = ExpChar <$> (charP '\'' *> satisfy (const True) True <* charP '\'')
 
 expTupleP :: Parser Exp
 expTupleP = curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
@@ -284,17 +302,34 @@ testP :: Parser a -> String -> ([Error], Maybe (Code, a))
 testP p s = comments False 0 (code s) >>= parse p
 
 p :: String -> ([Error], Maybe (Code, SPL))
-p s
-  | not $ null e = (e, Nothing)
-  | otherwise = case r of
+p s = case r of
     Nothing -> (e, Nothing)
-    Just (c, spl) -> if not $ null c then (e ++ [Error ParseError "Did not finish parsing" (map fst c, snd $ head c)], Just (c, spl)) else ([], Just (c, spl))
+    Just (c, spl) -> (e ++ e2 ++ ([Error ParseError "Did not finish parsing" (map fst c, snd $ head c) | not $ null c]), Just (c, spl))
+      where
+        e2 = extractErrors spl
   where
     (e, r) = testP splP s
 
+extractErrors :: SPL -> [Error]
+extractErrors = concatMap erDecl
+
+erDecl :: Decl -> [Error]
+erDecl (DeclVarDecl (VarDecl _ _ e)) = []
+erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts)) = []
+erDecl (DeclError s) = [Error ParseError "Unknown declaration" s]
+
+erExp :: Exp -> [Error]
+erExp = undefined
+
+erStmts :: [Stmt] -> [Error]
+erStmts = concatMap erStmt
+
+erStmt :: Stmt -> [Error]
+erStmt = undefined
+
 -- A function that transforms a string to a list of tuples with (character, line, column)
 code :: String -> Code
-code s = [(a, (b, c)) | (b, d) <- zip [1..] $ lines s, (c, a) <- zip [1 ..] d]
+code s = [(a, (b, c)) | (b, d) <- zip [1..] $ map (++ "\n") (lines s), (c, a) <- zip [1 ..] d]
 
 -- Parses the file provided in the IO
 main :: IO ()
