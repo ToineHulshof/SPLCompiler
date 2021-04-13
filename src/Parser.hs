@@ -192,7 +192,7 @@ lhsP l m e c = case r of
       where
         (e3, r3) = lhsP lBP m (Exp o e rhs) c''
     where
-      (lBP, rBP) = trace (show o) bp o
+      (lBP, rBP) = bp o
       (e2, r2) = expBP rBP c'
   where
     (e1, r) = parse (w op2P) c
