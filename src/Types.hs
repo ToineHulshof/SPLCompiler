@@ -263,7 +263,7 @@ allReturns = concatMap getReturns
 
 hasReturn :: Stmt -> Bool
 hasReturn (StmtIf _ ss1 ss2) = correctReturn ss1 && correctReturn (fromMaybe [] ss2)
-hasReturn (StmtWhile _ ss) = correctReturn ss
+hasReturn (StmtWhile _ ss) = False
 hasReturn StmtReturn {} = True
 hasReturn _ = False
 

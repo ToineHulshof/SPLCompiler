@@ -171,7 +171,7 @@ expOp2P :: Parser Exp
 expOp2P = Parser $ expBP 0
 
 expBP :: Int -> Code -> ([Error], Maybe (Code, Exp))
-expBP minBP c = case r1 of
+expBP minBP c = case trace (show r1) r1 of
   Nothing -> (e1, Nothing)
   Just (c', lhs) -> case r2 of
     Nothing -> (e2, Nothing)

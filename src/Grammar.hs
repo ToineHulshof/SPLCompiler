@@ -6,7 +6,8 @@ import Errors
 import Control.Applicative
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
-newtype Parser a = Parser { parse :: Code -> ([Error], Maybe (Code, a)) }
+-- newtype Parser a = Parser { parse :: Code -> ([Error], Maybe (Code, a)) }
+newtype Parser a = Parser { parse :: Code -> ([Error], Maybe (Code, Positioned a)) }
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
