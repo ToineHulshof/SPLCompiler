@@ -14,7 +14,7 @@ import Data.Graph ( stronglyConnCompR, SCC(..) )
 import Data.Tuple ( swap )
 
 components :: SPL -> [SCC Decl]
-components (SPL ds) = map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
+components ds = map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
 
 ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
 ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)
@@ -29,7 +29,7 @@ ctStmt args (StmtWhile e ss) = ctExp args e ++ ctStmts args ss
 ctStmt args (StmtField n _ e)
     | n `elem` args = []
     | otherwise = [(Var, n)]
-ctStmt args (StmtFunCall (FunCall n es)) = [(Fun, n)]
+ctStmt args (StmtFunCall (FunCall _ n es)) = [(Fun, n)]
 ctStmt args (StmtReturn Nothing) = []
 ctStmt args (StmtReturn (Just e)) = ctExp args e
 
@@ -41,7 +41,7 @@ ctExp args (ExpBrackets e) = ctExp args e
 ctExp args (ExpField n _)
     | n `elem` args = []
     | otherwise = [(Var, n)]
-ctExp args (ExpFunCall (FunCall n es)) = [(Fun, n)]
+ctExp args (ExpFunCall (FunCall _ n es)) = [(Fun, n)]
 ctExp _ _ = []
 
 stdlib :: TypeEnv
@@ -51,10 +51,10 @@ stdlib = TypeEnv $ M.fromList [
     ]
 
 btSPL :: TypeEnv -> SPL -> TI TypeEnv
-btSPL env (SPL []) = return env
-btSPL env (SPL (d:ds)) = do
+btSPL env [] = return env
+btSPL env (d:ds) = do
     env1 <- btDecl env d
-    env2 <- btSPL env1 (SPL ds)
+    env2 <- btSPL env1 ds
     return (env1 `combine` env2)
 
 btDecl :: TypeEnv -> Decl -> TI TypeEnv
@@ -80,23 +80,28 @@ hasEffect _ = True
 effect :: Subst -> Bool
 effect s = any hasEffect $ M.toList s
 
-finalEnv :: SPL -> TypeEnv -> TI TypeEnv
-finalEnv spl env = do
-    (s, env') <- tiSPL env spl
-    if env == env' then return env' else finalEnv spl env'
+-- finalEnv :: SPL -> TypeEnv -> TI (TypeEnv, SPL)
+-- finalEnv spl env = do
+--     (s, env', spl') <- tiSPL env spl
+--     if env == env' then return (env', spl') else finalEnv spl env'
 
-repeatDecl :: Int -> TypeEnv -> [Decl] -> TI TypeEnv
-repeatDecl 0 env _ = return env
+repeatDecl :: Int -> TypeEnv -> [Decl] -> TI (TypeEnv, [Decl])
+repeatDecl 0 env _ = return (env, [])
 repeatDecl i env ds = do
-    env1 <- snd <$> tiDecls env ds
+    env1 <- (\(_, e, _) -> e) <$> tiDecls env ds
     repeatDecl (i - 1) env1 ds
 
-tiComp :: TypeEnv -> SCC Decl -> TI TypeEnv
-tiComp env (AcyclicSCC d) = snd <$> tiDecl env d
+tiComp :: TypeEnv -> SCC Decl -> TI (TypeEnv, [Decl])
+tiComp env (AcyclicSCC d) = (\(_, e, dc) -> (e, [dc])) <$> tiDecl env d
 tiComp env (CyclicSCC ds) = repeatDecl (length ds) env ds
 
-tiComps :: TypeEnv -> [SCC Decl] -> TI TypeEnv
-tiComps = foldM tiComp
+tiComps :: TypeEnv -> [SCC Decl] -> TI (TypeEnv, [Decl])
+tiComps env [] = return (env, [])
+tiComps env (d:ds) = do
+    (env1, ds1) <- tiComp env d
+    (env2, ds2) <- tiComps env1 ds
+    return (env1 `combine` env2, ds1 ++ ds2)
+-- tiComps env = foldM tiComp
 
 varCycle :: SCC Decl -> Bool
 varCycle (AcyclicSCC _) = False
@@ -104,7 +109,7 @@ varCycle (CyclicSCC ds) = any isVarDecl ds where
     isVarDecl DeclFunDecl {} = False
     isVarDecl DeclVarDecl {} = True
 
-ti' :: SPL -> TypeEnv -> TI TypeEnv
+ti' :: SPL -> TypeEnv -> TI (TypeEnv, SPL)
 ti' spl e = do
     bt <- btSPL emptyEnv spl
     let comps = components spl
@@ -116,7 +121,8 @@ tiResult spl e = do
     (bt, _) <- runTI $ ti' spl e
     case bt of
         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
-        Right env -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+        Right (env, spl') -> print spl'
+        -- Right (env, spl') -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
 
 testEnv :: TypeEnv -> String -> IO ()
 testEnv env s = case testP splP s of

@@ -70,7 +70,7 @@ sepBy sep e = sepBy1 (ws *> sep <* ws) e <|> pure []
 -- These are self-explanatory, but the general idea is elaborated in the report
 
 splP :: Parser SPL
-splP = SPL <$> some (w declP)
+splP = some (w declP)
 
 declP :: Parser Decl
 declP = declVarDeclP <|> declFunDeclP
@@ -112,7 +112,7 @@ digitP :: Parser String
 digitP = notNull $ spanP isDigit
 
 funCallP :: Parser FunCall
-funCallP = FunCall <$> idP <*> (c '(' *> sepBy (charP ',') expP <* c ')')
+funCallP = FunCall Nothing <$> idP <*> (c '(' *> sepBy (charP ',') expP <* c ')')
 
 fieldFunP :: Parser Field
 fieldFunP = Head <$ stringP "hd" <|> Tail <$ stringP "tl" <|> First <$ stringP "fst" <|> Second <$ stringP "snd"

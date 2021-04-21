@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Binding
+      Codegen
       Grammar
       Main
       Parser

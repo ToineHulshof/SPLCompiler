@@ -31,7 +31,7 @@ join s (x : xs) = x ++ s ++ join s xs
 -- These are all pretty self-explanatory
 
 ppSPL :: SPL -> String
-ppSPL (SPL a) = join "\n\n" $ map (ppDecl 0) a
+ppSPL a = join "\n\n" $ map (ppDecl 0) a
 
 ppDecl :: Depth -> Decl -> String
 ppDecl d (DeclVarDecl vd) = printf "%s%s" (tab d) (ppVarDecl vd)
@@ -79,7 +79,7 @@ ppMExp Nothing = ""
 ppMExp (Just e) = " " ++ ppExp e
 
 ppFunCall :: FunCall -> String
-ppFunCall (FunCall n a) = printf "%s(%s)" n (join ", " (map ppExp a))
+ppFunCall (FunCall _ n a) = printf "%s(%s)" n (join ", " (map ppExp a))
 
 ppField :: Field -> String
 ppField Head = ".hd"

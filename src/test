@@ -1,0 +1,4 @@
+bla :: a -> b -> a
+bla x y = x
+
+var z = bla(bla(True, 3), 3);

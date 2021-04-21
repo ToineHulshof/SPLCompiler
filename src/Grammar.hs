@@ -15,7 +15,7 @@ instance Show Error where
   show (Error e l c) = "\x1b[31mError\x1b[0m " ++ e ++ " " ++ show l ++ ":" ++ show c
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
-newtype Parser a = Parser {parse :: Code -> Either [Error] (Code, a)}
+newtype Parser a = Parser { parse :: Code -> Either [Error] (Code, a) }
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
@@ -38,9 +38,7 @@ instance Alternative Parser where
 -- Our naming convention for the constructors: if there is only one, simply use the same name;
 -- If there are more, the name is AB, where A is the current datatype and B is the next, recursive datatype (DeclVarDecl -> current = Decl and next = VarDecl)
 
-newtype SPL
-  = SPL [Decl]
-  deriving (Show)
+type SPL = [Decl]
 
 data Decl
   = DeclVarDecl VarDecl
@@ -147,5 +145,5 @@ data Field
   deriving (Show)
 
 data FunCall
-  = FunCall String [Exp]
+  = FunCall (Maybe Type) String [Exp]
   deriving (Show)
