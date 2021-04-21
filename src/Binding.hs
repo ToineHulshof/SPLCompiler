@@ -101,7 +101,6 @@ tiComps env (d:ds) = do
     (env1, ds1) <- tiComp env d
     (env2, ds2) <- tiComps env1 ds
     return (env1 `combine` env2, ds1 ++ ds2)
--- tiComps env = foldM tiComp
 
 varCycle :: SCC Decl -> Bool
 varCycle (AcyclicSCC _) = False
@@ -113,7 +112,7 @@ ti' :: SPL -> TypeEnv -> TI (TypeEnv, SPL)
 ti' spl e = do
     bt <- btSPL emptyEnv spl
     let comps = components spl
-    if any varCycle comps then throwError "Stuk" else
+    if any varCycle comps then throwError "Cycle found in global variables" else
         tiComps (stdlib `combine` e `combine` bt) comps
 
 tiResult :: SPL -> TypeEnv -> IO ()
