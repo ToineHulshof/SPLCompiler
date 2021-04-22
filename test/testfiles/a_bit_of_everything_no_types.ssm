@@ -1,0 +1,5 @@
+ldc 60
+ldc 9
+add
+trap 0
+halt

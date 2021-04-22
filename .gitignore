@@ -5,4 +5,5 @@ test/*.
 src/*.hi
 src/*.o
 src/*.
+src/Main
 *~

@@ -5,6 +5,7 @@ module Binding where
 import Parser ( splP, testP, fst3 )
 import Grammar
 import Control.Monad.Except ( MonadError(throwError) )
+import Codegen ( genCode )
 import Types
 import Data.Maybe ( fromMaybe, fromJust, maybeToList )
 import Control.Monad (foldM, forM)
@@ -80,11 +81,6 @@ hasEffect _ = True
 effect :: Subst -> Bool
 effect s = any hasEffect $ M.toList s
 
--- finalEnv :: SPL -> TypeEnv -> TI (TypeEnv, SPL)
--- finalEnv spl env = do
---     (s, env', spl') <- tiSPL env spl
---     if env == env' then return (env', spl') else finalEnv spl env'
-
 repeatDecl :: Int -> TypeEnv -> [Decl] -> TI (TypeEnv, [Decl])
 repeatDecl 0 env _ = return (env, [])
 repeatDecl i env ds = do
@@ -115,18 +111,22 @@ ti' spl e = do
     if any varCycle comps then throwError "Cycle found in global variables" else
         tiComps (stdlib `combine` e `combine` bt) comps
 
-tiResult :: SPL -> TypeEnv -> IO ()
-tiResult spl e = do
+tiResult :: Maybe FilePath -> SPL -> TypeEnv -> IO ()
+tiResult f spl e = do
     (bt, _) <- runTI $ ti' spl e
     case bt of
         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
-        Right (env, spl') -> print spl'
-        -- Right (env, spl') -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+        Right (env, spl') -> case f of
+            Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+            Just filePath -> genCode filePath spl' 
 
-testEnv :: TypeEnv -> String -> IO ()
-testEnv env s = case testP splP s of
+testEnv :: Maybe FilePath -> TypeEnv -> String -> IO ()
+testEnv f env s = case testP splP s of
     Left e -> putStrLn $ "\x1b[31mParseError:\x1b[0m" ++ show e ++ "\n"
-    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0m Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult s env
+    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0m Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult f s env
 
 check :: String -> IO ()
-check = testEnv emptyEnv
+check = testEnv Nothing emptyEnv
+
+compile :: FilePath -> String -> IO ()
+compile f = testEnv (Just f) emptyEnv
