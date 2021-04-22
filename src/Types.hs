@@ -454,7 +454,7 @@ refresh False t = return t
 refresh True t = instantiate $ generalize emptyEnv t
 
 tiExp' :: Bool -> TypeEnv -> Exp -> TI (Subst, Type, Exp)
-tiExp' b env (Exp o e1 e2) = do
+tiExp' b env (Exp _ o e1 e2) = do
     (t1, t2, t3) <- tiOp2 o
     (s1, t1', e1') <- tiExp' b env e1
     s2 <- mgu t1' (apply s1 t1)
@@ -463,7 +463,7 @@ tiExp' b env (Exp o e1 e2) = do
     let cs2 = s3 `composeSubst` cs1
     s4 <- mgu (apply cs2 t2') (apply cs2 t2)
     let cs3 = s4 `composeSubst` cs2
-    return (cs3, apply cs3 t3, Exp o e1' e2')
+    return (cs3, apply cs3 t3, Exp Nothing o e1' e2')
 tiExp' b env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1', e') <- tiExp' b env e
@@ -474,12 +474,12 @@ tiExp' b env (ExpTuple (e1, e2)) = do
     (s2, t2, e2') <- tiExp' b (apply s1 env) e2
     return (s2 `composeSubst` s1, TypeTuple t1 t2, ExpTuple (e1', e2'))
 tiExp' b env (ExpBrackets e) = tiExp' b env e
-tiExp' b (TypeEnv env) e@(ExpField s fs) = case M.lookup (Var, s) env of
-    Nothing -> throwError $ s ++ " is not defined"
+tiExp' b (TypeEnv env) e@(ExpField _ n fs) = case M.lookup (Var, n) env of
+    Nothing -> throwError $ n ++ " is not defined"
     Just sigma -> do
         t <- instantiate sigma
         t' <- refresh b t
-        (\(s, ty) -> (s, ty, e)) <$> tiFields t' fs
+        (\(s, ty) -> (s, ty, ExpField Nothing n fs)) <$> tiFields t' fs
 tiExp' _ _ e@(ExpInt _) = return (nullSubst, TypeBasic IntType, e)
 tiExp' _ _ e@(ExpBool _) = return (nullSubst, TypeBasic BoolType, e)
 tiExp' _ _ e@(ExpChar _) = return (nullSubst, TypeBasic CharType, e)

@@ -35,11 +35,11 @@ ctStmt args (StmtReturn Nothing) = []
 ctStmt args (StmtReturn (Just e)) = ctExp args e
 
 ctExp :: [String] -> Exp -> [(Kind, String)]
-ctExp args (Exp _ e1 e2) = ctExp args e1 ++ ctExp args e2
+ctExp args (Exp _ _ e1 e2) = ctExp args e1 ++ ctExp args e2
 ctExp args (ExpOp1 _ e) = ctExp args e
 ctExp args (ExpTuple (e1, e2)) = ctExp args e1 ++ ctExp args e2
 ctExp args (ExpBrackets e) = ctExp args e
-ctExp args (ExpField n _)
+ctExp args (ExpField _ n _)
     | n `elem` args = []
     | otherwise = [(Var, n)]
 ctExp args (ExpFunCall (FunCall _ n es)) = [(Fun, n)]

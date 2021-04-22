@@ -103,11 +103,11 @@ data Stmt
 -- Here we used the provided hints to ensure precendence
 -- More details can be found in the report
 data Exp
-  = Exp Op2 Exp Exp
+  = Exp (Maybe Type) Op2 Exp Exp
   | ExpOp1 Op1 Exp
   | ExpTuple (Exp, Exp)
   | ExpBrackets Exp
-  | ExpField String [Field]
+  | ExpField (Maybe Type) String [Field]
   | ExpInt Integer
   | ExpChar Char
   | ExpBool Bool

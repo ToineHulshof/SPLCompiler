@@ -92,11 +92,11 @@ ppStmtElse _ Nothing = ""
 ppStmtElse d (Just s) = printf " else {\n%s%s}" (unlines $ map (ppStmt (d + 1)) s) (tab d)
 
 ppExp :: Exp -> String
-ppExp (Exp o e1 e2) = ppExp e1 ++ " " ++ ppOp2 o ++ " " ++ ppExp e2
+ppExp (Exp _ o e1 e2) = ppExp e1 ++ " " ++ ppOp2 o ++ " " ++ ppExp e2
 ppExp (ExpOp1 o e) = ppOp1 o ++ ppExp e
 ppExp (ExpTuple (e1, e2)) = printf "(%s, %s)" (ppExp e1) (ppExp e2)
 ppExp (ExpBrackets e) = printf "(%s)" (ppExp e)
-ppExp (ExpField s f) = s ++ concatMap ppField f
+ppExp (ExpField _ s f) = s ++ concatMap ppField f
 ppExp (ExpInt i) = show i
 ppExp (ExpChar c) = printf "'%s'" [c]
 ppExp (ExpBool b) = if b then "True" else "False"

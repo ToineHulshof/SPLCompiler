@@ -143,7 +143,7 @@ expP :: Parser Exp
 expP = expOp2P <|> expNOp2P
 
 expNOp2P :: Parser Exp 
-expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField <$> idP <*> fieldP <|> expCharP <|> ExpEmptyList <$ w (stringP "[]")
+expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField Nothing <$> idP <*> fieldP <|> expCharP <|> ExpEmptyList <$ w (stringP "[]")
 
 expOp2P :: Parser Exp 
 expOp2P = Parser $ expBP 0
@@ -165,7 +165,7 @@ lhsP l m e c = do
         Right (c, e)
       else do
         (c'', rhs) <- expBP rBP c'
-        (c''', lhs) <- lhsP lBP m (Exp o e rhs) c''
+        (c''', lhs) <- lhsP lBP m (Exp Nothing o e rhs) c''
         return (c''', lhs)
   where
     help :: Either [Error] (Code, Op2) -> Either [Error] (Code, Maybe Op2)

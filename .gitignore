@@ -1,9 +1,4 @@
 .stack-work/
-test/*.hi
-test/*.o
-test/*.
-src/*.hi
-src/*.o
-src/*.
+src/.out
 src/Main
 *~
