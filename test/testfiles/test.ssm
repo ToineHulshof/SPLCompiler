@@ -1,21 +1,7 @@
+bra f
+f: 
 ldc 1
 ldc 2
-add
-ldc 3
-add
-ldc 4
-add
-ldc 5
-add
-ldc 6
-add
-ldc 7
-add
-ldc 8
-add
-ldc 9
-add
-ldc 11
 add
 trap 0
 halt

@@ -82,7 +82,7 @@ effect :: Subst -> Bool
 effect s = any hasEffect $ M.toList s
 
 repeatDecl :: Int -> TypeEnv -> [Decl] -> TI (TypeEnv, [Decl])
-repeatDecl 0 env _ = return (env, [])
+repeatDecl 0 env ds = return (env, ds)
 repeatDecl i env ds = do
     env1 <- (\(_, e, _) -> e) <$> tiDecls env ds
     repeatDecl (i - 1) env1 ds
