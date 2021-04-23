@@ -114,7 +114,9 @@ genDecl (DeclFunDecl (FunDecl n args _ vars stmts)) = do
 genStmts :: [Stmt] -> CG [Instruction]
 genStmts ss = concat <$> mapM genStmt ss
 
-
+-- link aantal vars
+-- sp naar r0
+-- acces naar var = r0 - index van var
 
 genStmt :: Stmt -> CG [Instruction]
 genStmt (StmtFunCall f) = genFunCall f
