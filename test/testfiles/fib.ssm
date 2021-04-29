@@ -1,32 +1,39 @@
 bra main
 fib:
-link 0
-ldl -2
+link 1
+ldl 1
 ldc 1
 le
 brt Then0
-ldl -2
+ldl 1
 ldc 1
 sub
 bsr fib
 ldr RR
-ldl -2
+ldl 1
 ldc 2
 sub
 bsr fib
 ldr RR
 add
-bra End0
-Then0:
-ldl -2
-End0:
 str RR
+bra EndIf0
+Then0:
+ldl 1
+str RR
+EndIf0:
 unlink
 sts -1
 ret
 main:
+link 1
 ldc 10
 bsr fib
 ldr RR
+stl 1
+ldl 1
 trap 0
-halt
+sts 0x85
+trap 1
+unlink
+sts -1

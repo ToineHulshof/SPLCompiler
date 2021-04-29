@@ -1,0 +1,19 @@
+bra main
+fib:
+link 0
+ldc 1
+str RR
+unlink
+sts -1
+ret
+main:
+link 1
+bsr fib
+ldr RR
+stl 1
+ldl 1
+trap 0
+sts 0x85
+trap 1
+unlink
+sts -1

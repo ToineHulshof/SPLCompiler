@@ -15,5 +15,6 @@ fib(n) {
 // }
 
 main () {
-    fib(10);
+    var x = fib(10);
+    print(x);
 }

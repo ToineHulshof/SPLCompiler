@@ -1,0 +1,8 @@
+fib() {
+    return 1;
+}
+
+main() {
+    var y = fib();
+    print(y);
+}
