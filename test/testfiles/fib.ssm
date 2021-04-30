@@ -27,7 +27,7 @@ sts -1
 ret
 main:
 link 1
-ldc 3
+ldc 10
 bsr fib
 ldr RR
 stl 1

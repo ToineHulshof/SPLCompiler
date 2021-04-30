@@ -15,6 +15,6 @@ fac(n) {
 }
 
 main () {
-    var x = fib(3);
+    var x = fib(10);
     print(x);
 }
