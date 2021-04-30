@@ -3,6 +3,9 @@ fib() {
 }
 
 main() {
-    var y = fib();
-    print(y);
+    var x = 0;
+    while (x < 10) {
+        x = x + 1;
+    }
+    print(x);
 }

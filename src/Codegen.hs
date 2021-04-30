@@ -20,7 +20,14 @@ data Instruction
     | StoreRegister Register
     | StoreStack Int
     | StoreLocal Int
+    | StoreAddress Int
+    | StoreHeap
+    | StoreMultipleHeap Int
     | LoadLocal Int
+    | LoadStack Int
+    | LoadAddress Int
+    | LoadHeap Int
+    | LoadMultipleHeap Int Int
     | Link Int
     | Unlink
     | Label String
@@ -52,9 +59,13 @@ instance Show TrapCode where
 
 data Register
     = ReturnRegister
+    | GlobalOffset
+    | StackPointer
 
 instance Show Register where
     show ReturnRegister = "RR"
+    show GlobalOffset = "R5"
+    show StackPointer = "R1"
 
 instance Show Instruction where
     show (LoadConstant i) = "ldc " ++ show i
@@ -63,9 +74,16 @@ instance Show Instruction where
     show (BranchTrue s) = "brt " ++ s
     show (BranchFalse s) = "brf " ++ s
     show (LoadRegister r) = "ldr " ++ show r
+    show (LoadStack i) = "lds " ++ show i
+    show (LoadAddress i) = "lda " ++ show i
+    show (LoadHeap i) = "ldh " ++ show i
+    show (LoadMultipleHeap o l) = "ldmh " ++ show o ++ " " ++ show l
     show (StoreRegister r) = "str " ++ show r
     show (StoreStack i) = "sts " ++ show i
     show (StoreLocal i) = "stl " ++ show i
+    show (StoreMultipleHeap i) = "stmh " ++ show i
+    show StoreHeap = "sth"
+    show (StoreAddress i) = "sta " ++ show i
     show (LoadLocal i) = "ldl " ++ show i
     show (AdjustStack i) = "ajs " ++ show i
     show (Link i) = "link " ++ show i
@@ -74,7 +92,7 @@ instance Show Instruction where
     show Return = "ret"
 
     show Add = "add"
-    show (Trap c) = "trap " ++ show c ++ "\nsts 0x85\ntrap 1"
+    show (Trap c) = "trap " ++ show c ++ "\nldc 0x20\ntrap 1"
     show Multiply = "mul"
     show Subtract = "sub"
     show Divide = "div"
@@ -128,25 +146,31 @@ setLocalMap m = do
 genCode :: FilePath -> SPL -> IO ()
 genCode f spl = do
     (instructions, _) <- runStateT (genSPL spl) (0, "", M.empty, M.empty)
-    writeFile f (unlines $ map show (BranchAlways "main" : instructions)) --"ldc 60\nldc 9\nadd\ntrap 0\nhalt"
+    writeFile f (unlines $ map show instructions)
     --putStrLn "\x1b[32mCompilation successful\x1b[0m"
 
 genSPL :: SPL -> CG [Instruction]
-genSPL ds = concat <$> mapM genDecl ds
+genSPL ds = do
+    let vardecls = [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
+    (i1, m) <- genGlobalVars 1 vardecls
+    setGlobalMap m
+    i2 <- concat <$> mapM genFunDecl [(\(DeclFunDecl f) -> f) x | x@DeclFunDecl {} <- ds]
+    return $ i1 ++ [BranchAlways "main"]  ++ i2 
 
-genDecl :: Decl -> CG [Instruction]
-genDecl (DeclVarDecl (VarDecl _ _ e)) = genExp e
--- genDecl (DeclFunDecl (FunDecl "main" args _ vars stmts)) = do
---     (i1, m) <- genLocalVarDecls 0 vars
---     setLocalMap m
---     i2 <- genStmts stmts
---     return $ Label "main" : i1 ++ i2
-genDecl (DeclFunDecl (FunDecl n args _ vars stmts)) = do
-    (i1, m) <- genLocalVarDecls 1 args vars
+genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
+genGlobalVars _ [] = return ([], M.empty)
+genGlobalVars i ((VarDecl _ n e):xs) = do
+    i1 <- genExp e
+    (i2, m) <- genGlobalVars (i + 1) xs
+    return (i1 ++ [LoadConstant i, StoreAddress 0] ++ i2, M.singleton n i `M.union` m)
+
+genFunDecl :: FunDecl -> CG [Instruction]
+genFunDecl (FunDecl n args _ vars stmts) = do
+    (i1, m) <- genLocalVars 1 args vars
     setLocalMap m
     setFunName n
     i2 <- genStmts stmts
-    return $ Label n : Link (length vars + length args) : i1 ++ i2 ++ [Unlink, StoreStack (-1)] ++ [Return | n /= "main"]
+    return $ Label n : Link (length vars + length args) : i1 ++ i2 ++ [Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
 
 argsMap :: Int -> [String] -> CG (M.Map String Int)
 argsMap _ [] = return M.empty
@@ -154,13 +178,13 @@ argsMap i (x:xs) = do
     m <- argsMap (i + 1) xs 
     return $ m `M.union` M.singleton x i
 
-genLocalVarDecls :: Int -> [String] -> [VarDecl] -> CG ([Instruction], M.Map String Int)
-genLocalVarDecls i args [] = do
-    m <- argsMap i args
+genLocalVars :: Int -> [String] -> [VarDecl] -> CG ([Instruction], M.Map String Int)
+genLocalVars _ args [] = do
+    m <- argsMap (-1 - length args) args
     return ([], m)
-genLocalVarDecls i args ((VarDecl _ n e):vs) = do
+genLocalVars i args ((VarDecl _ n e):vs) = do
     i1 <- genExp e
-    (i2, m) <- genLocalVarDecls (i + 1) args vs
+    (i2, m) <- genLocalVars (i + 1) args vs
     return (i1 ++ [StoreLocal i] ++ i2, M.singleton n i `M.union` m)
 
 genStmts :: [Stmt] -> CG [Instruction]
@@ -192,7 +216,8 @@ genStmt (StmtField n [] e) = do
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
             Nothing -> error ""
-            Just i -> undefined
+            Just i -> do
+                return $ i1 ++ [LoadConstant i, StoreAddress 0]
         Just i -> return $ i1 ++ [StoreLocal i]
 genStmt (StmtField n _ e) = undefined
 genStmt (StmtReturn Nothing) = do 
@@ -204,7 +229,7 @@ genStmt (StmtReturn (Just e)) = do
     i1 <- genExp e
     funName <- getFunName
     if funName == "main"
-    then return [StoreRegister ReturnRegister, Halt]
+        then return [StoreRegister ReturnRegister, Halt]
         else return $ i1 ++ [StoreRegister ReturnRegister]
 
 genFunCall :: FunCall -> CG [Instruction]
@@ -216,7 +241,13 @@ genFunCall (FunCall _ n args) = do
     i <- concat <$> mapM genExp args
     return $ i ++ [BranchSubroutine n, LoadRegister ReturnRegister]
 
+-- 1 : []
+
 genExp :: Exp -> CG [Instruction]
+genExp (Exp t Cons e1 e2) = do
+    i2 <- genExp e2 -- address of heap
+    i1 <- genExp e1 -- value of head
+    return $ i2 ++ i1 ++ [StoreMultipleHeap 2]
 genExp (Exp _ o e1 e2) = do
     i1 <- genExp e1
     i2 <- genExp e2
@@ -232,12 +263,14 @@ genExp (ExpField _ n []) = do
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
             Nothing -> trace (show lm) (error "")
-            Just i -> undefined
+            Just i -> return [LoadAddress i]
         Just i -> return [LoadLocal i]
 genExp (ExpField _ n fs) = return [LoadLocal (-2)]
 genExp (ExpInt i) = return [LoadConstant $ fromInteger i]
 genExp (ExpBool b) = return [LoadConstant $ if b then 1 else 0]
 genExp (ExpChar c) = return [LoadConstant $ ord c]
+genExp (ExpTuple (e1, e2)) = undefined
+genExp ExpEmptyList = return [LoadConstant 0]
 
 genOp2 :: Op2 -> Instruction
 genOp2 Plus = Add

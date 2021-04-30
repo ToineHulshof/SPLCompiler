@@ -1,0 +1,13 @@
+ldc 3
+ldc 1
+sta 0
+bra main
+main:
+link 0
+lda 1
+trap 0
+ldc 0x20
+trap 1
+unlink
+sts -1
+halt
