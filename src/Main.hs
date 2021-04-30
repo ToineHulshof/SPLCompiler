@@ -25,6 +25,13 @@ testFile addPrefix f = do
     -- putStrLn $ "\x1b[3m" ++ f ++ ".spl \x1b[0m"
     compile (changeSuffix "" f) s
 
+testFileWindows :: Bool -> String -> IO ()
+testFileWindows addPrefix f = do
+    let file = if addPrefix then "..\\\\test\\\\testfiles\\\\" ++ f ++ ".spl" else f
+    s <- readFile file
+    -- putStrLn $ "\x1b[3m" ++ f ++ ".spl \x1b[0m"
+    compile (changeSuffix "" f) s
+
 test :: IO [()]
 test = testAllFiles
 
