@@ -23,11 +23,14 @@ data Instruction
     | StoreAddress Int
     | StoreHeap
     | StoreMultipleHeap Int
+    | LoadStackAddress Int
     | LoadLocal Int
     | LoadStack Int
-    | LoadAddress Int
+    | LoadAddress (Either Int Register)
     | LoadHeap Int
     | LoadMultipleHeap Int Int
+    | LoadRegisterFromRegister Register Register
+    | ChangeAddress Int
     | Link Int
     | Unlink
     | Label String
@@ -60,24 +63,30 @@ instance Show TrapCode where
 data Register
     = ReturnRegister
     | GlobalOffset
+    | GlobalTemp
     | StackPointer
 
 instance Show Register where
     show ReturnRegister = "RR"
     show GlobalOffset = "R5"
     show StackPointer = "R1"
+    show GlobalTemp = "R6"
 
 instance Show Instruction where
     show (LoadConstant i) = "ldc " ++ show i
+    show (LoadStackAddress i) = "ldsa " ++ show i
     show (BranchAlways s) = "bra " ++ s
     show (BranchSubroutine s) = "bsr " ++ s
     show (BranchTrue s) = "brt " ++ s
     show (BranchFalse s) = "brf " ++ s
     show (LoadRegister r) = "ldr " ++ show r
     show (LoadStack i) = "lds " ++ show i
-    show (LoadAddress i) = "lda " ++ show i
+    show (LoadAddress (Left i)) = "lda " ++ show i
+    show (LoadAddress (Right r)) = "lda " ++ show r
     show (LoadHeap i) = "ldh " ++ show i
     show (LoadMultipleHeap o l) = "ldmh " ++ show o ++ " " ++ show l
+    show (LoadRegisterFromRegister to from) = "ldrr " ++ show to ++ " " ++ show from
+    show (ChangeAddress i) = "ldaa " ++ show i
     show (StoreRegister r) = "str " ++ show r
     show (StoreStack i) = "sts " ++ show i
     show (StoreLocal i) = "stl " ++ show i
@@ -155,14 +164,14 @@ genSPL ds = do
     (i1, m) <- genGlobalVars 1 vardecls
     setGlobalMap m
     i2 <- concat <$> mapM genFunDecl [(\(DeclFunDecl f) -> f) x | x@DeclFunDecl {} <- ds]
-    return $ i1 ++ [BranchAlways "main"]  ++ i2 
+    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"]  ++ i2 
 
 genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
 genGlobalVars _ [] = return ([], M.empty)
 genGlobalVars i ((VarDecl _ n e):xs) = do
     i1 <- genExp e
     (i2, m) <- genGlobalVars (i + 1) xs
-    return (i1 ++ [LoadConstant i, StoreAddress 0] ++ i2, M.singleton n i `M.union` m)
+    return (i1 ++ i2, M.singleton n i `M.union` m)
 
 genFunDecl :: FunDecl -> CG [Instruction]
 genFunDecl (FunDecl n args _ vars stmts) = do
@@ -263,19 +272,22 @@ genExp (ExpField _ n []) = do
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
             Nothing -> trace (show lm) (error "")
-            Just i -> undefined
+            Just i -> return [LoadAddress (Left i)] --[LoadRegister GlobalOffset, LoadConstant i, Add, StoreRegister GlobalTemp, LoadAddress (Right GlobalTemp)]
         Just i -> return [LoadLocal i]
 genExp (ExpField (Just (TypeArray t)) n (x:xs)) = do 
     i1 <- genExp (ExpField (Just t) n xs)
     case x of
-        Head -> return $ [LoadHeap 0] ++ i1
-        Tail -> return $ [LoadHeap 1] ++ i1
+        Head -> return $ LoadHeap 0 : i1
+        Tail -> return $ LoadHeap 1 : i1
         _ -> error ""
 genExp (ExpField t n fs) = trace (show t) (error "")
 genExp (ExpInt i) = return [LoadConstant $ fromInteger i]
 genExp (ExpBool b) = return [LoadConstant $ if b then 1 else 0]
 genExp (ExpChar c) = return [LoadConstant $ ord c]
-genExp (ExpTuple (e1, e2)) = undefined
+genExp (ExpTuple (e1, e2)) = do
+    i1 <- genExp e1
+    i2 <- genExp e2
+    return $ i1 ++ i2
 genExp ExpEmptyList = return [LoadConstant 0]
 
 genOp2 :: Op2 -> Instruction

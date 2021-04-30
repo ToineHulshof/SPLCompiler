@@ -1,5 +1,7 @@
 var x = 3;
+var y = True;
+var z = 5;
 
 main () {
-    print(x);
+    print(x + z);
 }

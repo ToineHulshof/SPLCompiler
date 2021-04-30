@@ -1,10 +1,13 @@
-ldc 3
+ldrr R5 R1
+ldc 5
 ldc 1
-sta 0
+ldc 3
 bra main
 main:
 link 0
-lda 1
+lda 2
+ldc 0
+and
 trap 0
 ldc 0x20
 trap 1
