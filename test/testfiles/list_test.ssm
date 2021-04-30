@@ -1,17 +1,16 @@
 bra main
 main:
-link 2
+link 1
 ldc 0
 ldc 2
 stmh 2
 ldc 1
 stmh 2
 stl 1
-ldc 0
-ldc 3
-stmh 2
-stl 2
-halt
+ldl 1
+trap 0
+ldc 0x20
+trap 1
 unlink
 sts -1
 halt

@@ -263,9 +263,15 @@ genExp (ExpField _ n []) = do
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
             Nothing -> trace (show lm) (error "")
-            Just i -> return [LoadAddress i]
+            Just i -> undefined
         Just i -> return [LoadLocal i]
-genExp (ExpField _ n fs) = return [LoadLocal (-2)]
+genExp (ExpField (Just (TypeArray t)) n (x:xs)) = do 
+    i1 <- genExp (ExpField (Just t) n xs)
+    case x of
+        Head -> return $ [LoadHeap 0] ++ i1
+        Tail -> return $ [LoadHeap 1] ++ i1
+        _ -> error ""
+genExp (ExpField t n fs) = trace (show t) (error "")
 genExp (ExpInt i) = return [LoadConstant $ fromInteger i]
 genExp (ExpBool b) = return [LoadConstant $ if b then 1 else 0]
 genExp (ExpChar c) = return [LoadConstant $ ord c]

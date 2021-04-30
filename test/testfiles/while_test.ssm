@@ -16,10 +16,11 @@ bra While0
 EndWhile0:
 ldl 1
 trap 0
-sts 0x85
+ldc 0x20
 trap 1
 unlink
 sts -1
+halt
 fib:
 link 0
 ldc 1
