@@ -130,24 +130,15 @@ new = do
     put e { ifCounter = ifCounter e + 1 }
     return $ ifCounter e
 
-getFunName :: CG String
-getFunName = gets funName
-
 setFunName :: String -> CG ()
 setFunName n = do
     e <- get
     put e { funName = n }
 
-getGlobalMap :: CG (M.Map String Int)
-getGlobalMap = gets globalMap
-
 setGlobalMap :: M.Map String Int -> CG ()
 setGlobalMap m = do
     e <- get
     put e { globalMap = m }
-
-getLocalMap :: CG (M.Map String Int)
-getLocalMap = gets localMap
 
 setLocalMap :: M.Map String Int -> CG ()
 setLocalMap m = do
@@ -221,8 +212,8 @@ genStmt (StmtWhile e ss) = do
     i <- show <$> new
     return $ Label ("While" ++ i) : i1 ++ [BranchFalse $ "EndWhile" ++ i] ++ i2 ++ [BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i]
 genStmt (StmtField n [] e) = do
-    lm <- getLocalMap
-    gm <- getGlobalMap
+    lm <- gets localMap
+    gm <- gets globalMap
     i1 <- genExp e
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
@@ -232,13 +223,13 @@ genStmt (StmtField n [] e) = do
         Just i -> return $ i1 ++ [StoreLocal i]
 genStmt (StmtField n _ e) = undefined
 genStmt (StmtReturn Nothing) = do 
-    funName <- getFunName
+    funName <- gets funName
     if funName == "main"
         then return [Halt]
         else return []
 genStmt (StmtReturn (Just e)) = do 
     i1 <- genExp e
-    funName <- getFunName
+    funName <- gets funName
     if funName == "main"
         then return [StoreRegister ReturnRegister, Halt]
         else return $ i1 ++ [StoreRegister ReturnRegister]
@@ -282,8 +273,8 @@ genExp (ExpOp1 o e) = do
 genExp (ExpBrackets e) = genExp e
 genExp (ExpFunCall f) = genFunCall f
 genExp (ExpField _ n []) = do
-    lm <- getLocalMap
-    gm <- getGlobalMap
+    lm <- gets localMap
+    gm <- gets globalMap
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
             Nothing -> trace (show lm) (error "")
