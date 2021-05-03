@@ -1,16 +1,24 @@
+ldrr R5 R1
 bra main
-main:
-link 1
-ldc 0
-ldc 2
-stmh 2
-ldc 1
-stmh 2
-stl 1
-ldl 1
-trap 0
+printTrue:
+ldc 69
+trap 1
 ldc 0x20
 trap 1
+ret
+printFalse:
+ldc 70
+trap 1
+ldc 0x20
+trap 1
+ret
+main:
+link 1
+ldc 1
+stl 1
+ldl 1
+brt printTrue
+brf printFalse
 unlink
 sts -1
 halt

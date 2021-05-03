@@ -3,5 +3,5 @@ var y = True;
 var z = 5;
 
 main () {
-    print((x + z) / 2);
+    print((x + z + y) / 2);
 }

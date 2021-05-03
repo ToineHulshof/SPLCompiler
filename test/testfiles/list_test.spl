@@ -1,5 +1,5 @@
 main () {
-    [Int] x = 1 : 2 : [];
-    Int y = x.hd;
-    return;
+    // var x = 1 : 2 : [];
+    var x = True;
+    print(x);
 }

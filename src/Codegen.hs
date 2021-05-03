@@ -56,9 +56,11 @@ data Instruction
 
 data TrapCode
     = Int
+    | Char
 
 instance Show TrapCode where
     show Int = "0"
+    show Char = "1"
 
 data Register
     = ReturnRegister
@@ -119,42 +121,42 @@ instance Show Instruction where
     show NotI = "not"
     show Halt = "halt"
 
-type GenEnv = (Int, String, M.Map String Int, M.Map String Int)
+data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int }
 type CG a = StateT GenEnv IO a
 
 new :: CG Int
 new = do
-    (s, n, g, l) <- get
-    put (s + 1, n, g, l)
-    return s
+    e <- get
+    put e { ifCounter = ifCounter e + 1 }
+    return $ ifCounter e
 
 getFunName :: CG String
-getFunName = gets (\(_, n, _, _) -> n)
+getFunName = gets funName
 
 setFunName :: String -> CG ()
 setFunName n = do
-    (s, _, g, l) <- get
-    put (s, n, g, l)
+    e <- get
+    put e { funName = n }
 
 getGlobalMap :: CG (M.Map String Int)
-getGlobalMap = gets (\(_, _, g, _) -> g)
+getGlobalMap = gets globalMap
 
 setGlobalMap :: M.Map String Int -> CG ()
 setGlobalMap m = do
-    (s, n, _, l) <- get
-    put (s, n, m, l)
+    e <- get
+    put e { globalMap = m }
 
 getLocalMap :: CG (M.Map String Int)
-getLocalMap = gets (\(_, _, _, l) -> l)
+getLocalMap = gets localMap
 
 setLocalMap :: M.Map String Int -> CG ()
 setLocalMap m = do
-    (s, n, g, _) <- get
-    put (s, n, g, m)
+    e <- get
+    put e { localMap = m }
 
 genCode :: FilePath -> SPL -> IO ()
 genCode f spl = do
-    (instructions, _) <- runStateT (genSPL spl) (0, "", M.empty, M.empty)
+    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, localMap = M.empty, globalMap = M.empty })
     writeFile f (unlines $ map show instructions)
     --putStrLn "\x1b[32mCompilation successful\x1b[0m"
 
@@ -164,7 +166,7 @@ genSPL ds = do
     (i1, m) <- genGlobalVars 1 vardecls
     setGlobalMap m
     i2 <- concat <$> mapM genFunDecl [(\(DeclFunDecl f) -> f) x | x@DeclFunDecl {} <- ds]
-    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i2
+    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main", Label "printTrue", LoadConstant 69, Trap Char, Return, Label "printFalse", LoadConstant 70, Trap Char, Return] ++ i2
 
 genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
 genGlobalVars _ [] = return ([], M.empty)
@@ -243,14 +245,27 @@ genStmt (StmtReturn (Just e)) = do
 
 genFunCall :: FunCall -> CG [Instruction]
 -- genFunCall (FunCall _ n args) = concatMap genExp args ++ [BranchSubroutine n, AdjustStack (-length args), LoadRegister ReturnRegister]
-genFunCall (FunCall _ "print" args) = do
+genFunCall (FunCall (Just t) "print" args) = do
+    let (TypeFun t' _) = t
     i <- concat <$> mapM genExp args
-    return $ i ++ [Trap Int]
+    return $ i ++ genPrint t'
 genFunCall (FunCall _ n args) = do
     i <- concat <$> mapM genExp args
     return $ i ++ [BranchSubroutine n, LoadRegister ReturnRegister]
 
--- 1 : []
+genPrint :: Type -> [Instruction]
+genPrint (TypeBasic IntType) = [Trap Int]
+genPrint (TypeBasic BoolType) = [BranchTrue "printTrue", BranchFalse "printFalse"]
+
+--   = TypeBasic BasicType
+--   | TypeTuple Type Type
+--   | TypeArray Type
+--   | TypeID (Maybe Condition) String
+--   | TypeFun Type Type
+--   | Void
+--   = IntType
+--   | BoolType
+--   | CharType
 
 genExp :: Exp -> CG [Instruction]
 genExp (Exp t Cons e1 e2) = do
@@ -272,7 +287,7 @@ genExp (ExpField _ n []) = do
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
             Nothing -> trace (show lm) (error "")
-            Just i -> return [LoadRegister GlobalOffset, LoadAddress (Left i)] -- LoadConstant i, Add, StoreRegister GlobalTemp, LoadAddress (Right GlobalTemp), AdjustStack 1]
+            Just i -> return [LoadRegister GlobalOffset, LoadAddress (Left i)]
         Just i -> return [LoadLocal i]
 genExp (ExpField (Just (TypeArray t)) n (x:xs)) = do 
     i1 <- genExp (ExpField (Just t) n xs)
