@@ -5,9 +5,13 @@ ldc 3
 bra main
 main:
 link 0
-lda 2
-ldc 0
-and
+ldr R5
+lda 3
+ldr R5
+lda 1
+add
+ldc 2
+div
 trap 0
 ldc 0x20
 trap 1

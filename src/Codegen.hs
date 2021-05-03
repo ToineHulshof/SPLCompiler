@@ -164,7 +164,7 @@ genSPL ds = do
     (i1, m) <- genGlobalVars 1 vardecls
     setGlobalMap m
     i2 <- concat <$> mapM genFunDecl [(\(DeclFunDecl f) -> f) x | x@DeclFunDecl {} <- ds]
-    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"]  ++ i2 
+    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i2
 
 genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
 genGlobalVars _ [] = return ([], M.empty)
@@ -272,7 +272,7 @@ genExp (ExpField _ n []) = do
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
             Nothing -> trace (show lm) (error "")
-            Just i -> return [LoadAddress (Left i)] --[LoadRegister GlobalOffset, LoadConstant i, Add, StoreRegister GlobalTemp, LoadAddress (Right GlobalTemp)]
+            Just i -> return [LoadRegister GlobalOffset, LoadAddress (Left i)] -- LoadConstant i, Add, StoreRegister GlobalTemp, LoadAddress (Right GlobalTemp), AdjustStack 1]
         Just i -> return [LoadLocal i]
 genExp (ExpField (Just (TypeArray t)) n (x:xs)) = do 
     i1 <- genExp (ExpField (Just t) n xs)
