@@ -1,3 +1,4 @@
+ldrr R5 R1
 bra main
 fib:
 link 1

@@ -1,24 +1,38 @@
 ldrr R5 R1
 bra main
-printTrue:
-ldc 69
-trap 1
-ldc 0x20
-trap 1
-ret
-printFalse:
+printBool:
+link 1
+ldl -2
+brt printTrue
+ldc 101
+ldc 115
+ldc 108
+ldc 97
 ldc 70
 trap 1
-ldc 0x20
 trap 1
+trap 1
+trap 1
+trap 1
+bra printEnd
+printTrue:
+ldc 101
+ldc 117
+ldc 114
+ldc 84
+trap 1
+trap 1
+trap 1
+trap 1
+printEnd:
+unlink
 ret
 main:
 link 1
 ldc 1
 stl 1
 ldl 1
-brt printTrue
-brf printFalse
+bsr printBool
 unlink
 sts -1
 halt

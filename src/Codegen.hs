@@ -103,7 +103,7 @@ instance Show Instruction where
     show Return = "ret"
 
     show Add = "add"
-    show (Trap c) = "trap " ++ show c ++ "\nldc 0x20\ntrap 1"
+    show (Trap c) = "trap " ++ show c-- ++ "\nldc 0x20\ntrap 1"
     show Multiply = "mul"
     show Subtract = "sub"
     show Divide = "div"
@@ -129,6 +129,11 @@ new = do
     e <- get
     put e { ifCounter = ifCounter e + 1 }
     return $ ifCounter e
+
+updateBoolPrint :: CG ()
+updateBoolPrint = do
+    e <- get
+    put e { boolPrint = True }
 
 setFunName :: String -> CG ()
 setFunName n = do
@@ -157,7 +162,15 @@ genSPL ds = do
     (i1, m) <- genGlobalVars 1 vardecls
     setGlobalMap m
     i2 <- concat <$> mapM genFunDecl [(\(DeclFunDecl f) -> f) x | x@DeclFunDecl {} <- ds]
-    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main", Label "printTrue", LoadConstant 69, Trap Char, Return, Label "printFalse", LoadConstant 70, Trap Char, Return] ++ i2
+    i3 <- genExtra
+    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i3 ++ i2
+
+genExtra :: CG [Instruction]
+genExtra = do
+    b <- gets boolPrint
+    if b
+        then return [Label "printBool", Link 1, LoadLocal (-2), BranchTrue "printTrue", LoadConstant 101, LoadConstant 115, LoadConstant 108, LoadConstant 97, LoadConstant 70, Trap Char, Trap Char, Trap Char, Trap Char, Trap Char, BranchAlways "printEnd", Label "printTrue", LoadConstant 101, LoadConstant 117, LoadConstant 114, LoadConstant 84, Trap Char, Trap Char, Trap Char, Trap Char, Label "printEnd", Unlink, Return]
+        else return []
 
 genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
 genGlobalVars _ [] = return ([], M.empty)
@@ -191,12 +204,6 @@ genLocalVars i args ((VarDecl _ n e):vs) = do
 
 genStmts :: [Stmt] -> CG [Instruction]
 genStmts ss = concat <$> mapM genStmt ss
-
--- link aantal vars
--- sp naar r0
--- acces naar var = r0 - index van var
-
--- x = 3;
 
 genStmt :: Stmt -> CG [Instruction]
 genStmt (StmtFunCall f) = genFunCall f
@@ -237,16 +244,20 @@ genStmt (StmtReturn (Just e)) = do
 genFunCall :: FunCall -> CG [Instruction]
 -- genFunCall (FunCall _ n args) = concatMap genExp args ++ [BranchSubroutine n, AdjustStack (-length args), LoadRegister ReturnRegister]
 genFunCall (FunCall (Just t) "print" args) = do
+    i1 <- concat <$> mapM genExp args
     let (TypeFun t' _) = t
-    i <- concat <$> mapM genExp args
-    return $ i ++ genPrint t'
+    i2 <- genPrint t'
+    return $ i1 ++ i2
 genFunCall (FunCall _ n args) = do
     i <- concat <$> mapM genExp args
     return $ i ++ [BranchSubroutine n, LoadRegister ReturnRegister]
 
-genPrint :: Type -> [Instruction]
-genPrint (TypeBasic IntType) = [Trap Int]
-genPrint (TypeBasic BoolType) = [BranchTrue "printTrue", BranchFalse "printFalse"]
+genPrint :: Type -> CG [Instruction]
+genPrint (TypeBasic IntType) = return [Trap Int]
+genPrint (TypeBasic BoolType) = do
+    b <- gets boolPrint
+    updateBoolPrint
+    return [BranchSubroutine "printBool"]
 
 --   = TypeBasic BasicType
 --   | TypeTuple Type Type
