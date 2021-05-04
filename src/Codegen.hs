@@ -123,7 +123,7 @@ instance Show Instruction where
     show NotI = "not"
     show Halt = "halt"
 
-data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, arrayPrint :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int }
+data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int }
 type CG a = StateT GenEnv IO a
 
 new :: CG Int
@@ -136,11 +136,6 @@ updateBoolPrint :: CG ()
 updateBoolPrint = do
     e <- get
     put e { boolPrint = True }
-
-updateArrayPrint :: CG ()
-updateArrayPrint = do
-    e <- get
-    put e { arrayPrint = True }
 
 setFunName :: String -> CG ()
 setFunName n = do
@@ -159,7 +154,7 @@ setLocalMap m = do
 
 genCode :: FilePath -> SPL -> IO ()
 genCode f spl = do
-    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, arrayPrint = False, localMap = M.empty, globalMap = M.empty })
+    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, localMap = M.empty, globalMap = M.empty })
     writeFile f (unlines $ map show instructions)
     --putStrLn "\x1b[32mCompilation successful\x1b[0m"
 
@@ -176,8 +171,6 @@ genExtra :: CG [Instruction]
 genExtra = do
     boolPrint <- gets boolPrint
     let i = if boolPrint then [Label "printBool", Link 1, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "False" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "True" ++ [Label "printEnd", Unlink, Return] else []
-    arrayPrint <- gets arrayPrint
-    -- let i = i ++ [Label "printArray" | arrayPrint]
     return i
 
 genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
@@ -275,9 +268,9 @@ genPrint i1 (TypeArray t) = do
     i2 <- genPrint [] t -- ?
     return $ printString "[" ++ i1 ++ [Label $ "print" ++ i, StoreRegister HeapTemp, LoadRegister HeapTemp, LoadConstant 0, EqualsI, BranchTrue $ "end" ++ i, LoadRegister HeapTemp, LoadMultipleHeap 0 2] ++ i2 ++ printString ", " ++ [BranchAlways $ "print" ++ i, Label $ "end" ++ i] ++ printString "]"
 genPrint i1 (TypeTuple t1 t2) = do
-    i2 <- genPrint [] t1
-    i3 <- genPrint [] t2
-    return $ printString "(" ++ i1 ++ [LoadHeap (-1)] ++ i2 ++ printString ", " ++ [LoadHeap 0] ++ i3 ++ printString ")"
+    i2 <- genPrint (i1 ++ [LoadHeap (-1)]) t1
+    i3 <- genPrint (i1 ++ [LoadHeap 0]) t2
+    return $ printString "(" ++ i2 ++ printString ", " ++ i3 ++ printString ")"
 genPrint _ _ = undefined -- TypeID, TypeFun, Void
 
 genGetArray :: [Instruction]
