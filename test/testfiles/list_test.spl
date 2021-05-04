@@ -1,5 +1,5 @@
 main () {
-    // var x = 1 : 2 : [];
-    var x = True;
+    var x = 1 : 2 : 3 : [];
+    var x = True : False : [];
     print(x);
 }

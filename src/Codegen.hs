@@ -67,12 +67,14 @@ data Register
     | GlobalOffset
     | GlobalTemp
     | StackPointer
+    | HeapTemp
 
 instance Show Register where
     show ReturnRegister = "RR"
     show GlobalOffset = "R5"
     show StackPointer = "R1"
     show GlobalTemp = "R6"
+    show HeapTemp = "R7"
 
 instance Show Instruction where
     show (LoadConstant i) = "ldc " ++ show i
@@ -121,7 +123,7 @@ instance Show Instruction where
     show NotI = "not"
     show Halt = "halt"
 
-data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int }
+data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, arrayPrint :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int }
 type CG a = StateT GenEnv IO a
 
 new :: CG Int
@@ -134,6 +136,11 @@ updateBoolPrint :: CG ()
 updateBoolPrint = do
     e <- get
     put e { boolPrint = True }
+
+updateArrayPrint :: CG ()
+updateArrayPrint = do
+    e <- get
+    put e { arrayPrint = True }
 
 setFunName :: String -> CG ()
 setFunName n = do
@@ -152,7 +159,7 @@ setLocalMap m = do
 
 genCode :: FilePath -> SPL -> IO ()
 genCode f spl = do
-    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, localMap = M.empty, globalMap = M.empty })
+    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, arrayPrint = False, localMap = M.empty, globalMap = M.empty })
     writeFile f (unlines $ map show instructions)
     --putStrLn "\x1b[32mCompilation successful\x1b[0m"
 
@@ -167,10 +174,11 @@ genSPL ds = do
 
 genExtra :: CG [Instruction]
 genExtra = do
-    b <- gets boolPrint
-    if b
-        then return [Label "printBool", Link 1, LoadLocal (-2), BranchTrue "printTrue", LoadConstant 101, LoadConstant 115, LoadConstant 108, LoadConstant 97, LoadConstant 70, Trap Char, Trap Char, Trap Char, Trap Char, Trap Char, BranchAlways "printEnd", Label "printTrue", LoadConstant 101, LoadConstant 117, LoadConstant 114, LoadConstant 84, Trap Char, Trap Char, Trap Char, Trap Char, Label "printEnd", Unlink, Return]
-        else return []
+    boolPrint <- gets boolPrint
+    let i = if boolPrint then [Label "printBool", Link 1, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "False" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "True" ++ [Label "printEnd", Unlink, Return] else []
+    arrayPrint <- gets arrayPrint
+    -- let i = i ++ [Label "printArray" | arrayPrint]
+    return i
 
 genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
 genGlobalVars _ [] = return ([], M.empty)
@@ -246,28 +254,27 @@ genFunCall :: FunCall -> CG [Instruction]
 genFunCall (FunCall (Just t) "print" args) = do
     i1 <- concat <$> mapM genExp args
     let (TypeFun t' _) = t
-    i2 <- genPrint t'
-    return $ i1 ++ i2
+    genPrint i1 t'
 genFunCall (FunCall _ n args) = do
     i <- concat <$> mapM genExp args
     return $ i ++ [BranchSubroutine n, LoadRegister ReturnRegister]
 
-genPrint :: Type -> CG [Instruction]
-genPrint (TypeBasic IntType) = return [Trap Int]
-genPrint (TypeBasic BoolType) = do
-    b <- gets boolPrint
-    updateBoolPrint
-    return [BranchSubroutine "printBool"]
+printString :: String -> [Instruction]
+printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Trap Char)
 
---   = TypeBasic BasicType
---   | TypeTuple Type Type
---   | TypeArray Type
---   | TypeID (Maybe Condition) String
---   | TypeFun Type Type
---   | Void
---   = IntType
---   | BoolType
---   | CharType
+genPrint :: [Instruction] -> Type -> CG [Instruction]
+genPrint i1 (TypeBasic IntType) = return $ i1 ++ [Trap Int]
+genPrint i1 (TypeBasic BoolType) = updateBoolPrint >> return (i1 ++ [BranchSubroutine "printBool", AdjustStack (-1)])
+genPrint i1 (TypeBasic CharType) = return $ i1 ++ [Trap Char]
+genPrint i1 (TypeArray t) = do
+    i <- show <$> new
+    i2 <- genPrint [] t -- ?
+    return $ printString "[" ++ i1 ++ [Label $ "print" ++ i, StoreRegister HeapTemp, LoadRegister HeapTemp, LoadConstant 0, EqualsI, BranchTrue $ "end" ++ i, LoadRegister HeapTemp, LoadMultipleHeap 0 2] ++ i2 ++ printString ", " ++ [BranchAlways $ "print" ++ i, Label $ "end" ++ i] ++ printString "]"
+genPrint i1 (TypeTuple t1 t2) = undefined
+genPrint _ _ = undefined -- TypeID, TypeFun, Void
+
+genGetArray :: [Instruction]
+genGetArray = undefined
 
 genExp :: Exp -> CG [Instruction]
 genExp (Exp t Cons e1 e2) = do
