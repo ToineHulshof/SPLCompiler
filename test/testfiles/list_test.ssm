@@ -1,7 +1,7 @@
 ldrr R5 R1
 bra main
 main:
-link 1
+link 2
 ldc 0
 ldc 3
 stmh 2
@@ -10,9 +10,13 @@ stmh 2
 ldc 1
 stmh 2
 stl 1
+ldl 1
+ldc 0
+stmh 2
+stl 2
 ldc 91
 trap 1
-ldl 1
+ldl 2
 print0:
 str R7
 ldr R7

@@ -189,10 +189,10 @@ genGlobalVars i ((VarDecl _ n e):xs) = do
 
 genFunDecl :: FunDecl -> CG [Instruction]
 genFunDecl (FunDecl n args _ vars stmts) = do
-    (i1, m) <- genLocalVars 1 args vars
-    setLocalMap m
+    i1 <- genLocalVars 1 args vars
     setFunName n
     i2 <- genStmts stmts
+    setLocalMap M.empty
     return $ Label n : Link (length vars + length args) : i1 ++ i2 ++ [Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
 
 argsMap :: Int -> [String] -> CG (M.Map String Int)
@@ -201,14 +201,18 @@ argsMap i (x:xs) = do
     m <- argsMap (i + 1) xs 
     return $ m `M.union` M.singleton x i
 
-genLocalVars :: Int -> [String] -> [VarDecl] -> CG ([Instruction], M.Map String Int)
+genLocalVars :: Int -> [String] -> [VarDecl] -> CG [Instruction]
 genLocalVars _ args [] = do
-    m <- argsMap (-1 - length args) args
-    return ([], m)
+    m1 <- argsMap (-1 - length args) args
+    m2 <- gets localMap
+    setLocalMap $ m1 `M.union` m2
+    return []
 genLocalVars i args ((VarDecl _ n e):vs) = do
     i1 <- genExp e
-    (i2, m) <- genLocalVars (i + 1) args vs
-    return (i1 ++ [StoreLocal i] ++ i2, M.singleton n i `M.union` m)
+    m <- gets localMap
+    setLocalMap $ M.singleton n i `M.union` m
+    i2 <- genLocalVars (i + 1) args vs
+    return $ i1 ++ [StoreLocal i] ++ i2
 
 genStmts :: [Stmt] -> CG [Instruction]
 genStmts ss = concat <$> mapM genStmt ss
