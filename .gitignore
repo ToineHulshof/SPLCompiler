@@ -1,5 +1,6 @@
 .stack-work/
 src/.out
 src/Main
+src/HELP.md
 *.rs
 *~
