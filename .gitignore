@@ -1,5 +1,4 @@
 .stack-work/
 src/.out
 src/Main
-src/*.rs
 *~

@@ -265,16 +265,13 @@ genPrint i1 (TypeBasic BoolType) = updateBoolPrint >> return (i1 ++ [BranchSubro
 genPrint i1 (TypeBasic CharType) = return $ i1 ++ [Trap Char]
 genPrint i1 (TypeArray t) = do
     i <- show <$> new
-    i2 <- genPrint [] t -- ?
+    i2 <- genPrint [] t -- Hier moet nog iets worden ingevuld -- [LoadRegister HeapTemp, LoadHeap 0]
     return $ printString "[" ++ i1 ++ [Label $ "print" ++ i, StoreRegister HeapTemp, LoadRegister HeapTemp, LoadConstant 0, EqualsI, BranchTrue $ "end" ++ i, LoadRegister HeapTemp, LoadMultipleHeap 0 2] ++ i2 ++ printString ", " ++ [BranchAlways $ "print" ++ i, Label $ "end" ++ i] ++ printString "]"
 genPrint i1 (TypeTuple t1 t2) = do
     i2 <- genPrint (i1 ++ [LoadHeap (-1)]) t1
     i3 <- genPrint (i1 ++ [LoadHeap 0]) t2
     return $ printString "(" ++ i2 ++ printString ", " ++ i3 ++ printString ")"
 genPrint _ _ = undefined -- TypeID, TypeFun, Void
-
-genGetArray :: [Instruction]
-genGetArray = undefined
 
 genExp :: Exp -> CG [Instruction]
 genExp (Exp t Cons e1 e2) = do
