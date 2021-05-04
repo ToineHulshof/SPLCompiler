@@ -274,7 +274,10 @@ genPrint i1 (TypeArray t) = do
     i <- show <$> new
     i2 <- genPrint [] t -- ?
     return $ printString "[" ++ i1 ++ [Label $ "print" ++ i, StoreRegister HeapTemp, LoadRegister HeapTemp, LoadConstant 0, EqualsI, BranchTrue $ "end" ++ i, LoadRegister HeapTemp, LoadMultipleHeap 0 2] ++ i2 ++ printString ", " ++ [BranchAlways $ "print" ++ i, Label $ "end" ++ i] ++ printString "]"
-genPrint i1 (TypeTuple t1 t2) = undefined
+genPrint i1 (TypeTuple t1 t2) = do
+    i2 <- genPrint [] t1
+    i3 <- genPrint [] t2
+    return $ printString "(" ++ i1 ++ [LoadHeap (-1)] ++ i2 ++ printString ", " ++ [LoadHeap 0] ++ i3 ++ printString ")"
 genPrint _ _ = undefined -- TypeID, TypeFun, Void
 
 genGetArray :: [Instruction]
@@ -315,7 +318,7 @@ genExp (ExpChar c) = return [LoadConstant $ ord c]
 genExp (ExpTuple (e1, e2)) = do
     i1 <- genExp e1
     i2 <- genExp e2
-    return $ i1 ++ i2
+    return $ i1 ++ i2 ++ [StoreMultipleHeap 2]
 genExp ExpEmptyList = return [LoadConstant 0]
 
 genOp2 :: Op2 -> Instruction

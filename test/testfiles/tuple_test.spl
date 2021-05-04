@@ -1,0 +1,4 @@
+main() {
+    var x = (3, True);
+    print(x);
+}
