@@ -1,18 +1,104 @@
 ldrr R5 R1
 bra main
+printBool:
+link 1
+ldl -2
+brt printTrue
+ldc 101
+ldc 115
+ldc 108
+ldc 97
+ldc 70
+trap 1
+trap 1
+trap 1
+trap 1
+trap 1
+bra printEnd
+printTrue:
+ldc 101
+ldc 117
+ldc 114
+ldc 84
+trap 1
+trap 1
+trap 1
+trap 1
+printEnd:
+unlink
+ret
 main:
 link 1
+ldc 1
+ldc 5
+ldc 6
+stmh 2
+stmh 2
+ldc 1
 ldc 0
-ldc 0
+ldc 3
+ldc 4
+stmh 2
+stmh 2
 ldc 1
 ldc 2
 stmh 2
 stmh 2
 stmh 2
+stmh 2
 stl 1
+ldc 40
+trap 1
+ldc 40
+trap 1
+ldl 1
+ldh -1
+ldh -1
+trap 0
+ldc 32
+ldc 44
+trap 1
+trap 1
+ldc 40
+trap 1
+ldl 1
+ldh -1
+ldh 0
+ldh -1
+trap 0
+ldc 32
+ldc 44
+trap 1
+trap 1
+ldl 1
+ldh -1
+ldh 0
+ldh 0
+trap 0
+ldc 41
+trap 1
+ldc 41
+trap 1
+ldc 32
+ldc 44
+trap 1
+trap 1
+ldc 40
+trap 1
+ldl 1
+ldh 0
+ldh -1
+bsr printBool
+ajs -1
+ldc 32
+ldc 44
+trap 1
+trap 1
 ldc 91
 trap 1
 ldl 1
+ldh 0
+ldh 0
 print0:
 str R7
 ldr R7
@@ -20,25 +106,22 @@ ldc 0
 eq
 brt end0
 ldr R7
-ldmh 0 2
-ldc 91
-trap 1
-print1:
-str R7
-ldr R7
-ldc 0
-eq
-brt end1
-ldr R7
-ldmh 0 2
 ldc 40
 trap 1
+ldl 1
+ldh 0
+ldh 0
+ldmh 0 2
 ldh -1
 trap 0
 ldc 32
 ldc 44
 trap 1
 trap 1
+ldl 1
+ldh 0
+ldh 0
+ldmh 0 2
 ldh 0
 trap 0
 ldc 41
@@ -47,17 +130,13 @@ ldc 32
 ldc 44
 trap 1
 trap 1
-bra print1
-end1:
-ldc 93
-trap 1
-ldc 32
-ldc 44
-trap 1
-trap 1
 bra print0
 end0:
 ldc 93
+trap 1
+ldc 41
+trap 1
+ldc 41
 trap 1
 unlink
 sts -1
