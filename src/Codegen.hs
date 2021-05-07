@@ -251,7 +251,8 @@ genFunCall :: FunCall -> CG [Instruction]
 genFunCall (FunCall (Just t) "print" args) = do
     i1 <- concat <$> mapM genExp args
     let (TypeFun t' _) = t
-    genPrint i1 t'
+    i2 <- genPrint t'
+    return $ i1 ++ i2
 genFunCall (FunCall _ n args) = do
     i <- concat <$> mapM genExp args
     return $ i ++ [BranchSubroutine n, LoadRegister ReturnRegister]
@@ -259,19 +260,19 @@ genFunCall (FunCall _ n args) = do
 printString :: String -> [Instruction]
 printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Trap Char)
 
-genPrint :: [Instruction] -> Type -> CG [Instruction]
-genPrint i1 (TypeBasic IntType) = return $ i1 ++ [Trap Int]
-genPrint i1 (TypeBasic BoolType) = updateBoolPrint >> return (i1 ++ [BranchSubroutine "printBool", AdjustStack (-1)])
-genPrint i1 (TypeBasic CharType) = return $ i1 ++ [Trap Char]
-genPrint i1 (TypeArray t) = do
+genPrint :: Type -> CG [Instruction]
+genPrint (TypeBasic IntType) = return [Trap Int]
+genPrint (TypeBasic BoolType) = updateBoolPrint >> return [BranchSubroutine "printBool", AdjustStack (-1)]
+genPrint (TypeBasic CharType) = return [Trap Char]
+genPrint (TypeTuple t1 t2) = do
+    i1 <- genPrint t1
+    i2 <- genPrint t2
+    return $ printString "(" ++ [LoadStack 0, LoadHeap (-1)] ++ i1 ++ printString ", " ++ [LoadHeap 0] ++ i2 ++ printString ")"
+genPrint (TypeArray t) = do
     i <- show <$> new
-    i2 <- genPrint (i1 ++ [LoadMultipleHeap 0 2]) t
-    return $ printString "[" ++ i1 ++ [Label $ "print" ++ i, StoreRegister HeapTemp, LoadRegister HeapTemp, LoadConstant 0, EqualsI, BranchTrue $ "end" ++ i, LoadRegister HeapTemp] ++ i2 ++ printString ", " ++ [BranchAlways $ "print" ++ i, Label $ "end" ++ i] ++ printString "]"
-genPrint i1 (TypeTuple t1 t2) = do
-    i2 <- genPrint (i1 ++ [LoadHeap (-1)]) t1
-    i3 <- genPrint (i1 ++ [LoadHeap 0]) t2
-    return $ printString "(" ++ i2 ++ printString ", " ++ i3 ++ printString ")"
-genPrint _ _ = undefined -- TypeID, TypeFun, Void
+    i1 <- genPrint t
+    return $ printString "[" ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ printString ", " ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)] ++ printString "]"
+genPrint _ = undefined -- TypeID, TypeFun, Void
 
 genExp :: Exp -> CG [Instruction]
 genExp (Exp t Cons e1 e2) = do
@@ -287,21 +288,22 @@ genExp (ExpOp1 o e) = do
     return $ i ++ [genOp1 o]
 genExp (ExpBrackets e) = genExp e
 genExp (ExpFunCall f) = genFunCall f
-genExp (ExpField _ n []) = do
+genExp (ExpField _ n fs) = do
+    let i1 = map genField fs
     lm <- gets localMap
     gm <- gets globalMap
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
             Nothing -> trace (show lm) (error "")
-            Just i -> return [LoadRegister GlobalOffset, LoadAddress (Left i)]
-        Just i -> return [LoadLocal i]
-genExp (ExpField (Just (TypeArray t)) n (x:xs)) = do 
-    i1 <- genExp (ExpField (Just t) n xs)
-    case x of
-        Head -> return $ LoadHeap 0 : i1
-        Tail -> return $ LoadHeap 1 : i1
-        _ -> error ""
-genExp (ExpField t n fs) = trace (show t) (error "")
+            Just i -> return $ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i1
+        Just i -> return $ LoadLocal i : i1
+-- genExp (ExpField (Just (TypeArray t)) n (x:xs)) = do 
+--     i1 <- genExp (ExpField (Just t) n xs)
+--     case x of
+--         Head -> return $ LoadHeap 0 : i1
+--         Tail -> return $ LoadHeap 1 : i1
+--         _ -> error ""
+-- genExp (ExpField t n fs) = trace (show t) (error "")
 genExp (ExpInt i) = return [LoadConstant $ fromInteger i]
 genExp (ExpBool b) = return [LoadConstant $ if b then 1 else 0]
 genExp (ExpChar c) = return [LoadConstant $ ord c]
@@ -310,6 +312,12 @@ genExp (ExpTuple (e1, e2)) = do
     i2 <- genExp e2
     return $ i1 ++ i2 ++ [StoreMultipleHeap 2]
 genExp ExpEmptyList = return [LoadConstant 0]
+
+genField :: Field -> Instruction
+genField Head = LoadHeap 0
+genField Tail = LoadHeap (-1)
+genField First = LoadHeap 0
+genField Second  = LoadHeap (-1)
 
 genOp2 :: Op2 -> Instruction
 genOp2 Plus = Add
