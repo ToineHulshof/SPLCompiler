@@ -271,7 +271,7 @@ genPrint (TypeArray t) = do
     i <- show <$> new
     i1 <- genPrint t
     return $ printString "[" ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ printString ", " ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)] ++ printString "]"
-genPrint _ = undefined -- TypeID, TypeFun, Void
+genPrint _ = return []--undefined -- TypeID, TypeFun, Void
 
 genExp :: Exp -> CG [Instruction]
 genExp (Exp t Cons e1 e2) = do

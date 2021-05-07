@@ -1,7 +1,33 @@
-bra f
-f: 
+ldrr R5 R1
 ldc 1
 ldc 2
-add
+mul
+ldc 3
+mul
+ldc 4
+mul
+ldc 5
+mul
+ldc 6
+mul
+ldc 7
+mul
+ldc 8
+mul
+ldc 9
+mul
+ldc 10
+mul
+ldc 11
+mul
+bra main
+main:
+link 0
+ldr R5
+lda 1
 trap 0
+ldc 10
+trap 1
+unlink
+sts -1
 halt

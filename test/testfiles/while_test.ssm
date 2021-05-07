@@ -1,3 +1,4 @@
+ldrr R5 R1
 bra main
 main:
 link 1
@@ -9,6 +10,10 @@ ldc 10
 lt
 brf EndWhile0
 ldl 1
+trap 0
+ldc 10
+trap 1
+ldl 1
 ldc 1
 add
 stl 1
@@ -16,7 +21,7 @@ bra While0
 EndWhile0:
 ldl 1
 trap 0
-ldc 0x20
+ldc 10
 trap 1
 unlink
 sts -1

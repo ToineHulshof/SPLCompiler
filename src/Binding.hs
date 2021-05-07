@@ -15,7 +15,7 @@ import Data.Graph ( stronglyConnCompR, SCC(..) )
 import Data.Tuple ( swap )
 
 components :: SPL -> [SCC Decl]
-components ds = map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
+components ds = reverse $ map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
 
 ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
 ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)
