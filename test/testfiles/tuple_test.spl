@@ -8,8 +8,8 @@ main() {
     // var x = 1 : 2 : [];
     var x = 1 : 2 : 3 : [];
     var y = (1, (2, (3, 4)));
-    var z = ((((1, 2), 3), 4), 5);
-    print(x.tl.tl.tl);
+    var z = ((((1, 'a'), 3), 4), 5);
+    print(x.tl.tl);
     print(y.snd);
     print(z.fst.fst);
 }

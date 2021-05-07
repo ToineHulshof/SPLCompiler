@@ -105,7 +105,7 @@ instance Show Instruction where
     show Return = "ret"
 
     show Add = "add"
-    show (Trap c) = "trap " ++ show c-- ++ "\nldc 0x20\ntrap 1"
+    show (Trap c) = "trap " ++ show c
     show Multiply = "mul"
     show Subtract = "sub"
     show Divide = "div"
@@ -251,7 +251,7 @@ genFunCall (FunCall (Just t) "print" args) = do
     i1 <- concat <$> mapM genExp args
     let (TypeFun t' _) = t
     i2 <- genPrint t'
-    return $ i1 ++ i2
+    return $ i1 ++ i2 ++ printString "\n"
 genFunCall (FunCall _ n args) = do
     i <- concat <$> mapM genExp args
     return $ i ++ [BranchSubroutine n, LoadRegister ReturnRegister]
@@ -262,7 +262,7 @@ printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Tr
 genPrint :: Type -> CG [Instruction]
 genPrint (TypeBasic IntType) = return [Trap Int]
 genPrint (TypeBasic BoolType) = updateBoolPrint >> return [BranchSubroutine "printBool", AdjustStack (-1)]
-genPrint (TypeBasic CharType) = return [Trap Char]
+genPrint (TypeBasic CharType) = return $ printString "'" ++ [Trap Char] ++ printString "'"
 genPrint (TypeTuple t1 t2) = do
     i1 <- genPrint t1
     i2 <- genPrint t2

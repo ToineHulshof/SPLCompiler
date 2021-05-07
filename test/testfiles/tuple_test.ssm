@@ -19,7 +19,7 @@ stmh 2
 stmh 2
 stl 2
 ldc 1
-ldc 2
+ldc 97
 stmh 2
 ldc 3
 stmh 2
@@ -29,7 +29,6 @@ ldc 5
 stmh 2
 stl 3
 ldl 1
-ldh -1
 ldh -1
 ldh -1
 ldc 91
@@ -48,6 +47,8 @@ trap 1
 bra list0
 listEnd0:
 ldc 93
+trap 1
+ldc 10
 trap 1
 ldl 2
 ldh 0
@@ -76,6 +77,8 @@ ldc 41
 trap 1
 ldc 41
 trap 1
+ldc 10
+trap 1
 ldl 3
 ldh -1
 ldh -1
@@ -93,7 +96,11 @@ ldc 44
 trap 1
 trap 1
 ldh 0
-trap 0
+ldc 39
+trap 1
+trap 1
+ldc 39
+trap 1
 ldc 41
 trap 1
 ldc 32
@@ -103,6 +110,8 @@ trap 1
 ldh 0
 trap 0
 ldc 41
+trap 1
+ldc 10
 trap 1
 unlink
 sts -1
