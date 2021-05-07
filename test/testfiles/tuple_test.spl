@@ -11,5 +11,5 @@ main() {
     var z = ((((1, 'a'), 3), 4), 5);
     print(x.tl.tl);
     print(y.snd);
-    print(z.fst.fst);
+    print(z.fst.snd.snd);
 }
