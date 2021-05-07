@@ -316,8 +316,8 @@ genExp ExpEmptyList = return [LoadConstant 0]
 genField :: Field -> Instruction
 genField Head = LoadHeap 0
 genField Tail = LoadHeap (-1)
-genField First = LoadHeap 0
-genField Second  = LoadHeap (-1)
+genField First = LoadHeap (-1)
+genField Second  = LoadHeap 0
 
 genOp2 :: Op2 -> Instruction
 genOp2 Plus = Add
