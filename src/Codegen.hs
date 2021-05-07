@@ -247,7 +247,6 @@ genStmt (StmtReturn (Just e)) = do
         else return $ i1 ++ [StoreRegister ReturnRegister]
 
 genFunCall :: FunCall -> CG [Instruction]
--- genFunCall (FunCall _ n args) = concatMap genExp args ++ [BranchSubroutine n, AdjustStack (-length args), LoadRegister ReturnRegister]
 genFunCall (FunCall (Just t) "print" args) = do
     i1 <- concat <$> mapM genExp args
     let (TypeFun t' _) = t
@@ -297,13 +296,6 @@ genExp (ExpField _ n fs) = do
             Nothing -> trace (show lm) (error "")
             Just i -> return $ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i1
         Just i -> return $ LoadLocal i : i1
--- genExp (ExpField (Just (TypeArray t)) n (x:xs)) = do 
---     i1 <- genExp (ExpField (Just t) n xs)
---     case x of
---         Head -> return $ LoadHeap 0 : i1
---         Tail -> return $ LoadHeap 1 : i1
---         _ -> error ""
--- genExp (ExpField t n fs) = trace (show t) (error "")
 genExp (ExpInt i) = return [LoadConstant $ fromInteger i]
 genExp (ExpBool b) = return [LoadConstant $ if b then 1 else 0]
 genExp (ExpChar c) = return [LoadConstant $ ord c]
