@@ -1,0 +1,13 @@
+reverse ( list ) {
+    var accu = [];
+    while ( ! isEmpty ( list ) ) {
+        accu = list.hd : accu ;
+        list = list.tl;
+    }
+    return accu ;
+}
+
+main() {
+    var l = [];
+    print(reverse(l));
+}

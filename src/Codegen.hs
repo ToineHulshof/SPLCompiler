@@ -237,13 +237,13 @@ genStmt (StmtField n fs e) = do
     lm <- gets localMap
     gm <- gets globalMap
     i1 <- genExp e
-    let i2 = map genField (init fs)
+    let i2 = map (LoadHeap . genField) (init fs)
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
             Nothing -> error ""
             Just i -> do
-                return $ i1 ++ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i2 ++ [StoreAddress $ f (last fs)]
-        Just i -> return $ i1 ++ [LoadLocal i] ++ i2 ++ [StoreAddress $ f (last fs)]
+                return $ i1 ++ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i2 ++ [StoreAddress $ genField (last fs)]
+        Just i -> return $ i1 ++ [LoadLocal i] ++ i2 ++ [StoreAddress $ genField (last fs)]
 genStmt (StmtReturn Nothing) = do 
     funName <- gets funName
     return [BranchAlways $ funName ++ "End"]
@@ -252,8 +252,11 @@ genStmt (StmtReturn (Just e)) = do
     funName <- gets funName
     return $ i1 ++ [StoreRegister ReturnRegister, BranchAlways $ funName ++ "End"]
 
-f First = -1
-f Second = 0
+genField :: Field -> Int
+genField First = -1
+genField Second = 0
+genField Head = 0
+genField Tail = -1
 
 genFunCall :: FunCall -> CG [Instruction]
 genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg]) = do
@@ -263,7 +266,7 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg]) = do
 genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
 genFunCall (FunCall _ n args) = (++ [BranchSubroutine n, LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
--- Eq, x.snd = 5, ?
+-- Eq, ?
 
 printString :: String -> [Instruction]
 printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Trap Char)
@@ -279,7 +282,7 @@ genPrint (TypeTuple t1 t2) = do
 genPrint (TypeArray t) = do
     i <- show <$> new
     i1 <- genPrint t
-    return $ printString "[" ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ printString ", " ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)] ++ printString "]"
+    return $ printString "[" ++ [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i)] ++ printString ", " ++ [LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)] ++ printString "]"
 genPrint t = return []--undefined -- TypeID, TypeFun, Void
 
 genExp :: Exp -> CG [Instruction]
@@ -297,7 +300,7 @@ genExp (ExpOp1 o e) = do
 genExp (ExpBrackets e) = genExp e
 genExp (ExpFunCall f) = genFunCall f
 genExp (ExpField _ n fs) = do
-    let i1 = map genField fs
+    let i1 = map (LoadHeap . genField) fs
     lm <- gets localMap
     gm <- gets globalMap
     case M.lookup n lm of
@@ -313,12 +316,6 @@ genExp (ExpTuple (e1, e2)) = do
     i2 <- genExp e2
     return $ i1 ++ i2 ++ [StoreMultipleHeap 2]
 genExp ExpEmptyList = return [LoadConstant 0]
-
-genField :: Field -> Instruction
-genField Head = LoadHeap 0
-genField Tail = LoadHeap (-1)
-genField First = LoadHeap (-1)
-genField Second  = LoadHeap 0
 
 genOp2 :: Op2 -> Instruction
 genOp2 Plus = Add
