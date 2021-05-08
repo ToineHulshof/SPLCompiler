@@ -186,12 +186,12 @@ composeConditions c Nothing = c
 composeConditions _ c = c
      
 varBind :: String -> Maybe Condition -> Type -> TI Subst
-varBind u (Just Eq) t
-    | isBasicType t = return $ M.singleton u t
-    | otherwise = throwError $ show t ++ " is not Eq"
-    where
-        isBasicType (TypeBasic _) = True
-        isBasicType _ = False
+varBind u (Just Eq) t = return $ M.singleton u t
+    -- | isBasicType t = return $ M.singleton u t
+    -- | otherwise = throwError $ show t ++ " is not Eq"
+    -- where
+    --     isBasicType (TypeBasic _) = True
+    --     isBasicType _ = False
 varBind u (Just Ord) t
     | isOrd t = return $ M.singleton u t
     | otherwise = throwError $ show t ++ " is not Ord"

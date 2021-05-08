@@ -1,3 +1,5 @@
+var x = 3;
+
 f(n) {
     if (n <= 1) {
         return n;
@@ -14,11 +16,15 @@ K(x, y) {
 }
 
 main() :: -> Void {
-    var x = (5, 7);
-    var x = (2, True);
+    var z = (5, 7);
+    var y = (5, 7);
+    var a = 3 : [];
     // x.snd = 3;
-    print(f(30));
-    print(id(5));
-    print(K(True, 1 : 2 : []));
+    // print(f(30));
+    // print(id(5));
+    // print(K(True, 1 : 2 : []));
+    // print(id(id(x)));
+    // print(y == y);
+    print(isEmpty(a));
     return;
 }
