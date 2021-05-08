@@ -257,6 +257,7 @@ genFunCall (FunCall (Just t) "print" args) = do
     let (TypeFun t' _) = t
     i2 <- genPrint t'
     return $ i1 ++ i2 ++ printString "\n"
+genFunCall (FunCall (Just (TypeArray t)) n args) = undefined
 genFunCall (FunCall _ n args) = do
     i <- concat <$> mapM genExp args
     return $ i ++ [BranchSubroutine n, LoadRegister ReturnRegister]

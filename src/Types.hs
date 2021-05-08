@@ -173,7 +173,7 @@ mgu (TypeBasic t1) (TypeBasic t2)
     | t1 == t2 = return nullSubst
     | otherwise = throwError $ "types do not unify: " ++ show t1 ++ " vs. " ++ show t2
 mgu Void Void = return nullSubst
-mgu t1 t2 = throwError $ "types do not unify: " ++ show t1 ++ " vs. " ++ show t2
+mgu t1 t2 = throwError $ "types do not unify: " ++ showType (varsMap t1) t1 ++ " vs. " ++ showType (varsMap t2) t2
 
 condition :: Type -> String -> (Maybe Condition, Bool)
 condition (TypeID c n) s = (c, n == s)
@@ -187,20 +187,15 @@ composeConditions _ c = c
      
 varBind :: String -> Maybe Condition -> Type -> TI Subst
 varBind u (Just Eq) t = return $ M.singleton u t
-    -- | isBasicType t = return $ M.singleton u t
-    -- | otherwise = throwError $ show t ++ " is not Eq"
-    -- where
-    --     isBasicType (TypeBasic _) = True
-    --     isBasicType _ = False
 varBind u (Just Ord) t
     | isOrd t = return $ M.singleton u t
-    | otherwise = throwError $ show t ++ " is not Ord"
+    | otherwise = throwError $ showType (varsMap t) t ++ " is not Ord"
     where
         isOrd (TypeBasic IntType) = True
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
 varBind u c t
-    | u `S.member` ftv t = throwError $ "occur check fails: \x1b[36m" ++ u ++ "\x1b[0m vs. " ++ show t
+    | u `S.member` ftv t = throwError $ "occur check fails: \x1b[36m" ++ u ++ "\x1b[0m vs. " ++ showType (varsMap t) t
     | otherwise = return $ M.singleton u t
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv, SPL)
