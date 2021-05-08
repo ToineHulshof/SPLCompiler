@@ -15,7 +15,7 @@ import Data.Graph ( stronglyConnCompR, SCC(..) )
 import Data.Tuple ( swap )
 
 components :: SPL -> [SCC Decl]
-components ds = reverse $ map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
+components ds = map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
 
 ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
 ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)
@@ -30,7 +30,7 @@ ctStmt args (StmtWhile e ss) = ctExp args e ++ ctStmts args ss
 ctStmt args (StmtField n _ e)
     | n `elem` args = []
     | otherwise = [(Var, n)]
-ctStmt args (StmtFunCall (FunCall _ n es)) = [(Fun, n)]
+ctStmt args (StmtFunCall (FunCall _ n es)) = (Fun, n) : concatMap (ctExp args) es
 ctStmt args (StmtReturn Nothing) = []
 ctStmt args (StmtReturn (Just e)) = ctExp args e
 
@@ -42,7 +42,7 @@ ctExp args (ExpBrackets e) = ctExp args e
 ctExp args (ExpField _ n _)
     | n `elem` args = []
     | otherwise = [(Var, n)]
-ctExp args (ExpFunCall (FunCall _ n es)) = [(Fun, n)]
+ctExp args (ExpFunCall (FunCall _ n es)) = (Fun, n) : concatMap (ctExp args) es
 ctExp _ _ = []
 
 stdlib :: TypeEnv
