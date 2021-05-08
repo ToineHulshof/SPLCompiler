@@ -266,8 +266,6 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg]) = do
 genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
 genFunCall (FunCall _ n args) = (++ [BranchSubroutine n, LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
--- Eq, ?
-
 printString :: String -> [Instruction]
 printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Trap Char)
 
@@ -283,17 +281,29 @@ genPrint (TypeArray t) = do
     i <- show <$> new
     i1 <- genPrint t
     return $ printString "[" ++ [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i)] ++ printString ", " ++ [LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)] ++ printString "]"
-genPrint t = return []--undefined -- TypeID, TypeFun, Void
+genPrint t = undefined -- TypeID, TypeFun, Void
+
+genEq :: [Instruction] -> [Instruction] -> Type -> CG [Instruction]
+genEq i1 i2 (TypeBasic _) = return $ i1 ++ i2 ++ [EqualsI]
+genEq i1 i2 (TypeTuple t1 t2) = do
+    i3 <- genEq (i1 ++ [LoadHeap (-1)]) (i2 ++ [LoadHeap (-1)]) t1
+    i4 <- genEq (i1 ++ [LoadHeap 0]) (i2 ++ [LoadHeap 0]) t2
+    return $ i3 ++ i4 ++ [EqualsI]
+-- genEq i1 i2 (TypeArray t) = do
+--     i <- show <$> new
+--     i1 <- genEq t
+--     return $ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)]
+genEq _ _ t = undefined -- TypeID, TypeFun, Void
 
 genExp :: Exp -> CG [Instruction]
-genExp (Exp t Cons e1 e2) = do
-    i2 <- genExp e2 -- address of heap
-    i1 <- genExp e1 -- value of head
-    return $ i2 ++ i1 ++ [StoreMultipleHeap 2]
-genExp (Exp _ o e1 e2) = do
+genExp (Exp (Just t) o e1 e2) = do
     i1 <- genExp e1
     i2 <- genExp e2
-    return $ i1 ++ i2 ++ [genOp2 o]
+    let i3 = genOp2 o
+    if o == Cons
+        then return $ i2 ++ i1 ++ [i3] else if o `elem` [Equals, Neq] 
+        then genEq i1 i2 t
+    else return $ i1 ++ i2 ++ [i3]
 genExp (ExpOp1 o e) = do
     i <- genExp e
     return $ i ++ [genOp1 o]
@@ -331,7 +341,7 @@ genOp2 Geq = GreaterEqual
 genOp2 Neq = NotEquals
 genOp2 And = AndI
 genOp2 Or = OrI
-genOp2 Cons = undefined
+genOp2 Cons = StoreMultipleHeap 2
 
 genOp1 :: Op1 -> Instruction
 genOp1 Min = Negation

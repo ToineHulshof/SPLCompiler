@@ -1,0 +1,10 @@
+// test(x) {
+//     print(x);
+// }
+
+main() {
+    var x = (2, 3);
+    var y = (2, 3);
+    print(x == y);
+    // test(1);
+}

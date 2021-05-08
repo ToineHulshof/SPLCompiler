@@ -451,7 +451,7 @@ tiExp' b env (Exp _ o e1 e2) = do
     let cs2 = s3 `composeSubst` cs1
     s4 <- mgu (apply cs2 t2') (apply cs2 t2)
     let cs3 = s4 `composeSubst` cs2
-    return (cs3, apply cs3 t3, Exp Nothing o e1' e2')
+    return (cs3, apply cs3 t3, Exp (Just t1') o e1' e2')
 tiExp' b env (ExpOp1 o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1', e') <- tiExp' b env e
