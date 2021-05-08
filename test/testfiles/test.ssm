@@ -1,33 +1,46 @@
 ldrr R5 R1
-ldc 1
-ldc 2
-mul
-ldc 3
-mul
-ldc 4
-mul
-ldc 5
-mul
-ldc 6
-mul
-ldc 7
-mul
-ldc 8
-mul
-ldc 9
-mul
-ldc 10
-mul
-ldc 11
-mul
 bra main
+f:
+link 1
+ldl -2
+ldc 1
+le
+brt Then0
+bra EndIf0
+Then0:
+ldl -2
+str RR
+bra fEnd
+EndIf0:
+ldl -2
+ldl -2
+ldc 1
+sub
+bsr f
+ldr RR
+mul
+str RR
+bra fEnd
+fEnd:
+unlink
+sts -1
+ret
 main:
-link 0
-ldr R5
-lda 1
+link 1
+ldc 5
+ldc 7
+stmh 2
+stl 1
+ldc 6
+bsr f
+ldr RR
 trap 0
 ldc 10
 trap 1
+ldc 4
+str RR
+bra mainEnd
+mainEnd:
 unlink
 sts -1
 halt

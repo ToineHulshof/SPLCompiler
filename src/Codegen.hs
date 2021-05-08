@@ -186,7 +186,7 @@ genFunDecl (FunDecl n args _ vars stmts) = do
     setFunName n
     i2 <- genStmts stmts
     setLocalMap M.empty
-    return $ Label n : Link (length vars + length args) : i1 ++ i2 ++ [Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
+    return $ Label n : Link (length vars + length args) : i1 ++ i2 ++ [Label $ n ++ "End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
 
 argsMap :: Int -> [String] -> CG (M.Map String Int)
 argsMap _ [] = return M.empty
@@ -233,18 +233,23 @@ genStmt (StmtField n [] e) = do
             Just i -> do
                 return $ i1 ++ [LoadConstant i, StoreAddress 0]
         Just i -> return $ i1 ++ [StoreLocal i]
-genStmt (StmtField n _ e) = undefined
+genStmt (StmtField n fs e) = do
+    lm <- gets localMap
+    gm <- gets globalMap
+    i1 <- genExp e
+    case M.lookup n lm of
+        Nothing -> case M.lookup n gm of
+            Nothing -> error ""
+            Just i -> do
+                return $ i1 ++ [LoadConstant i, StoreAddress 0]
+        Just i -> return $ i1 ++ [StoreLocal i]
 genStmt (StmtReturn Nothing) = do 
     funName <- gets funName
-    if funName == "main"
-        then return [Halt]
-        else return []
+    return [BranchAlways $ funName ++ "End"]
 genStmt (StmtReturn (Just e)) = do 
     i1 <- genExp e
     funName <- gets funName
-    if funName == "main"
-        then return [StoreRegister ReturnRegister, Halt]
-        else return $ i1 ++ [StoreRegister ReturnRegister]
+    return $ i1 ++ [StoreRegister ReturnRegister, BranchAlways $ funName ++ "End"]
 
 genFunCall :: FunCall -> CG [Instruction]
 genFunCall (FunCall (Just t) "print" args) = do
