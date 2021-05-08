@@ -217,15 +217,8 @@ tiVarDecl env (VarDecl Nothing s ex) = do
     (s1, t1, ex') <- tiExp' True env ex
     let env1@(TypeEnv e) = apply s1 env
     let d = VarDecl (Just t1) s ex'
-    case M.lookup (Var, s) e of 
-        Nothing -> do
-            let TypeEnv env2 = remove env1 Var s
-            return (s1, TypeEnv (M.insert (Var, s) (Scheme [] t1) env2), d)
-        Just v -> do
-            t <- instantiate v
-            s2 <- mgu t t1
-            let cs1 = s2 `composeSubst` s1
-            return (cs1, apply cs1 env1, d)
+    let TypeEnv env2 = remove env1 Var s
+    return (s1, TypeEnv (M.insert (Var, s) (Scheme [] t1) env2), d)
 tiVarDecl env (VarDecl (Just t) s e) = do
     (s1, t1, e') <- tiExp' True env e
     s2 <- mgu t1 t

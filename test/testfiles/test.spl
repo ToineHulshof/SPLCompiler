@@ -1,14 +1,24 @@
 f(n) {
-    // return n;
     if (n <= 1) {
         return n;
     }
     return n * f(n - 1);
 }
 
-main() {
+id(x) {
+    return x;
+}
+
+K(x, y) {
+    return y;
+}
+
+main() :: -> Void {
     var x = (5, 7);
+    var x = (2, True);
     // x.snd = 3;
-    print(f(6));
-    return 4;
+    print(f(30));
+    print(id(5));
+    print(K(True, 1 : 2 : []));
+    return;
 }
