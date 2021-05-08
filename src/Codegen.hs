@@ -33,6 +33,7 @@ data Instruction
     | ChangeAddress Int
     | Link Int
     | Unlink
+    | Swap
     | Label String
     | Return
     | Add
@@ -102,6 +103,7 @@ instance Show Instruction where
     show (Link i) = "link " ++ show i
     show Unlink = "unlink"
     show (Label s) = s ++ ":"
+    show Swap = "swp"
     show Return = "ret"
 
     show Add = "add"
@@ -288,12 +290,43 @@ genEq i1 i2 (TypeBasic _) = return $ i1 ++ i2 ++ [EqualsI]
 genEq i1 i2 (TypeTuple t1 t2) = do
     i3 <- genEq (i1 ++ [LoadHeap (-1)]) (i2 ++ [LoadHeap (-1)]) t1
     i4 <- genEq (i1 ++ [LoadHeap 0]) (i2 ++ [LoadHeap 0]) t2
-    return $ i3 ++ i4 ++ [EqualsI]
--- genEq i1 i2 (TypeArray t) = do
---     i <- show <$> new
---     i1 <- genEq t
---     return $ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)]
+    return $ i3 ++ i4 ++ [AndI]
+genEq i1 i2 (TypeArray t) = do
+    i <- show <$> new
+    i3 <- genEq [] [] t
+    return $ i1 ++ i2
+    -- return $ i1 ++ [LoadMultipleHeap 0 2, Swap] ++ i2 ++ [LoadMultipleHeap 0 2, Swap, AdjustStack (-1), Swap, AdjustStack (-1)] ++ i3 ++ [AdjustStack 2, Swap, AdjustStack 1, Swap, AdjustStack (-1)]
 genEq _ _ t = undefined -- TypeID, TypeFun, Void
+
+-- ldl 1
+-- ldmh 0 2
+-- swp
+-- ldl 2
+-- ldmh 0 2
+-- swp
+-- ajs -1
+-- swp
+-- ajs -1
+-- eq
+
+-- ajs 2
+-- swp
+-- ajs 1
+-- swp
+-- ajs -1
+-- lds
+
+-- genEq' :: Type -> CG [Instruction]
+-- genEq' (TypeBasic _) = return [EqualsI]
+-- genEq' (TypeTuple t1 t2) = do
+--     i1 <- genEq' t1
+--     i2 <- genEq' t2
+--     return $ i1 ++ [LoadHeap (-1)]
+-- genEq' (TypeArray t) = do
+--     i <- show <$> new
+--     i1 <- genEq' t
+--     return $ printString "[" ++ [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i)] ++ printString ", " ++ [LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)] ++ printString "]"
+-- genEq' t = undefined -- TypeID, TypeFun, Void
 
 genExp :: Exp -> CG [Instruction]
 genExp (Exp (Just t) o e1 e2) = do
@@ -302,7 +335,9 @@ genExp (Exp (Just t) o e1 e2) = do
     let i3 = genOp2 o
     if o == Cons
         then return $ i2 ++ i1 ++ [i3] else if o `elem` [Equals, Neq] 
-        then genEq i1 i2 t
+        then do
+            i4 <- genEq i1 i2 t
+            return $ i4 ++ [NotI | o /= Equals]
     else return $ i1 ++ i2 ++ [i3]
 genExp (ExpOp1 o e) = do
     i <- genExp e
