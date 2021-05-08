@@ -252,15 +252,14 @@ genStmt (StmtReturn (Just e)) = do
     return $ i1 ++ [StoreRegister ReturnRegister, BranchAlways $ funName ++ "End"]
 
 genFunCall :: FunCall -> CG [Instruction]
-genFunCall (FunCall (Just t) "print" args) = do
-    i1 <- concat <$> mapM genExp args
-    let (TypeFun t' _) = t
-    i2 <- genPrint t'
+genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg]) = do
+    i1 <- genExp arg
+    i2 <- genPrint t
     return $ i1 ++ i2 ++ printString "\n"
-genFunCall (FunCall (Just (TypeArray t)) n args) = undefined
-genFunCall (FunCall _ n args) = do
-    i <- concat <$> mapM genExp args
-    return $ i ++ [BranchSubroutine n, LoadRegister ReturnRegister]
+genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
+genFunCall (FunCall _ n args) = (++ [BranchSubroutine n, LoadRegister ReturnRegister]) . concat <$> mapM genExp args
+
+-- Eq, x.snd = 5, ?
 
 printString :: String -> [Instruction]
 printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Trap Char)

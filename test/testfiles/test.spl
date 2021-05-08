@@ -25,6 +25,6 @@ main() :: -> Void {
     // print(K(True, 1 : 2 : []));
     // print(id(id(x)));
     // print(y == y);
-    print(isEmpty(z));
+    print(isEmpty(a.tl));
     return;
 }
