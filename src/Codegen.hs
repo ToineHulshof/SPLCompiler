@@ -191,6 +191,8 @@ genGlobalVars i ((VarDecl _ n e):xs) = do
 
 genFunDecl :: FunDecl -> CG [Instruction]
 genFunDecl (FunDecl n args _ vars stmts) = do
+    m <- argsMap (-1 - length args) args
+    setLocalMap m
     i1 <- genLocalVars 1 args vars
     setFunName n
     i2 <- genStmts stmts
@@ -204,11 +206,7 @@ argsMap i (x:xs) = do
     return $ m `M.union` M.singleton x i
 
 genLocalVars :: Int -> [String] -> [VarDecl] -> CG [Instruction]
-genLocalVars _ args [] = do
-    m1 <- argsMap (-1 - length args) args
-    m2 <- gets localMap
-    setLocalMap $ m1 `M.union` m2
-    return []
+genLocalVars _ args [] = return []
 genLocalVars i args ((VarDecl _ n e):vs) = do
     i1 <- genExp e
     m <- gets localMap
