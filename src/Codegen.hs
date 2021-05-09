@@ -272,9 +272,8 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg]) = do
     i1 <- genExp arg
     i2 <- genPrint t
     return $ i1 ++ i2 ++ printString "\n"
-genFunCall (FunCall _ "isEmpty" [arg]) = updateIsEmpty >> (++ [LoadConstant 0, EqualsI]) <$> genExp arg
--- genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = updateIsEmpty >> (++ [LoadConstant 0, EqualsI]) <$> genExp arg
-genFunCall (FunCall t n args) = (++ [BranchSubroutine n, LoadRegister ReturnRegister]) . concat <$> mapM genExp args
+genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = updateIsEmpty >> (++ [LoadConstant 0, EqualsI]) <$> genExp arg
+genFunCall (FunCall t n args) = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
 printString :: String -> [Instruction]
 printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Trap Char)
@@ -304,7 +303,7 @@ genEq i1 i2 (TypeArray t) = do
     i3 <- genEq [] [] t
     return $ i1 ++ i2
     -- return $ i1 ++ [LoadMultipleHeap 0 2, Swap] ++ i2 ++ [LoadMultipleHeap 0 2, Swap, AdjustStack (-1), Swap, AdjustStack (-1)] ++ i3 ++ [AdjustStack 2, Swap, AdjustStack 1, Swap, AdjustStack (-1)]
-genEq _ _ t = undefined -- TypeID, TypeFun, Void
+genEq i1 i2 t = return $ i1 ++ i2 ++ [EqualsI]-- TypeID, TypeFun, Void
 
 -- ldl 1
 -- ldmh 0 2
@@ -337,14 +336,14 @@ genEq _ _ t = undefined -- TypeID, TypeFun, Void
 -- genEq' t = undefined -- TypeID, TypeFun, Void
 
 genExp :: Exp -> CG [Instruction]
-genExp (Exp t o e1 e2) = do
+genExp (Exp (Just t) o e1 e2) = do
     i1 <- genExp e1
     i2 <- genExp e2
     let i3 = genOp2 o
     if o == Cons
         then return $ i2 ++ i1 ++ [i3] else if o `elem` [Equals, Neq] 
         then do
-            i4 <- return []--genEq i1 i2 t
+            i4 <- genEq i1 i2 t
             return $ i4 ++ [NotI | o /= Equals]
     else return $ i1 ++ i2 ++ [i3]
 genExp (ExpOp1 o e) = do

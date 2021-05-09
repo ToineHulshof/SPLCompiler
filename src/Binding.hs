@@ -95,7 +95,7 @@ tiComps :: TypeEnv -> [SCC Decl] -> TI (TypeEnv, [Decl])
 tiComps env [] = return (env, [])
 tiComps env (d:ds) = do
     (env1, ds1) <- tiComp env d
-    (env2, ds2) <- trace (show ds1) tiComps env1 ds
+    (env2, ds2) <- tiComps env1 ds
     return (env1 `combine` env2, ds1 ++ ds2)
 
 varCycle :: SCC Decl -> Bool
