@@ -84,8 +84,8 @@ effect s = any hasEffect $ M.toList s
 repeatDecl :: Int -> TypeEnv -> [Decl] -> TI (TypeEnv, [Decl])
 repeatDecl 0 env ds = return (env, ds)
 repeatDecl i env ds = do
-    env1 <- (\(_, e, _) -> e) <$> tiDecls env ds
-    repeatDecl (i - 1) env1 ds
+    (_, env1, ds') <- tiDecls env ds
+    repeatDecl (i - 1) env1 ds'
 
 tiComp :: TypeEnv -> SCC Decl -> TI (TypeEnv, [Decl])
 tiComp env (AcyclicSCC d) = (\(_, e, dc) -> (e, [dc])) <$> tiDecl env d
@@ -95,7 +95,7 @@ tiComps :: TypeEnv -> [SCC Decl] -> TI (TypeEnv, [Decl])
 tiComps env [] = return (env, [])
 tiComps env (d:ds) = do
     (env1, ds1) <- tiComp env d
-    (env2, ds2) <- tiComps env1 ds
+    (env2, ds2) <- trace (show ds1) tiComps env1 ds
     return (env1 `combine` env2, ds1 ++ ds2)
 
 varCycle :: SCC Decl -> Bool

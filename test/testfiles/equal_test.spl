@@ -1,15 +1,23 @@
 // test(x) {
 //     print(x);
 // }
+equal(l1, l2) {
+    if(isEmpty(l1) && isEmpty(l2)) {
+        return True;
+    }
+    return l1.hd == l2.hd && equal(l1.tl, l2.tl);
+}
 
 main() {
-    var x = (2, (3, (4, 5)));
-    var y = (2, (3, (4, 5)));
+    // var x = (2, (3, (4, 5)));
+    // var y = (2, (3, (4, 5)));
+    // var z = 4 + 5;
     // var x = (2, 3);
     // var y = (2, 3);
-    // var x = 2 : [];
-    // var y = 2 : [];
-    print(x == y);
+    var x = 2 : [];
+    var y = 2 : [];
+    print(equal(x, y));
+    // print(x == y);
     // print(x);
     // test(1);
 }

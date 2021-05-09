@@ -125,7 +125,7 @@ instance Show Instruction where
     show NotI = "not"
     show Halt = "halt"
 
-data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int }
+data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, isEmpty :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int }
 type CG a = StateT GenEnv IO a
 
 new :: CG Int
@@ -138,6 +138,11 @@ updateBoolPrint :: CG ()
 updateBoolPrint = do
     e <- get
     put e { boolPrint = True }
+
+updateIsEmpty :: CG ()
+updateIsEmpty = do
+    e <- get
+    put e { isEmpty = True }
 
 setFunName :: String -> CG ()
 setFunName n = do
@@ -156,7 +161,7 @@ setLocalMap m = do
 
 genCode :: FilePath -> SPL -> IO ()
 genCode f spl = do
-    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, localMap = M.empty, globalMap = M.empty })
+    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, isEmpty = False, localMap = M.empty, globalMap = M.empty })
     writeFile f (unlines $ map show instructions)
     --putStrLn "\x1b[32mCompilation successful\x1b[0m"
 
@@ -172,7 +177,9 @@ genSPL ds = do
 genExtra :: CG [Instruction]
 genExtra = do
     boolPrint <- gets boolPrint
+    isEmpty <- gets isEmpty
     let i = if boolPrint then [Label "printBool", Link 1, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "False" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "True" ++ [Label "printEnd", Unlink, Return] else []
+    -- let i = i ++ if isEmpty
     return i
 
 genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
@@ -188,7 +195,7 @@ genFunDecl (FunDecl n args _ vars stmts) = do
     setFunName n
     i2 <- genStmts stmts
     setLocalMap M.empty
-    return $ Label n : Link (length vars + length args) : i1 ++ i2 ++ [Label $ n ++ "End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
+    return $ Label n : Link (length vars) : i1 ++ i2 ++ [Label $ n ++ "End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
 
 argsMap :: Int -> [String] -> CG (M.Map String Int)
 argsMap _ [] = return M.empty
@@ -265,8 +272,9 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg]) = do
     i1 <- genExp arg
     i2 <- genPrint t
     return $ i1 ++ i2 ++ printString "\n"
-genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
-genFunCall (FunCall _ n args) = (++ [BranchSubroutine n, LoadRegister ReturnRegister]) . concat <$> mapM genExp args
+genFunCall (FunCall _ "isEmpty" [arg]) = updateIsEmpty >> (++ [LoadConstant 0, EqualsI]) <$> genExp arg
+-- genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = updateIsEmpty >> (++ [LoadConstant 0, EqualsI]) <$> genExp arg
+genFunCall (FunCall t n args) = (++ [BranchSubroutine n, LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
 printString :: String -> [Instruction]
 printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Trap Char)
@@ -329,14 +337,14 @@ genEq _ _ t = undefined -- TypeID, TypeFun, Void
 -- genEq' t = undefined -- TypeID, TypeFun, Void
 
 genExp :: Exp -> CG [Instruction]
-genExp (Exp (Just t) o e1 e2) = do
+genExp (Exp t o e1 e2) = do
     i1 <- genExp e1
     i2 <- genExp e2
     let i3 = genOp2 o
     if o == Cons
         then return $ i2 ++ i1 ++ [i3] else if o `elem` [Equals, Neq] 
         then do
-            i4 <- genEq i1 i2 t
+            i4 <- return []--genEq i1 i2 t
             return $ i4 ++ [NotI | o /= Equals]
     else return $ i1 ++ i2 ++ [i3]
 genExp (ExpOp1 o e) = do
