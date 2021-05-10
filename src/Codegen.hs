@@ -310,7 +310,7 @@ genPrint t = undefined -- TypeID, TypeFun, Void
 
 genEq :: Type -> CG [Instruction]
 genEq (TypeBasic _) = return [EqualsI]
-genEq (TypeTuple t _) = undefined
+genEq (TypeTuple t1 t2) = undefined
 genEq _ = return [EqualsI]
 
 -- equalTuple:
