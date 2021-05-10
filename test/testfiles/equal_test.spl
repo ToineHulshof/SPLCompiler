@@ -18,12 +18,13 @@ main() {
     // var x = (2, (3, (4, 5)));
     // var y = (2, (3, (4, 5)));
     // var z = 4 + 5;
-    // var a = (2, 3);
-    // var b = (2, 3);
+    var a = (2, 3);
+    var b = (2, 3);
     var c = 2 : [];
     var d = 2 : [];
+    print(a == c);
     // print(equalTuple(a, b));
-    print(equalList(c, d));
+    // print(equalList(c, d));
     // print(x == y);
     // print(x);
     // test(1);

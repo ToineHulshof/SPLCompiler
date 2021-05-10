@@ -125,7 +125,7 @@ instance Show Instruction where
     show NotI = "not"
     show Halt = "halt"
 
-data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, isEmpty :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int }
+data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, isEmpty :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int, polyLabels :: [String] }
 type CG a = StateT GenEnv IO a
 
 new :: CG Int
@@ -159,9 +159,14 @@ setLocalMap m = do
     e <- get
     put e { localMap = m }
 
+addPolyLabel :: String -> CG ()
+addPolyLabel l = do
+    e <- get
+    put e { polyLabels = l : polyLabels e }
+
 genCode :: FilePath -> SPL -> IO ()
 genCode f spl = do
-    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, isEmpty = False, localMap = M.empty, globalMap = M.empty })
+    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, isEmpty = False, localMap = M.empty, globalMap = M.empty, polyLabels = [] })
     writeFile f (unlines $ map show instructions)
     --putStrLn "\x1b[32mCompilation successful\x1b[0m"
 
@@ -290,48 +295,85 @@ genPrint (TypeArray t) = do
     return $ printString "[" ++ [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i)] ++ printString ", " ++ [LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)] ++ printString "]"
 genPrint t = undefined -- TypeID, TypeFun, Void
 
-genEq :: [Instruction] -> [Instruction] -> Type -> CG [Instruction]
-genEq i1 i2 (TypeBasic _) = return $ i1 ++ i2 ++ [EqualsI]
-genEq i1 i2 (TypeTuple t1 t2) = do
-    i3 <- genEq (i1 ++ [LoadHeap (-1)]) (i2 ++ [LoadHeap (-1)]) t1
-    i4 <- genEq (i1 ++ [LoadHeap 0]) (i2 ++ [LoadHeap 0]) t2
-    return $ i3 ++ i4 ++ [AndI]
-genEq i1 i2 (TypeArray t) = do
-    i <- show <$> new
-    i3 <- genEq [] [] t
-    return $ i1 ++ i2
-    -- return $ i1 ++ [LoadMultipleHeap 0 2, Swap] ++ i2 ++ [LoadMultipleHeap 0 2, Swap, AdjustStack (-1), Swap, AdjustStack (-1)] ++ i3 ++ [AdjustStack 2, Swap, AdjustStack 1, Swap, AdjustStack (-1)]
-genEq i1 i2 t = return $ i1 ++ i2 ++ [EqualsI]-- TypeID, TypeFun, Void
-
--- ldl 1
--- ldmh 0 2
--- swp
--- ldl 2
--- ldmh 0 2
--- swp
--- ajs -1
--- swp
--- ajs -1
--- eq
-
--- ajs 2
--- swp
--- ajs 1
--- swp
--- ajs -1
--- lds
-
--- genEq' :: Type -> CG [Instruction]
--- genEq' (TypeBasic _) = return [EqualsI]
--- genEq' (TypeTuple t1 t2) = do
---     i1 <- genEq' t1
---     i2 <- genEq' t2
---     return $ i1 ++ [LoadHeap (-1)]
--- genEq' (TypeArray t) = do
+-- genEq :: [Instruction] -> [Instruction] -> Type -> CG [Instruction]
+-- genEq i1 i2 (TypeBasic _) = return $ i1 ++ i2 ++ [EqualsI]
+-- genEq i1 i2 (TypeTuple t1 t2) = do
+--     i3 <- genEq (i1 ++ [LoadHeap (-1)]) (i2 ++ [LoadHeap (-1)]) t1
+--     i4 <- genEq (i1 ++ [LoadHeap 0]) (i2 ++ [LoadHeap 0]) t2
+--     return $ i3 ++ i4 ++ [AndI]
+-- genEq i1 i2 (TypeArray t) = do
 --     i <- show <$> new
---     i1 <- genEq' t
---     return $ printString "[" ++ [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i)] ++ printString ", " ++ [LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways ("list" ++ i), Label ("listEnd" ++ i)] ++ printString "]"
--- genEq' t = undefined -- TypeID, TypeFun, Void
+--     i3 <- genEq [] [] t
+--     return $ i1 ++ i2
+--     -- return $ i1 ++ [LoadMultipleHeap 0 2, Swap] ++ i2 ++ [LoadMultipleHeap 0 2, Swap, AdjustStack (-1), Swap, AdjustStack (-1)] ++ i3 ++ [AdjustStack 2, Swap, AdjustStack 1, Swap, AdjustStack (-1)]
+-- genEq i1 i2 t = return $ i1 ++ i2 ++ [EqualsI]-- TypeID, TypeFun, Void
+
+genEq :: Type -> CG [Instruction]
+genEq (TypeBasic _) = return [EqualsI]
+genEq (TypeTuple t _) = undefined
+genEq _ = return [EqualsI]
+
+-- equalTuple:
+-- link 0
+-- ldl -3
+-- ldh -1
+-- ldl -2
+-- ldh -1
+-- eq
+-- ldl -3
+-- ldh 0
+-- ldl -2
+-- ldh 0
+-- eq
+-- and
+-- str RR
+-- bra equalTupleEnd
+-- equalTupleEnd:
+-- unlink
+-- sts -1
+-- ret
+
+-- equalList:
+-- link 2
+-- ldl -3
+-- ldc 0
+-- eq
+-- stl 1
+-- ldl -2
+-- ldc 0
+-- eq
+-- stl 2
+-- ldl 1
+-- ldl 2
+-- or
+-- brt Then0
+-- bra EndIf0
+-- Then0:
+-- ldl 1
+-- ldl 2
+-- and
+-- str RR
+-- bra equalListEnd
+-- EndIf0:
+-- ldl -3
+-- ldh 0
+-- ldl -2
+-- ldh 0
+-- eq
+-- ldl -3
+-- ldh -1
+-- ldl -2
+-- ldh -1
+-- bsr equalList
+-- ajs -1
+-- ldr RR
+-- and
+-- str RR
+-- bra equalListEnd
+-- equalListEnd:
+-- unlink
+-- sts -1
+-- ret
 
 genExp :: Exp -> CG [Instruction]
 genExp (Exp (Just t) o e1 e2) = do
@@ -341,8 +383,8 @@ genExp (Exp (Just t) o e1 e2) = do
     if o == Cons
         then return $ i2 ++ i1 ++ [i3] else if o `elem` [Equals, Neq] 
         then do
-            i4 <- genEq i1 i2 t
-            return $ i4 ++ [NotI | o /= Equals]
+            i4 <- genEq t--genEq i1 i2 t
+            return $ i1 ++ i2 ++ i4 ++ [NotI | o /= Equals]
     else return $ i1 ++ i2 ++ [i3]
 genExp (ExpOp1 o e) = do
     i <- genExp e
