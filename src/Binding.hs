@@ -96,7 +96,7 @@ tiComps env [] = return (env, [])
 tiComps env (d:ds) = do
     (env1, ds1) <- tiComp env d
     (env2, ds2) <- tiComps env1 ds
-    return (env1 `combine` env2, ds1 ++ ds2)
+    return (env2 `combine` env1, ds1 ++ ds2)
 
 varCycle :: SCC Decl -> Bool
 varCycle (AcyclicSCC _) = False
@@ -118,7 +118,7 @@ tiResult f spl e = do
         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
         Right (env, spl') -> case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
-            Just filePath -> genCode filePath spl' 
+            Just filePath -> trace (show spl' ++ "\n" ++ show env) genCode filePath spl' 
 
 testEnv :: Maybe FilePath -> TypeEnv -> String -> IO ()
 testEnv f env s = case testP splP s of

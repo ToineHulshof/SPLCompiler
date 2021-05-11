@@ -1,0 +1,11 @@
+equals(a, b) {
+    return a == b;
+}
+
+// f(a, b) {
+//     return equals(a, b);
+// }
+
+main() {
+    print(equals(1, 1));
+}
