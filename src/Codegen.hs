@@ -125,7 +125,7 @@ instance Show Instruction where
     show NotI = "not"
     show Halt = "halt"
 
-data GenEnv = GenEnv { ifCounter :: Int, funName :: String, boolPrint :: Bool, isEmpty :: Bool, localMap :: M.Map String Int, globalMap :: M.Map String Int, functions :: [[Instruction]], labels :: [String] }
+data GenEnv = GenEnv { ifCounter :: Int, funName :: String, localMap :: M.Map String Int, globalMap :: M.Map String Int, functions :: [[Instruction]], labels :: [String] }
 type CG a = StateT GenEnv IO a
 
 new :: CG Int
@@ -133,16 +133,6 @@ new = do
     e <- get
     put e { ifCounter = ifCounter e + 1 }
     return $ ifCounter e
-
-updateBoolPrint :: CG ()
-updateBoolPrint = do
-    e <- get
-    put e { boolPrint = True }
-
-updateIsEmpty :: CG ()
-updateIsEmpty = do
-    e <- get
-    put e { isEmpty = True }
 
 setFunName :: String -> CG ()
 setFunName n = do
@@ -171,7 +161,7 @@ addLabel l = do
 
 genCode :: FilePath -> SPL -> IO ()
 genCode f spl = do
-    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", boolPrint = False, isEmpty = False, localMap = M.empty, globalMap = M.empty, functions = [], labels = [] })
+    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", localMap = M.empty, globalMap = M.empty, functions = [], labels = [] })
     writeFile f (unlines $ map show instructions)
     --putStrLn "\x1b[32mCompilation successful\x1b[0m"
 
@@ -181,17 +171,8 @@ genSPL ds = do
     (i1, m) <- genGlobalVars 1 vardecls
     setGlobalMap m
     i2 <- concat <$> mapM genFunDecl [(\(DeclFunDecl f) -> f) x | x@DeclFunDecl {} <- ds]
-    i3 <- genExtra
     functions <- gets functions
-    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i3 ++ i2 ++ concat functions
-
-genExtra :: CG [Instruction]
-genExtra = do
-    boolPrint <- gets boolPrint
-    isEmpty <- gets isEmpty
-    let i = if boolPrint then [Label "printBool", Link 1, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "False" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "True" ++ [Label "printEnd", Unlink, Return] else []
-    -- let i = i ++ if isEmpty
-    return i
+    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i2 ++ concat functions
 
 genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
 genGlobalVars _ [] = return ([], M.empty)
@@ -281,7 +262,7 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg]) = do
     i1 <- genExp arg
     i2 <- genPrint t
     return $ i1 ++ i2 ++ printString "\n"
-genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = updateIsEmpty >> (++ [LoadConstant 0, EqualsI]) <$> genExp arg
+genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
 genFunCall (FunCall t n args) = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
 printString :: String -> [Instruction]
@@ -289,7 +270,7 @@ printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Tr
 
 genPrint :: Type -> CG [Instruction]
 genPrint (TypeBasic IntType) = return [Trap Int]
-genPrint (TypeBasic BoolType) = updateBoolPrint >> return [BranchSubroutine "printBool", AdjustStack (-1)]
+-- genPrint (TypeBasic BoolType) = updateBoolPrint >> return [BranchSubroutine "printBool", AdjustStack (-1)]
 genPrint (TypeBasic CharType) = return $ printString "'" ++ [Trap Char] ++ printString "'"
 genPrint t = do
     let name = "print" ++ typeName t
@@ -298,6 +279,10 @@ genPrint t = do
     return [BranchSubroutine name, LoadRegister ReturnRegister]
 
 genPrint' :: String -> Type -> CG ()
+genPrint' _ (TypeBasic BoolType) = do
+    let f = [Label "printBool", Link 1, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "False" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "True" ++ [Label "printEnd", Unlink, Return]
+    addFunction f
+    addLabel "printBool"
 genPrint' name (TypeTuple t1 t2) = do
     i1 <- genPrint t1
     i2 <- genPrint t2

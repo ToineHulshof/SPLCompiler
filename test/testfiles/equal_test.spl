@@ -39,29 +39,31 @@
 //     return t1.fst == t2.fst && t1.snd == t2.snd;
 // }
 
-f() {
-    print(3);
-}
-
-// main() {
-//     // var x = (2, (3, (4, 5)));
-//     // var y = (2, (3, (4, 5)));
-//     // var z = 4 + 5;
-//     // print((1,1:[]) == (1,2:[]));
-//     // print((1,1:[]) == (1,2:[]));
-//     // print(4 : 3 : 2 : []);
-//     // print((3 : [], 3 : []));
-//     print((1 : 2 : []) : (3 : 4 : []) : []);
-//     // [1] == [2]
-//     // [True] == [True]
-//     // var a = (2, 3);
-//     // var b = (2, 3);
-//     // var c = 2 : [];
-//     // var d = 2 : [];
-//     // print(a == c);
-//     // print(equalTuple(a, b));
-//     // print(equalList(c, d));
-//     // print(x == y);
-//     // print(x);
-//     // test(1);
+// f() {
+//     print(3);
 // }
+
+main() {
+    // var x = (2, (3, (4, 5)));
+    // var y = (2, (3, (4, 5)));
+    // var z = 4 + 5;
+    // print((1,1:[]) == (1,2:[]));
+    // print((1,1:[]) == (1,2:[]));
+    // print(4 : 3 : 2 : []);
+    // print((3 : [], 3 : []));
+    // f();
+    print(False);
+    // print((1 : []) : (2 : []) : []);
+    // [1] == [2]
+    // [True] == [True]
+    // var a = (2, 3);
+    // var b = (2, 3);
+    // var c = 2 : [];
+    // var d = 2 : [];
+    // print(a == c);
+    // print(equalTuple(a, b));
+    // print(equalList(c, d));
+    // print(x == y);
+    // print(x);
+    // test(1);
+}
