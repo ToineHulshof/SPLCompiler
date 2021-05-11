@@ -118,7 +118,14 @@ tiResult f spl e = do
         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
         Right (env, spl') -> case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
-            Just filePath -> genCode filePath spl' 
+            Just filePath -> if containsMain spl' then genCode filePath spl' else putStrLn "\x1b[31mNo main function\x1b[0m"
+
+containsMain :: SPL -> Bool
+containsMain = any isMain
+    where 
+        isMain :: Decl -> Bool
+        isMain (DeclFunDecl (FunDecl "main" _ _ _ _)) = True
+        isMain _ = False
 
 testEnv :: Maybe FilePath -> TypeEnv -> String -> IO ()
 testEnv f env s = case testP splP s of

@@ -306,10 +306,13 @@ genPrint' name (TypeTuple t1 t2) = do
     addLabel name
 genPrint' name (TypeArray t) = do
     i1 <- genPrint t
-    let f = [Label name, Link 0, LoadLocal (-2)] ++ (printString "[" ++ [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue (name ++ "End"), LoadMultipleHeap 0 2] ++ i1 ++ [Label name, LoadStack 0, LoadConstant 0, EqualsI, BranchTrue (name ++ "End")] ++ printString ", " ++ [LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways name, Label (name ++ "End")] ++ printString "]") ++ [Unlink, StoreStack (-1), Return]
+    i <- show <$> new
+    let f = [Label name, Link 0, LoadLocal (-2)] ++ (printString "[" ++ [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i)] ++ printString ", " ++ [LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways $ "list" ++ i, Label ("listEnd" ++ i)] ++ printString "]") ++ [Unlink, StoreStack (-1), Return]
     addFunction f
     addLabel name
 genPrint' _ t = trace (show t) undefined
+
+-- [Label name, Link 0, LoadLocal (-2)] ++ (printString "(" ++ [LoadStack 0, LoadHeap (-1)] ++ i1 ++ printString ", " ++ [LoadHeap 0] ++ i2 ++ printString ")") ++ [Unlink, StoreStack (-1), Return]
 
 -- print:
 -- link 0
