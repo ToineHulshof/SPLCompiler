@@ -280,7 +280,23 @@ parseFile = parseFileP splP result
 
 -- A helper function to test if a parser behaves correctly on a given input.
 testP :: Parser a -> String -> Either [Error] (Code, a)
-testP p s = comments False 0 (code s) >>= parse p
+testP p s = comments False 0 (code $ syntacticSugar s) >>= parse p
+
+syntacticSugar :: String -> String
+syntacticSugar = rewriteStrings . rewriteLists
+
+rewriteStrings :: String -> String
+rewriteStrings s = let (a, b) = span (/= '"') s in if null b then a else let (c, d) = span (/= '"') $ tail b in a ++ convertStringToList c ++ rewriteStrings (tail d)
+
+convertStringToList :: String -> String
+convertStringToList "" = "[]"
+convertStringToList (x:xs) = "'" ++ [x] ++ "' : " ++ convertStringToList xs
+
+rewriteLists :: String -> String
+rewriteLists s = let (a, b) = span (/= '[') s in if null b then a else let (c, d) = span (/= ']') $ tail b in a ++ convertListToString c ++ rewriteStrings (tail d)
+
+convertListToString :: String -> String
+convertListToString s = let (a, b) = span (/= ',') s in if null b then a ++ " : []" else a ++ " :" ++ convertListToString (tail b)
 
 p :: String -> Either [Error] (Code, SPL)
 p = parse splP . code
