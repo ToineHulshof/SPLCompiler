@@ -296,12 +296,6 @@ genPrint' name (TypeList t) = do
     addLabel name
 genPrint' _ t = trace (show t) undefined
 
--- p :: String -> CG [Instruction]
--- p name = do
---     i <- show <$> new
---     let i1 = []
---     return $ 
-
 typeName :: Type -> String
 typeName (TypeBasic IntType) = "Int"
 typeName (TypeBasic BoolType) = "Bool"
