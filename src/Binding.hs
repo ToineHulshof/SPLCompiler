@@ -118,7 +118,7 @@ tiResult f spl e = do
         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
         Right (env, spl') -> case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
-            Just filePath -> trace (show spl' ++ "\n" ++ show env) genCode filePath spl' 
+            Just filePath -> genCode filePath spl' 
 
 testEnv :: Maybe FilePath -> TypeEnv -> String -> IO ()
 testEnv f env s = case testP splP s of

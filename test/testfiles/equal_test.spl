@@ -1,14 +1,16 @@
 // test(x) {
 //     print(x);
 // }
-equalList(l1, l2) {
-    var e1 = isEmpty(l1);
-    var e2 = isEmpty(l2);
-    if(e1 || e2) {
-        return e1 && e2;
-    }
-    return l1.hd == l2.hd && equalList(l1.tl, l2.tl);
-}
+// equalList(l1, l2) {
+//     var e1 = isEmpty(l1);
+//     var e2 = isEmpty(l2);
+//     if(e1 || e2) {
+//         return e1 && e2;
+//     }
+//     return l1.hd == l2.hd && equalList(l1.tl, l2.tl);
+// }
+
+// [(1, True), (3, False)] == [(5, True)]
 
 // equalTuple(t1, t2) {
 //     return t1.fst == t2.fst && t1.snd == t2.snd;
@@ -18,11 +20,16 @@ main() {
     // var x = (2, (3, (4, 5)));
     // var y = (2, (3, (4, 5)));
     // var z = 4 + 5;
-    var a = (2, 3);
-    var b = (2, 3);
-    var c = 2 : [];
-    var d = 2 : [];
-    print(a == c);
+    // print((1,1:[]) == (1,2:[]));
+    // print((1,1:[]) == (1,2:[]));
+    print((3 : [], 3 : []));
+    // [1] == [2]
+    // [True] == [True]
+    // var a = (2, 3);
+    // var b = (2, 3);
+    // var c = 2 : [];
+    // var d = 2 : [];
+    // print(a == c);
     // print(equalTuple(a, b));
     // print(equalList(c, d));
     // print(x == y);
