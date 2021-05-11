@@ -275,7 +275,7 @@ genPrint t = do
     let name = "print" ++ typeName t
     labels <- gets labels
     when (name `notElem` labels) $ genPrint' name t
-    return [BranchSubroutine name, LoadRegister ReturnRegister]
+    return [BranchSubroutine name]
 
 genPrint' :: String -> Type -> CG ()
 genPrint' _ (TypeBasic BoolType) = do
@@ -291,10 +291,16 @@ genPrint' name (TypeTuple t1 t2) = do
 genPrint' name (TypeList t) = do
     i1 <- genPrint t
     i <- show <$> new
-    let f = [Label name, Link 0, LoadLocal (-2)] ++ (printString "[" ++ [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i)] ++ printString ", " ++ [LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways $ "list" ++ i, Label ("listEnd" ++ i)] ++ printString "]") ++ [Unlink, StoreStack (-1), Return]
+    let f = [Label name, Link 0] ++ printString "[" ++ [Label $ "While" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile" ++ i, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then" ++ i, BranchAlways $ "EndIf" ++ i, Label $ "Then" ++ i] ++ printString ", " ++ [Label $ "EndIf" ++ i, BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i] ++ printString "]" ++ [Unlink, StoreStack (-1), Return]
     addFunction f
     addLabel name
 genPrint' _ t = trace (show t) undefined
+
+-- p :: String -> CG [Instruction]
+-- p name = do
+--     i <- show <$> new
+--     let i1 = []
+--     return $ 
 
 typeName :: Type -> String
 typeName (TypeBasic IntType) = "Int"

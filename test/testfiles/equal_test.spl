@@ -43,6 +43,31 @@
 //     print(3);
 // }
 
+// reverse ( list ) :: [t] -> [t] {
+//     var accu = [];
+//     while ( ! isEmpty ( list ) ) {
+//         accu = list.hd : accu ;
+//         list = list.tl;
+//     }
+//     return accu ;
+// }
+
+// p(l) :: [Int] -> Void {
+//     print('[');
+//     while(!isEmpty(l)) {
+//         print('b');
+//         l = l.tl;
+//         if(!isEmpty(l)) {
+//             print(',');
+//         }
+//     }
+//     print(']');
+// }
+
+// main() {
+//     p(2 : 3 : []);
+// }
+
 main() {
     // var x = (2, (3, (4, 5)));
     // var y = (2, (3, (4, 5)));
@@ -50,10 +75,12 @@ main() {
     // print((1,1:[]) == (1,2:[]));
     // print((1,1:[]) == (1,2:[]));
     // print(4 : 3 : 2 : []);
-    // print((3 : [], 3 : []));
+    // print(3 : [] == 2 : []);
     // f();
     // print(False);
-    print((1 : []) : (2 : []) : []);
+    print((3 : [], 2 : []));
+    // print((1 : []) : (2 : []) : []);
+    // print(2 : 3 : []);
     // [1] == [2]
     // [True] == [True]
     // var a = (2, 3);
