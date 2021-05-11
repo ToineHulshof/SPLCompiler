@@ -27,7 +27,7 @@ class Types a where
 instance Types Type where
   ftv (TypeID _ n) = S.singleton n
   ftv (TypeBasic _)  = S.empty
-  ftv (TypeArray t) = ftv t
+  ftv (TypeList t) = ftv t
   ftv (TypeFun t1 t2) = ftv t1 `S.union` ftv t2
   ftv (TypeTuple t1 t2)  = ftv t1 `S.union` ftv t2
   ftv Void = S.empty
@@ -39,7 +39,7 @@ instance Types Type where
             checkConditions (TypeID c1 n) = TypeID (composeConditions c c1) n
             checkConditions t = t
   apply _ (TypeBasic t) = TypeBasic t
-  apply s (TypeArray t) = TypeArray (apply s t)
+  apply s (TypeList t) = TypeList (apply s t)
   apply s (TypeFun t1 t2) = TypeFun (apply s t1) (apply s t2)
   apply s (TypeTuple t1 t2) = TypeTuple (apply s t1) (apply s t2)
   apply _ Void = Void
@@ -65,7 +65,7 @@ instance Eq TypeEnv where
 conditions :: Type -> [(String, Condition)]
 conditions (TypeBasic _) = []
 conditions (TypeTuple t1 t2) = conditions t1 ++ conditions t2
-conditions (TypeArray t) = conditions t
+conditions (TypeList t) = conditions t
 conditions (TypeID Nothing _) = []
 conditions (TypeID (Just c) n) = [(n, c)]
 conditions (TypeFun t1 t2) = conditions t1 ++ conditions t2
@@ -79,7 +79,7 @@ showConditions m ((s, c):cs) = "\x1b[34m" ++ show c ++ "\x1b[0m \x1b[36m" ++ fro
 varStrings :: Type -> [String]
 varStrings (TypeID _ s) = [s]
 varStrings (TypeTuple t1 t2) = varStrings t1 ++ varStrings t2
-varStrings (TypeArray t) = varStrings t
+varStrings (TypeList t) = varStrings t
 varStrings (TypeFun t1 t2) = varStrings t1 ++ varStrings t2
 varStrings _ = []
 
@@ -95,7 +95,7 @@ varsMap t = M.fromList $ zip (reverse $ removeDuplicates $ reverse $ varStrings 
 showType :: M.Map String String -> Type -> String
 showType m (TypeBasic b) = show b
 showType m (TypeTuple t1 t2) = "(" ++ showType m t1 ++ ", " ++ showType m t2 ++ ")"
-showType m (TypeArray t) = "[" ++ showType m t ++ "]"
+showType m (TypeList t) = "[" ++ showType m t ++ "]"
 showType m (TypeID _ s) = "\x1b[36m" ++ fromMaybe s (M.lookup s m) ++ "\x1b[0m"
 showType m (TypeFun t1 t2) = showType m t1 ++ " -> " ++ showType m t2
 showType m Void = "\x1b[34mVoid\x1b[0m"
@@ -161,7 +161,7 @@ mgu (TypeFun l1 r1) (TypeFun l2 r2) = do
     s1 <- mgu l1 l2
     s2 <- mgu (apply s1 r1) (apply s1 r2)
     return $ s2 `composeSubst` s1
-mgu (TypeArray t1) (TypeArray t2) = mgu t1 t2
+mgu (TypeList t1) (TypeList t2) = mgu t1 t2
 mgu (TypeTuple l1 r1) (TypeTuple l2 r2) = do
     s1 <- mgu l1 l2
     s2 <- mgu (apply s1 r1) (apply s1 r2)
@@ -320,12 +320,12 @@ tiStmts env (s:ss) = do
 tiField :: Type -> Field -> TI (Subst, Type)
 tiField t Head = do
     t1 <- newTyVar Nothing "f"
-    s <- mgu (TypeArray t1) t
+    s <- mgu (TypeList t1) t
     return (s, apply s t1)
 tiField t Tail = do
     t1 <- newTyVar Nothing "f"
-    s <- mgu (TypeArray t1) t
-    return (s, apply s $ TypeArray t1)
+    s <- mgu (TypeList t1) t
+    return (s, apply s $ TypeList t1)
 tiField t First = do
     t1 <- newTyVar Nothing "f"
     t2 <- newTyVar Nothing "f"
@@ -430,7 +430,7 @@ tiOp2 :: Op2 -> TI (Type, Type, Type)
 tiOp2 o
     | o `elem` [Plus, Minus, Product, Division, Modulo] = return (TypeBasic IntType, TypeBasic IntType, TypeBasic IntType)
     | o `elem` [And, Or] = return (TypeBasic BoolType, TypeBasic BoolType, TypeBasic BoolType)
-    | o == Cons = newTyVar Nothing "c" >>= (\t -> return (t, TypeArray t, TypeArray t))
+    | o == Cons = newTyVar Nothing "c" >>= (\t -> return (t, TypeList t, TypeList t))
     | o `elem` [Equals, Neq] = newTyVar (Just Eq) "e" >>= (\t -> return (t, t, TypeBasic BoolType))
     | o `elem` [Leq, Geq, Smaller, Greater] = newTyVar (Just Ord) "e" >>= (\t -> return (t, t, TypeBasic BoolType))
 
@@ -474,4 +474,4 @@ tiExp' _ _ e@(ExpChar _) = return (nullSubst, TypeBasic CharType, e)
 tiExp' _ env (ExpFunCall f) = fmap ExpFunCall <$> tiFunCall env f
 tiExp' _ _ e@ExpEmptyList = do
     t <- newTyVar Nothing "l"
-    return (nullSubst, TypeArray t, e)
+    return (nullSubst, TypeList t, e)

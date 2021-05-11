@@ -262,7 +262,7 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg]) = do
     i1 <- genExp arg
     i2 <- genPrint t
     return $ i1 ++ i2 ++ printString "\n"
-genFunCall (FunCall (Just (TypeFun (TypeArray _) _)) "isEmpty" [arg]) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
+genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg]) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
 genFunCall (FunCall t n args) = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
 printString :: String -> [Instruction]
@@ -270,7 +270,6 @@ printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Tr
 
 genPrint :: Type -> CG [Instruction]
 genPrint (TypeBasic IntType) = return [Trap Int]
--- genPrint (TypeBasic BoolType) = updateBoolPrint >> return [BranchSubroutine "printBool", AdjustStack (-1)]
 genPrint (TypeBasic CharType) = return $ printString "'" ++ [Trap Char] ++ printString "'"
 genPrint t = do
     let name = "print" ++ typeName t
@@ -280,7 +279,7 @@ genPrint t = do
 
 genPrint' :: String -> Type -> CG ()
 genPrint' _ (TypeBasic BoolType) = do
-    let f = [Label "printBool", Link 1, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "False" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "True" ++ [Label "printEnd", Unlink, Return]
+    let f = [Label "printBool", Link 0, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "False" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "True" ++ [Label "printEnd", Unlink, Return]
     addFunction f
     addLabel "printBool"
 genPrint' name (TypeTuple t1 t2) = do
@@ -289,7 +288,7 @@ genPrint' name (TypeTuple t1 t2) = do
     let f = [Label name, Link 0, LoadLocal (-2)] ++ (printString "(" ++ [LoadStack 0, LoadHeap (-1)] ++ i1 ++ printString ", " ++ [LoadHeap 0] ++ i2 ++ printString ")") ++ [Unlink, StoreStack (-1), Return]
     addFunction f
     addLabel name
-genPrint' name (TypeArray t) = do
+genPrint' name (TypeList t) = do
     i1 <- genPrint t
     i <- show <$> new
     let f = [Label name, Link 0, LoadLocal (-2)] ++ (printString "[" ++ [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i), LoadMultipleHeap 0 2] ++ i1 ++ [Label ("list" ++ i), LoadStack 0, LoadConstant 0, EqualsI, BranchTrue ("listEnd" ++ i)] ++ printString ", " ++ [LoadMultipleHeap 0 2] ++ i1 ++ [BranchAlways $ "list" ++ i, Label ("listEnd" ++ i)] ++ printString "]") ++ [Unlink, StoreStack (-1), Return]
@@ -297,82 +296,12 @@ genPrint' name (TypeArray t) = do
     addLabel name
 genPrint' _ t = trace (show t) undefined
 
--- [Label name, Link 0, LoadLocal (-2)] ++ (printString "(" ++ [LoadStack 0, LoadHeap (-1)] ++ i1 ++ printString ", " ++ [LoadHeap 0] ++ i2 ++ printString ")") ++ [Unlink, StoreStack (-1), Return]
-
--- print:
--- link 0
--- ldc 91
--- ldc 39
--- trap 1
--- trap 1
--- ldc 39
--- trap 1
--- ldc 10
--- trap 1
--- While1:
--- ldl -2
--- ldc 0
--- eq
--- not
--- brf EndWhile1
--- ldl -2
--- ldh -1
--- ldc 0
--- eq
--- not
--- brt Then0
--- bra EndIf0
--- Then0:
--- EndIf0:
--- ldl -2
--- ldh -1
--- stl -2
--- bra While1
--- EndWhile1:
--- ldc 93
--- ldc 39
--- trap 1
--- trap 1
--- ldc 39
--- trap 1
--- ldc 10
--- trap 1
--- bra printEnd
--- printEnd:
--- unlink
--- sts -1
--- ret
-
--- print:
--- link 0
--- ldc 40
--- ldc 39
--- trap 1
--- trap 1
--- ldc 39
--- trap 1
--- ldc 10
--- trap 1
--- ldc 41
--- ldc 39
--- trap 1
--- trap 1
--- ldc 39
--- trap 1
--- ldc 10
--- trap 1
--- bra printEnd
--- printEnd:
--- unlink
--- sts -1
--- ret
-
 typeName :: Type -> String
 typeName (TypeBasic IntType) = "Int"
 typeName (TypeBasic BoolType) = "Bool"
 typeName (TypeBasic CharType) = "Char"
 typeName (TypeTuple t1 t2) = "Tuple" ++ typeName t1 ++ typeName t2
-typeName (TypeArray t) = "Array" ++ typeName t
+typeName (TypeList t) = "List" ++ typeName t
 typeName _ = undefined
 
 genEq :: Type -> CG [Instruction]
@@ -390,7 +319,7 @@ genEq' name (TypeTuple t1 t2) = do
     let f = [Label name, Link 0, LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1)] ++ i1 ++ [LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i2 ++ [AndI, StoreRegister ReturnRegister, Unlink, StoreStack (-1), Return]
     addFunction f
     addLabel name
-genEq' name (TypeArray t) = do
+genEq' name (TypeList t) = do
     i1 <- genEq t
     i <- show <$> new
     let f = [Label name, Link 2, LoadLocal (-3), LoadConstant 0, EqualsI, StoreLocal 1, LoadLocal (-2), LoadConstant 0, EqualsI, StoreLocal 2, LoadLocal 1, LoadLocal 2, OrI, BranchTrue ("Then" ++ i), BranchAlways ("EndIf" ++ i), 

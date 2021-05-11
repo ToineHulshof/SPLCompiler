@@ -56,7 +56,7 @@ ppFunType (Just t) = ":: " ++ ppType t -- printf ":: %s-> %s " (join "" (map ((+
 ppType :: Type -> String
 ppType (TypeBasic t) = ppBasicType t
 ppType (TypeTuple t1 t2) = printf "(%s, %s)" (ppType t1) (ppType t2)
-ppType (TypeArray t) = printf "[%s]" (ppType t)
+ppType (TypeList t) = printf "[%s]" (ppType t)
 ppType (TypeID _ s) = s
 ppType (TypeFun t1 Void) = printf "-> %s " (ppType t1)
 ppType (TypeFun t1 t2) = printf "%s %s" (ppType t1) (ppType t2)

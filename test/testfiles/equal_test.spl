@@ -52,8 +52,8 @@ main() {
     // print(4 : 3 : 2 : []);
     // print((3 : [], 3 : []));
     // f();
-    print(False);
-    // print((1 : []) : (2 : []) : []);
+    // print(False);
+    print((1 : []) : (2 : []) : []);
     // [1] == [2]
     // [True] == [True]
     // var a = (2, 3);

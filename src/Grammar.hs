@@ -58,7 +58,7 @@ data Condition = Eq | Ord deriving (Eq, Ord, Show)
 data Type
   = TypeBasic BasicType
   | TypeTuple Type Type
-  | TypeArray Type
+  | TypeList Type
   | TypeID (Maybe Condition) String
   | TypeFun Type Type
   | Void
@@ -66,7 +66,7 @@ data Type
 instance Eq Type where
   TypeBasic b1 == TypeBasic b2 = b1 == b2
   TypeTuple l1 r1 == TypeTuple l2 r2 = l1 == l2 && r1 == r2
-  TypeArray t1 == TypeArray t2 = t1 == t2
+  TypeList t1 == TypeList t2 = t1 == t2
   TypeID {} == TypeID {} = True
   TypeFun l1 r1 == TypeFun l2 r2 = l1 == l2 && r1 == r2
   Void == Void = True
@@ -75,7 +75,7 @@ instance Eq Type where
 instance Show Type where
   show (TypeBasic b) = show b
   show (TypeTuple t1 t2) = "(" ++ show t1 ++ ", " ++ show t2 ++ ")"
-  show (TypeArray t) = "[" ++ show t ++ "]"
+  show (TypeList t) = "[" ++ show t ++ "]"
   show (TypeID c s) = "\x1b[36m" ++ s ++ "\x1b[0m"
   show (TypeFun t1 t2) = show t1 ++ " -> " ++ show t2
   show Void = "\x1b[34mVoid\x1b[0m"

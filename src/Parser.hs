@@ -226,11 +226,11 @@ funTypeP = (\args ret -> Just $ foldr1 TypeFun $ args ++ [ret]) <$> (w (stringP 
 typeTupleP :: Parser Type
 typeTupleP = TypeTuple <$> (c '(' *> typeP <* c ',') <*> typeP <* c ')'  
 
-typeArrayP :: Parser Type
-typeArrayP = TypeArray <$> (c '[' *> typeP <* c ']')
+typeListP :: Parser Type
+typeListP = TypeList <$> (c '[' *> typeP <* c ']')
 
 typeP :: Parser Type
-typeP = typeTupleP <|> typeArrayP <|> TypeBasic <$> basicTypeP <|> TypeID Nothing <$> idP
+typeP = typeTupleP <|> typeListP <|> TypeBasic <$> basicTypeP <|> TypeID Nothing <$> idP
 
 -- Several functions to easily apply the parser to certain programs
 

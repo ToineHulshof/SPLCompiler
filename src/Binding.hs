@@ -48,7 +48,7 @@ ctExp _ _ = []
 stdlib :: TypeEnv
 stdlib = TypeEnv $ M.fromList [
     ((Fun, "print"), Scheme ["t"] $ TypeFun (TypeID Nothing "t") Void),
-    ((Fun, "isEmpty"), Scheme ["t"] $ TypeFun (TypeArray $ TypeID Nothing "t") (TypeBasic BoolType))
+    ((Fun, "isEmpty"), Scheme ["t"] $ TypeFun (TypeList $ TypeID Nothing "t") (TypeBasic BoolType))
     ]
 
 btSPL :: TypeEnv -> SPL -> TI TypeEnv
