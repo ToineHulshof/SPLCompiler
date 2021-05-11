@@ -293,7 +293,7 @@ convertStringToList "" = "[]"
 convertStringToList (x:xs) = "'" ++ [x] ++ "' : " ++ convertStringToList xs
 
 rewriteLists :: String -> String
-rewriteLists s = let (a, b) = span (/= '[') s in if null b then a else let (c, d) = span (/= ']') $ tail b in a ++ convertListToString c ++ rewriteStrings (tail d)
+rewriteLists s = let (a, b) = span (/= '[') s in if null b then a else let (c, d) = span (/= ']') $ tail b in a ++ (if null c then "[]" else convertListToString c) ++ rewriteStrings (tail d)
 
 convertListToString :: String -> String
 convertListToString s = let (a, b) = span (/= ',') s in if null b then a ++ " : []" else a ++ " :" ++ convertListToString (tail b)

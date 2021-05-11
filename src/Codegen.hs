@@ -271,6 +271,7 @@ printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Tr
 genPrint :: Type -> CG [Instruction]
 genPrint (TypeBasic IntType) = return [Trap Int]
 genPrint (TypeBasic CharType) = return $ printString "'" ++ [Trap Char] ++ printString "'"
+genPrint (TypeID _ _) = return []
 genPrint t = do
     let name = "print" ++ typeName t
     labels <- gets labels
@@ -307,10 +308,11 @@ typeName (TypeBasic BoolType) = "Bool"
 typeName (TypeBasic CharType) = "Char"
 typeName (TypeTuple t1 t2) = "Tuple" ++ typeName t1 ++ typeName t2
 typeName (TypeList t) = "List" ++ typeName t
-typeName _ = undefined
+typeName _ = "Int"
 
 genEq :: Type -> CG [Instruction]
-genEq (TypeBasic _) = return [EqualsI]
+genEq (TypeBasic _) = return []
+genEq (TypeID _ _) = return [EqualsI]
 genEq t = do
     let name = "equal" ++ typeName t
     labels <- gets labels

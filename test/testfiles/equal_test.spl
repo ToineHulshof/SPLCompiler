@@ -7,7 +7,11 @@ K(a, b) {
 }
 
 main() {
-    if((4, True) == (4, True)) {
-        print([2, 3, 4]);
-    }
+    print([] == []);
+    // print([]);
+    // if((4, True) == (4, True)) {
+    //     print([]);
+    //     print([]);
+    //     // print(["hoi", "doei"]);
+    // }
 }
