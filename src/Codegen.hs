@@ -288,6 +288,11 @@ genPrint' name (TypeTuple t1 t2) = do
     let f = [Label name, Link 0, LoadLocal (-2)] ++ (printString "(" ++ [LoadStack 0, LoadHeap (-1)] ++ i1 ++ printString ", " ++ [LoadHeap 0] ++ i2 ++ printString ")") ++ [Unlink, StoreStack (-1), Return]
     addFunction f
     addLabel name
+genPrint' name (TypeList (TypeBasic CharType)) = do
+    i <- show <$> new
+    let f = [Label name, Link 0] ++ printString "\"" ++ [Label $ "While" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile" ++ i, LoadLocal (-2), LoadHeap 0, Trap Char, LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then" ++ i, BranchAlways $ "EndIf" ++ i, Label $ "Then" ++ i] ++ [Label $ "EndIf" ++ i, BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i] ++ printString "\"" ++ [Unlink, StoreStack (-1), Return]
+    addFunction f
+    addLabel name
 genPrint' name (TypeList t) = do
     i1 <- genPrint t
     i <- show <$> new
@@ -322,9 +327,7 @@ genEq' name (TypeTuple t1 t2) = do
 genEq' name (TypeList t) = do
     i1 <- genEq t
     i <- show <$> new
-    let f = [Label name, Link 2, LoadLocal (-3), LoadConstant 0, EqualsI, StoreLocal 1, LoadLocal (-2), LoadConstant 0, EqualsI, StoreLocal 2, LoadLocal 1, LoadLocal 2, OrI, BranchTrue ("Then" ++ i), BranchAlways ("EndIf" ++ i), 
-            Label ("Then" ++ i), LoadLocal 1, LoadLocal 2, AndI, StoreRegister ReturnRegister, BranchAlways $ name ++ "End", Label $ "EndIf" ++ i, LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-3), 
-            LoadHeap (-1), LoadLocal (-2), LoadHeap (-1), BranchSubroutine name, AdjustStack (-1), LoadRegister ReturnRegister, AndI, StoreRegister ReturnRegister, Label $ name ++ "End", Unlink, StoreStack (-1), Return]
+    let f = [Label name, Link 2, LoadLocal (-3), LoadConstant 0, EqualsI, StoreLocal 1, LoadLocal (-2), LoadConstant 0, EqualsI, StoreLocal 2, LoadLocal 1, LoadLocal 2, OrI, BranchTrue ("Then" ++ i), BranchAlways ("EndIf" ++ i), Label ("Then" ++ i), LoadLocal 1, LoadLocal 2, AndI, StoreRegister ReturnRegister, BranchAlways $ name ++ "End", Label $ "EndIf" ++ i, LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1), BranchSubroutine name, AdjustStack (-1), LoadRegister ReturnRegister, AndI, StoreRegister ReturnRegister, Label $ name ++ "End", Unlink, StoreStack (-1), Return]
     addFunction f
     addLabel name
 
