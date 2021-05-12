@@ -1,17 +1,4 @@
-id(x) {
-    return x;
-}
-
-K(a, b) {
-    return a;
-}
-
 main() {
-    print([] == []);
-    // print([]);
-    // if((4, True) == (4, True)) {
-    //     print([]);
-    //     print([]);
-    //     // print(["hoi", "doei"]);
-    // }
+    //[]
+    print(["hoi", "doei"]);
 }

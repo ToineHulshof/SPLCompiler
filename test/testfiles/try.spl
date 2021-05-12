@@ -1,0 +1,15 @@
+var x = 1;
+var y = 2;
+
+main() {
+    var cond = True;
+    while(cond) {
+        x = x + 1;
+        cond = False;
+    }
+    if(!cond) {
+        var z = x - y;
+    } else {
+        var z = x + y;
+    }
+}
