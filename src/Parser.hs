@@ -281,7 +281,7 @@ parseFile = parseFileP splP result
 
 -- A helper function to test if a parser behaves correctly on a given input.
 testP :: Parser a -> String -> Either [Error] (Code, a)
-testP p s = trace (show $ syntacticSugar s) comments False 0 (code $ syntacticSugar s) >>= parse p
+testP p s = comments False 0 (code $ syntacticSugar s) >>= parse p
 
 syntacticSugar :: String -> String
 syntacticSugar = rewriteStrings . rewriteLists

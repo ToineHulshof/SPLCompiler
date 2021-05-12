@@ -3,5 +3,6 @@ src/.out
 src/Main
 src/HELP.md
 test/testfiles/*.ssm
+test/testfiles/*.ll
 *.rs
 *~

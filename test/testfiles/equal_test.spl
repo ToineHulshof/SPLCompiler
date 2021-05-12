@@ -1,4 +1,18 @@
+f ( list ) {
+    var accu = [];
+    while ( ! isEmpty ( list ) ) {
+        accu = list.hd : accu ;
+        list = list.tl;
+    }
+    return accu ;
+}
+
+K(a, b){
+    print(3);
+    return a;
+}
+
 main() {
-    //[]
-    print(["hoi", "doei"]);
+    print('h':'o':'i':[]);
+    print(f(K([1, 2, 3], 'h':[])));
 }

@@ -111,14 +111,14 @@ ti' spl e = do
     if any varCycle comps then throwError "Cycle found in global variables" else
         tiComps (stdlib `combine` e `combine` bt) comps
 
-tiResult :: Maybe FilePath -> SPL -> TypeEnv -> IO ()
-tiResult f spl e = do
+tiResult :: Bool -> Maybe FilePath -> SPL -> TypeEnv -> IO ()
+tiResult llvm f spl e = do
     (bt, _) <- runTI $ ti' spl e
     case bt of
         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
         Right (env, spl') -> case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
-            Just filePath -> if containsMain spl' then genCode filePath spl' else putStrLn "\x1b[31mNo main function\x1b[0m"
+            Just filePath -> if containsMain spl' then genCode llvm filePath spl' else putStrLn "\x1b[31mNo main function\x1b[0m"
 
 containsMain :: SPL -> Bool
 containsMain = any isMain
@@ -127,13 +127,13 @@ containsMain = any isMain
         isMain (DeclFunDecl (FunDecl "main" _ _ _ _)) = True
         isMain _ = False
 
-testEnv :: Maybe FilePath -> TypeEnv -> String -> IO ()
-testEnv f env s = case testP splP s of
+testEnv :: Bool -> Maybe FilePath -> TypeEnv -> String -> IO ()
+testEnv llvm f env s = case testP splP s of
     Left e -> putStrLn $ "\x1b[31mParseError:\x1b[0m" ++ show e ++ "\n"
-    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0m Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult f s env
+    Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0m Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult llvm f s env
 
 check :: String -> IO ()
-check = testEnv Nothing emptyEnv
+check = testEnv False Nothing emptyEnv
 
-compile :: FilePath -> String -> IO ()
-compile f = testEnv (Just f) emptyEnv
+compile :: Bool -> FilePath -> String -> IO ()
+compile llvm f = testEnv llvm (Just f) emptyEnv
