@@ -2,37 +2,39 @@
 
 module Grammar where
 
+import Errors
 import Control.Applicative (Alternative (empty, (<|>)))
 
--- Code is the list of chars in a program including its position, where the integers are the line and column respectively
-type Code = [(Char, Int, Int)]
-
--- Error is a datatype to store an error message as a String with its position, where the integers are the line and column respectively
-data Error
-  = Error String Int Int
-
-instance Show Error where
-  show (Error e l c) = "\x1b[31mError\x1b[0m " ++ e ++ " " ++ show l ++ ":" ++ show c
-
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
-newtype Parser a = Parser { parse :: Code -> Either [Error] (Code, a) }
+newtype Parser a = Parser { parse :: Code -> ([Error], Maybe (Code, a)) }
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
-  fmap f (Parser p) = Parser $ fmap (fmap f) . p
+  fmap f (Parser p) = Parser $ fmap (fmap (fmap f)) . p
 
 -- Proof that our Parser is an Applicative
 instance Applicative Parser where
-  pure x = Parser $ \code -> Right (code, x)
-  (Parser p1) <*> (Parser p2) = Parser $ \code -> do
-    (code', f) <- p1 code
-    (code'', a) <- p2 code'
-    Right (code'', f a)
+  pure x = Parser $ \code -> ([], Just (code, x))
+  (Parser p1) <*> (Parser p2) = Parser help
+    where
+      help c = case r1 of
+        Nothing -> (e1, Nothing)
+        Just (c', f) -> case r2 of
+          Nothing -> (e1 ++ e2, Nothing)
+          Just (c'', x) -> (e1 ++ e2, Just (c'', f x))
+          where
+            (e2, r2) = p2 c'
+        where
+          (e1, r1) = p1 c
+
 
 -- Proof that our Parser is an Alternative
 instance Alternative Parser where
-  empty = Parser . const $ Left [Error "" 0 0] --("Failed", 0, 0)
-  (Parser p1) <|> (Parser p2) = Parser $ \code -> p1 code <> p2 code
+  empty = Parser . const $ ([], Nothing)
+  (Parser p1) <|> (Parser p2) = Parser $ \code -> case p1 code of
+    (_, Nothing) -> p2 code
+    res -> res
+
 
 -- Our defined types in the Grammar (pretty similar to the given grammar; implementation details are mentioned in the code or in the report)
 -- Our naming convention for the constructors: if there is only one, simply use the same name;
@@ -43,6 +45,7 @@ type SPL = [Decl]
 data Decl
   = DeclVarDecl VarDecl
   | DeclFunDecl FunDecl
+  | DeclError (Positioned String)
   deriving (Show)
 
 data VarDecl
@@ -113,6 +116,7 @@ data Exp
   | ExpBool Bool
   | ExpFunCall FunCall
   | ExpEmptyList
+  | ExpError (Positioned String)
   deriving (Show)
 
 data Op2
@@ -130,6 +134,7 @@ data Op2
   | And
   | Or
   | Cons
+  | Op2Error (Positioned String)
   deriving (Eq, Show)
 
 data Op1

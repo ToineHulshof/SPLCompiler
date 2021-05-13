@@ -2,7 +2,10 @@ module Errors where
 
 import Data.Array
 
-type Positioned a = (a, (Int, Int))
+type Positioned a = ((Int, Int), a)
+
+z :: a -> Positioned a
+z a = ((0, 0), a)
 
 -- Code is the list of chars in a program including its position, where the integers are the line and column respectively
 type Code = [Positioned Char]
@@ -26,7 +29,7 @@ join s (x : xs) = x ++ s ++ join s xs
 
 instance Show Errors where
   show (Errors file lines errors) = join "\n\n" $ map showError errors where
-    showError (Error k e (c, (li, co))) =
+    showError (Error k e ((li, co), c)) =
       "\x1b[1m" ++ file ++ ":" ++ show li ++ ":" ++ show co ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ e ++ "\n" ++
       replicate leftLength ' ' ++ "\x1b[34m|\n" ++ show li ++ " |\x1b[0m " ++
       let (l, r) = splitAt (co - 1) (lines ! li) in (l ++ "\x1b[31m\x1b[1m" ++ c ++ "\x1b[0m" ++ drop (length c) r) ++ "\n" ++

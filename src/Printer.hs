@@ -3,15 +3,16 @@
 module Printer where
 
 import Grammar
+import Errors
 import Parser (code, expP, parseFileP, splP, testP, funDeclP)
 import Text.Printf (printf)
 
 type Depth = Int
 
 -- A function that either prints the Error or pretty prints the parsed code
-result' :: Either [Error] (Code, SPL) -> String
-result' (Left es) = join "\n" $ map show es
-result' (Right (_, a)) = ppSPL a
+result' :: ([Error], Maybe (Code, SPL)) -> String
+result' ([], Just (_, a)) = ppSPL a
+result' (e, _) = show e
 
 -- Pretty prints the program in the provided filepath
 pp :: FilePath -> IO ()
@@ -20,12 +21,6 @@ pp = parseFileP splP result'
 -- Pretty prints n tabs
 tab :: Int -> String
 tab n = replicate n '\t'
-
--- Joins a list of strings with a given seperator
-join :: String -> [String] -> String
-join _ [] = []
-join _ [x] = x
-join s (x : xs) = x ++ s ++ join s xs
 
 -- All the pretty print functions for the implemented grammer
 -- These are all pretty self-explanatory
