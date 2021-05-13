@@ -25,6 +25,13 @@ packages:
       sha256: c79246ba7d61392c2f214376fed3c2a05e4b2649b93ec2c849a86493f278ace0
   original:
     hackage: transformers-0.5.6.2
+- completed:
+    hackage: array-0.5.4.0@sha256:2b2425e01d592c0e66594c008405ea4c6f6e4d929daeddabbd81be9bb49ebffa,1588
+    pantry-tree:
+      size: 1135
+      sha256: e17dfafde2f226674cffd56b1f445c332b6e5855860f79dedd9de0b6916e7ff0
+  original:
+    hackage: array-0.5.4.0
 snapshots:
 - completed:
     size: 565712

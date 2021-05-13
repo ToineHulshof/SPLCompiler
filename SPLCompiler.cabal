@@ -27,6 +27,7 @@ library
   exposed-modules:
       Binding
       Codegen
+      Errors
       Grammar
       Main
       Parser
@@ -37,7 +38,8 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      array
+    , base >=4.7 && <5
     , containers
     , mtl
     , transformers
@@ -52,6 +54,7 @@ executable SPLCompiler-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       SPLCompiler
+    , array
     , base >=4.7 && <5
     , containers
     , mtl
@@ -68,6 +71,7 @@ test-suite SPLCompiler-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       SPLCompiler
+    , array
     , base >=4.7 && <5
     , containers
     , mtl

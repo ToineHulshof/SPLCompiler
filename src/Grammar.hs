@@ -19,7 +19,7 @@ newtype Parser a = Parser { parse :: Code -> Either [Error] (Code, a) }
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
-  fmap f (Parser p) = Parser $ fmap (f <$>) . p
+  fmap f (Parser p) = Parser $ fmap (fmap f) . p
 
 -- Proof that our Parser is an Applicative
 instance Applicative Parser where
