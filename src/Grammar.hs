@@ -6,22 +6,22 @@ import Errors
 import Control.Applicative (Alternative (empty, (<|>)))
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
-newtype Parser a = Parser { parse :: Code -> ([Error], Maybe (Code, (P, a))) }
+newtype Parser a = Parser { parse :: Code -> ([Error], Maybe (Code, a)) }
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
-  fmap f (Parser p) = Parser $ fmap (fmap (fmap (fmap f))) . p
+  fmap f (Parser p) = Parser $ fmap (fmap (fmap f)) . p
 
 -- Proof that our Parser is an Applicative
 instance Applicative Parser where
-  pure x = Parser $ \code -> ([], Just (code, (((1, 1), ""), x)))
+  pure x = Parser $ \code -> ([], Just (code, x))
   (Parser p1) <*> (Parser p2) = Parser help
     where
       help c = case r1 of
         Nothing -> (e1, Nothing)
-        Just (c', ((p, s1), f)) -> case r2 of
+        Just (c', f) -> case r2 of
           Nothing -> (e1 ++ e2, Nothing)
-          Just (c'', ((_, s2), x)) -> (e1 ++ e2, Just (c'', ((p, s1 ++ s2), f x)))
+          Just (c'', x) -> (e1 ++ e2, Just (c'', f x))
           where
             (e2, r2) = p2 c'
         where

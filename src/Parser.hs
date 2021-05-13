@@ -39,19 +39,22 @@ stringP = traverse charP
 -- If the Char is fulfilling the requirement, return a (Code, Char)
 -- If the Char doesnt fulfill the requirement, return an Error with the Char and its position
 -- If none of the above is the case, return an Error with "Unexpected EOF"
-satisfy :: (Char -> Bool) -> Bool -> Parser Char
-satisfy p consume = Parser $ \case
-  (p', y) : xs
-    | p y -> ([], Just (if consume then xs else (p', y) : xs, ((p', [y]), y)))
-    | otherwise -> ([Error ParseError [y] (p', [y])], Nothing)
+satisfy' :: (Char -> Bool) -> Bool -> Parser (Positioned Char)
+satisfy' p consume = Parser $ \case
+  ((l, c), y) : xs
+    | p y -> ([], Just (if consume then xs else ((l, c), y) : xs, ((l, c), y)))
+    | otherwise -> ([Error ParseError [y] ((l, c), [y])], Nothing)
   [] -> ([Error ParseError "Unexpected EOF" ((1, 1), "")], Nothing)
+
+satisfy :: (Char -> Bool) -> Bool -> Parser Char
+satisfy p consume = snd <$> satisfy' p consume
 
 -- Creates a Parser that parses all the consecutive Chars that satisfy the given requirement
 spanP :: (Char -> Bool) -> Parser String
 spanP p = map snd <$> spanP' p
 
 spanP' :: (Char -> Bool) -> Parser Code
-spanP' p = Parser $ \code -> let (token, rest) = span (p . snd) code in ([], Just (rest, ((fromMaybe (1, 1) (listToMaybe $ map fst code), map snd token), token)))
+spanP' p = Parser $ \code -> let (token, rest) = span (p . snd) code in ([], Just (rest, token))
 
 -- Extends the given Parser with the functionality to return an Error when zero characters are parsed
 notNull :: Parser [a] -> Parser [a]
@@ -92,9 +95,9 @@ funDeclP = FunDecl <$> idP <*> (c '(' *> sepBy (charP ',') idP <* c ')') <*> fun
 optP :: Char -> Parser Char
 optP ch = Parser $ \case
   ((p, x):xs)
-    | x == ch -> ([], Just (xs, ((p, [ch]), ch)))
-    | otherwise -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (p, " ")], Just ((p, x):xs, ((p, [ch]), ch)))
-  [] -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") ((1, 1), " ")], Just ([], (((1, 1), ""), ch)))
+    | x == ch -> ([], Just (xs, ch))
+    | otherwise -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (p, " ")], Just ((p, x):xs, ch))
+  [] -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") ((1, 1), " ")], Just ([], ch))
 
 varDeclP :: Parser VarDecl
 varDeclP = (varDeclVarP <|> varDeclTypeP) <* optP ';'
@@ -156,8 +159,8 @@ op2P =  Plus <$ charP '+'
 f :: (Char -> Bool) -> Parser P
 f p = (\c -> (fromMaybe (1, 1) (listToMaybe (map fst c)), map snd c)) <$> notNull (spanP' p)
 
-errorP :: (Char -> Bool) -> Bool -> Parser String
-errorP p consume = (\s ((l, c), _) -> ((l, c - length s), s)) <$> notNull (spanP (not . p)) <*> satisfy p consume
+errorP :: (Char -> Bool) -> Bool -> Parser P
+errorP p consume = (\s ((l, c), _) -> ((l, c - length s), s)) <$> notNull (spanP (not . p)) <*> satisfy' p consume
 
 expP :: Parser Exp
 expP = expOp2P <|> expNOp2P
