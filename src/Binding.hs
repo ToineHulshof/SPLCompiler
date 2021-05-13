@@ -9,18 +9,15 @@ import Codegen ( genCode )
 import Types
 import Errors
 import Data.Maybe ( fromMaybe, fromJust, maybeToList )
-import Control.Monad (foldM, forM)
+import Control.Monad ( foldM, forM )
 import qualified Data.Map as M
 import Debug.Trace ( trace )
 import Data.Graph ( stronglyConnCompR, SCC(..) )
 import Data.Tuple ( swap )
-import Data.Array
-
-fst3 :: (a, b, c) -> a
-fst3 (a, b, c) = a
+import Data.Array ( listArray )
 
 components :: SPL -> [SCC Decl]
-components ds = map (fst3 <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
+components ds = map ((\(a, _, _) -> a) <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
 
 ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
 ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)

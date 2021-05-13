@@ -5,9 +5,6 @@ import Data.Array
 type Positioned a = ((Int, Int), a)
 type P = Positioned String
 
-z :: a -> Positioned a
-z a = ((0, 0), a)
-
 -- Code is the list of chars in a program including its position, where the integers are the line and column respectively
 type Code = [Positioned Char]
 
