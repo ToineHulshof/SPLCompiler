@@ -101,6 +101,7 @@ data Stmt
   | StmtField String [Field] Exp
   | StmtFunCall FunCall
   | StmtReturn (Maybe Exp)
+  | StmtError (Positioned String)
   deriving (Show)
 
 -- Here we used the provided hints to ensure precendence

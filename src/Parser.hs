@@ -6,10 +6,11 @@ module Parser where
 
 import Grammar
 import Errors
-import Control.Applicative ( Alternative((<|>), some, many), optional )
+import Control.Applicative
 import Data.Char (isAlpha, isAlphaNum, isDigit, isSpace)
 import Data.Maybe (isNothing, listToMaybe, fromMaybe)
 import Data.List (isPrefixOf)
+import Data.Bifunctor ( Bifunctor(first) )
 import Debug.Trace ( trace )
 
 -- Several definitions of helper functions which are used in the "real" parsers
@@ -89,7 +90,7 @@ declFunDeclP :: Parser Decl
 declFunDeclP = DeclFunDecl <$> funDeclP
 
 funDeclP :: Parser FunDecl
-funDeclP = FunDecl <$> idP <*> (c '(' *> sepBy (charP ',') idP <* c ')') <*> funTypeP <*> (c '{' *> many varDeclP) <*> (some stmtP <* c '}')
+funDeclP = FunDecl <$> idP <*> (c '(' *> sepBy (charP ',') idP <* c ')') <*> funTypeP <*> (c '{' *> many varDeclP) <*> (some (w stmtP) <* c '}')
 
 optP :: Char -> Parser Char
 optP ch = Parser $ \case
@@ -153,13 +154,13 @@ op2P =  Plus <$ charP '+'
     <|> Or <$ stringP "||"
     <|> Cons <$ charP ':'
     -- <|> Op2Error <$> f (\c -> not (isAlpha c) && not (isSpace c) && c /= ';')
-    <|> Op2Error <$> errorP (\c -> isAlpha c && not (isSpace c) && c `elem` "()[].") True
+    <|> Op2Error <$> errorP (\c -> isAlpha c && not (isSpace c) && c `elem` "()[].,{}") True
 
 f :: (Char -> Bool) -> Parser (Positioned String)
 f p = (\c -> (fromMaybe (1, 1) (listToMaybe (map fst c)), map snd c)) <$> notNull (spanP' p)
 
 errorP :: (Char -> Bool) -> Bool -> Parser (Positioned String)
-errorP p consume = (\s ((l, c), _) -> ((l, c - length s), s)) <$> spanP (not . p) <*> satisfy' p consume
+errorP p consume = (\s ((l, c), _) -> ((l, c - length s), s)) <$> notNull (spanP (not . p)) <*> satisfy' p consume
 
 expP :: Parser Exp
 expP = expOp2P <|> expNOp2P
@@ -238,10 +239,10 @@ stmtFunCallP :: Parser Stmt
 stmtFunCallP = StmtFunCall <$> funCallP <* c ';'
 
 stmtReturnP :: Parser Stmt
-stmtReturnP = StmtReturn . pure <$> (stringP "return" *> ws *> expP <* c ';') <|> StmtReturn Nothing <$ stringP "return" <* c ';'
+stmtReturnP = StmtReturn Nothing <$ stringP "return" <* c ';' <|> StmtReturn . pure <$> (stringP "return" *> ws *> expP <* c ';')
 
 stmtP :: Parser Stmt
-stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP
+stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP <|> StmtError <$> errorP (`elem` "\n}") False
 
 basicTypeP :: Parser BasicType
 basicTypeP = IntType <$ stringP "Int" <|> BoolType <$ stringP "Bool" <|> CharType <$ stringP "Char"
@@ -302,6 +303,9 @@ parseFile = parseFileP splP result
 testP :: Parser a -> String -> ([Error], Maybe (Code, a))
 testP p s = comments False 0 (code $ syntacticSugar s) >>= parse p
 
+t :: Parser a -> String -> ([Error], Maybe (String, a))
+t p s = fmap (first (map snd)) <$> testP p s
+
 syntacticSugar :: String -> String
 syntacticSugar = rewriteStrings . rewriteLists
 
@@ -351,6 +355,7 @@ erStmts :: [Stmt] -> [Error]
 erStmts = concatMap erStmt
 
 erStmt :: Stmt -> [Error]
+erStmt (StmtError s) = [Error ParseError "Unknown statement" s]
 erStmt _ = []
 
 -- A function that transforms a string to a list of tuples with (character, line, column)
