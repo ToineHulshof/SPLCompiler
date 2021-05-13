@@ -60,8 +60,7 @@ btSPL :: TypeEnv -> SPL -> TI TypeEnv
 btSPL env [] = return env
 btSPL env (d:ds) = do
     env1 <- btDecl env d
-    env2 <- btSPL env1 ds
-    return (env1 `combine` env2)
+    btSPL (env `combine` env1) ds
 
 btDecl :: TypeEnv -> Decl -> TI TypeEnv
 btDecl _ (DeclVarDecl v) = btVarDecl v
@@ -72,13 +71,19 @@ btVarDecl (VarDecl Nothing s _) = TypeEnv . M.singleton (Var, s) . Scheme [] <$>
 btVarDecl (VarDecl (Just t) s _) = return $ TypeEnv $ M.singleton (Var, s) (Scheme [] t)
 
 btFunDecl :: TypeEnv -> FunDecl -> TI TypeEnv
-btFunDecl env (FunDecl s args Nothing _ _) = do
-    nvars <- mapM (newTyVar Nothing) args
-    ret <- newTyVar Nothing "r"
-    let t = foldr1 TypeFun $ nvars ++ [ret]
-    return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _) = return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-
+btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _) = do
+    case M.lookup (Fun, s) env of
+        Nothing -> do
+            nvars <- mapM (newTyVar Nothing) args
+            ret <- newTyVar Nothing "r"
+            let t = foldr1 TypeFun $ nvars ++ [ret]
+            return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
+        Just _ -> throwError $ "Function " ++ s ++ " is already defined."
+btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _) = do
+    case M.lookup (Fun, s) env of
+        Nothing -> return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
+        Just _ -> throwError $ "Function " ++ s ++ " is already defined."
+    
 hasEffect :: (String, Type) -> Bool
 hasEffect (s, TypeID _ n) = n /= s
 hasEffect _ = True

@@ -1,35 +1,24 @@
-// fib(n) {
-//     if (n <= 1) {
-//         return n;
-//     } else {
-//         return fib(n - 1) + fib(n - 2);
-//     }
-// }
+fib(n) {
+    if (n <= 1) {
+        return n;
+    } else {
+        return fib(n - 1) + fib(n - 2);
+    }
+}
 
-// fib(n) {
-//     return n;
-// }
+fib(n) {
+    return n;
+}
 
-// fac(n) {
-//     if (n <= 1) {
-//         return 1;
-//     } else {
-//         return n * fac(n - 1);
-//     }
-// }
+fac(n) {
+    if (n <= 1) {
+        return 1;
+    } else {
+        return n * fac(n - 1);
+    }
+}
 
-// boe
-
-// main () {
-//     // var x = fac(3);
-//     print(fib(3));
-// }
-
-boe
-
-main() {
-    hai
-    var x = 3;
-    hoi
-    return x;
+main () {
+    // var x = fac(3);
+    print(fib(3));
 }

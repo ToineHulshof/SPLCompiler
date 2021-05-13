@@ -283,7 +283,7 @@ tiFunDecl env (FunDecl n args (Just t) vars stmts)
         l2 = length args
 tiFunDecl env@(TypeEnv envt) (FunDecl n args Nothing vars stmts) = case M.lookup (Fun, n) envt of
     Nothing -> throwError $ "function " ++ n ++ " was not found in the environment, while it should be present."
-    Just s -> do
+    Just _ -> do
         tvs <- mapM (newTyVar Nothing) args
         let env1 = remove env Fun n
         let TypeEnv env2 = removeAll env Var args
