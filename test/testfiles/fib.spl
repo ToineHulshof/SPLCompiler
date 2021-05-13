@@ -28,6 +28,8 @@
 boe
 
 main() {
+    hai
+    var x = 3
     hoi
     return;
 }

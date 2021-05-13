@@ -166,7 +166,7 @@ expP :: Parser Exp
 expP = expOp2P <|> expNOp2P
 
 expNOp2P :: Parser Exp 
-expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField Nothing <$> idP <*> fieldP <|> expCharP <|> ExpEmptyList <$ w (stringP "[]") <|> (ExpError <$> errorP (\c -> c == ';' || c == '\n') False)
+expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField Nothing <$> idP <*> fieldP <|> expCharP <|> ExpEmptyList <$ w (stringP "[]") <|> (ExpError <$> errorP (`elem` "\n;") False)
 
 expOp2P :: Parser Exp 
 expOp2P = Parser $ expBP 0
