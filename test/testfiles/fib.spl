@@ -6,6 +6,10 @@ fib(n) {
     }
 }
 
+// fib(n) {
+//     return n;
+// }
+
 // fac(n) {
 //     if (n <= 1) {
 //         return 1;
@@ -16,5 +20,5 @@ fib(n) {
 
 main () {
     // var x = fac(3);
-    print(fib(17));
+    print(fib(10));
 }

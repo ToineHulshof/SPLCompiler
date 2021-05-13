@@ -142,11 +142,6 @@ testEnv llvm f env s
         (e, r) = p s
         l = lines s
 
--- testEnv :: Bool -> Maybe FilePath -> TypeEnv -> String -> IO ()
--- testEnv llvm f env s = case testP splP s of
---     Left e -> putStrLn $ "\x1b[31mParseError:\x1b[0m" ++ show e ++ "\n"
---     Right (c, s) -> if not $ null c then putStrLn ("\x1b[31mParseError:\x1b[0m Did not finish parsing \"\x1b[3m" ++ map fst3 c ++ "\x1b[0m\"\n") else tiResult llvm f s env
-
 check :: String -> IO ()
 check = testEnv False Nothing emptyEnv
 

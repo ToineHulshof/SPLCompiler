@@ -152,8 +152,8 @@ op2P =  Plus <$ charP '+'
     <|> And <$ stringP "&&"
     <|> Or <$ stringP "||"
     <|> Cons <$ charP ':'
-    <|> Op2Error <$> f (\c -> not (isAlpha c) && not (isSpace c) && c /= ';')
-    -- <|> Op2Error <$> errorP (\c -> isAlpha c && not (isSpace c)) True
+    -- <|> Op2Error <$> f (\c -> not (isAlpha c) && not (isSpace c) && c /= ';')
+    <|> Op2Error <$> errorP (\c -> isAlpha c && not (isSpace c) && c `elem` "()[].") True
 
 f :: (Char -> Bool) -> Parser (Positioned String)
 f p = (\c -> (fromMaybe (1, 1) (listToMaybe (map fst c)), map snd c)) <$> notNull (spanP' p)
@@ -171,7 +171,7 @@ expOp2P :: Parser Exp
 expOp2P = Parser $ expBP 0
 
 expBP :: Int -> Code -> ([Error], Maybe (Code, Exp))
-expBP minBP c = case trace (show r1) r1 of
+expBP minBP c = case r1 of
   Nothing -> (e1, Nothing)
   Just (c', lhs) -> case r2 of
     Nothing -> (e2, Nothing)
