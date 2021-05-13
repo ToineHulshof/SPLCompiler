@@ -6,15 +6,15 @@ fib(n) {
     }
 }
 
-fac(n) {
-    if (n <= 1) {
-        return 1;
-    } else {
-        return n * fac(n - 1);
-    }
-}
+// fac(n) {
+//     if (n <= 1) {
+//         return 1;
+//     } else {
+//         return n * fac(n - 1);
+//     }
+// }
 
 main () {
-    var x = fac(3);
-    print(x);
+    // var x = fac(3);
+    print(fib(17));
 }
