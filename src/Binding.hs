@@ -4,7 +4,7 @@ module Binding where
 
 import Parser ( splP, testP, p )
 import Grammar
-import Control.Monad.Except ( MonadError(throwError) )
+import Control.Monad.Writer ( MonadWriter(tell) )
 import Codegen ( genCode )
 import Types
 import Errors
@@ -78,11 +78,11 @@ btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _) = do
             ret <- newTyVar Nothing "r"
             let t = foldr1 TypeFun $ nvars ++ [ret]
             return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-        Just _ -> throwError $ "Function " ++ s ++ " is already defined."
+        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") x] >> return (TypeEnv env)
 btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _) = do
     case M.lookup (Fun, s) env of
         Nothing -> return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-        Just _ -> throwError $ "Function " ++ s ++ " is already defined."
+        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") x] >> return (TypeEnv env)
     
 hasEffect :: (String, Type) -> Bool
 hasEffect (s, TypeID _ n) = n /= s
@@ -118,17 +118,27 @@ ti' :: SPL -> TypeEnv -> TI (TypeEnv, SPL)
 ti' spl e = do
     bt <- btSPL emptyEnv spl
     let comps = components spl
-    if any varCycle comps then throwError "Cycle found in global variables" else
+    if any varCycle comps then tell [Error TypeError "Cycle found in global variables" x] >> return (e, spl) else
         tiComps (stdlib `combine` e `combine` bt) comps
 
-tiResult :: Bool -> Maybe FilePath -> SPL -> TypeEnv -> IO ()
-tiResult llvm f spl e = do
-    (bt, _) <- runTI $ ti' spl e
-    case bt of
-        Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
-        Right (env, spl') -> case f of
+tiResult :: Bool -> String -> Maybe FilePath -> SPL -> TypeEnv -> IO ()
+tiResult llvm s f spl e = do
+    (((env, spl'), e), _) <- runTI $ ti' spl e
+    if null e
+        then case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
             Just filePath -> if containsMain spl' then genCode llvm filePath spl' else putStrLn "\x1b[31mNo main function\x1b[0m"
+        else print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) (removeDuplicates e))
+    where
+        l = lines s
+-- tiResult :: Bool -> Maybe FilePath -> SPL -> TypeEnv -> IO ()
+-- tiResult llvm f spl e = do
+--     (bt, _) <- runTI $ ti' spl e
+--     case bt of
+--         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
+--         Right (env, spl') -> case f of
+--             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+--             Just filePath -> if containsMain spl' then genCode llvm filePath spl' else putStrLn "\x1b[31mNo main function\x1b[0m"
 
 containsMain :: SPL -> Bool
 containsMain = any isMain
@@ -142,7 +152,7 @@ testEnv llvm f env s
     | not $ null e = print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) e)
     | otherwise = case r of
         Nothing -> print e
-        Just (_, spl) -> tiResult llvm f spl env
+        Just (_, spl) -> tiResult llvm s f spl env
     where
         (e, r) = p s
         l = lines s

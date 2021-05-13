@@ -156,10 +156,10 @@ op2P =  Plus <$ charP '+'
     -- <|> Op2Error <$> f (\c -> not (isAlpha c) && not (isSpace c) && c /= ';')
     <|> Op2Error <$> errorP (\c -> isAlpha c && not (isSpace c) && c `elem` "()[].,{}") True
 
-f :: (Char -> Bool) -> Parser (Positioned String)
+f :: (Char -> Bool) -> Parser P
 f p = (\c -> (fromMaybe (1, 1) (listToMaybe (map fst c)), map snd c)) <$> notNull (spanP' p)
 
-errorP :: (Char -> Bool) -> Bool -> Parser (Positioned String)
+errorP :: (Char -> Bool) -> Bool -> Parser P
 errorP p consume = (\s ((l, c), _) -> ((l, c - length s), s)) <$> notNull (spanP (not . p)) <*> satisfy' p consume
 
 expP :: Parser Exp

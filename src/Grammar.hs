@@ -45,7 +45,7 @@ type SPL = [Decl]
 data Decl
   = DeclVarDecl VarDecl
   | DeclFunDecl FunDecl
-  | DeclError (Positioned String)
+  | DeclError P
   deriving (Show)
 
 data VarDecl
@@ -101,7 +101,7 @@ data Stmt
   | StmtField String [Field] Exp
   | StmtFunCall FunCall
   | StmtReturn (Maybe Exp)
-  | StmtError (Positioned String)
+  | StmtError P
   deriving (Show)
 
 -- Here we used the provided hints to ensure precendence
@@ -117,7 +117,7 @@ data Exp
   | ExpBool Bool
   | ExpFunCall FunCall
   | ExpEmptyList
-  | ExpError (Positioned String)
+  | ExpError P
   deriving (Show)
 
 data Op2
@@ -135,7 +135,7 @@ data Op2
   | And
   | Or
   | Cons
-  | Op2Error (Positioned String)
+  | Op2Error P
   deriving (Eq, Show)
 
 data Op1

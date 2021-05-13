@@ -3,6 +3,7 @@ module Errors where
 import Data.Array
 
 type Positioned a = ((Int, Int), a)
+type P = Positioned String
 
 z :: a -> Positioned a
 z a = ((0, 0), a)
@@ -11,11 +12,11 @@ z a = ((0, 0), a)
 type Code = [Positioned Char]
 
 -- Error is a datatype to store an error message as a String with its position, where the integers are the line and column respectively
-data Error = Error ErrorKind String (Positioned String) deriving Show
+data Error = Error ErrorKind String P deriving (Eq, Show)
 
 data Errors = Errors FilePath (Array Int String) [Error]
 
-data ErrorKind = ParseError | TypeError
+data ErrorKind = ParseError | TypeError deriving Eq
 
 instance Show ErrorKind where
   show ParseError = "Parse error: "
