@@ -355,22 +355,6 @@ testP p s = comments False 0 (code s) >>= parse p
 t :: Parser a -> String -> ([Error], Maybe (String, a))
 t p s = fmap (first (map snd)) <$> testP p s
 
-syntacticSugar :: String -> String
-syntacticSugar = rewriteStrings . rewriteLists
-
-rewriteStrings :: String -> String
-rewriteStrings s = let (a, b) = span (/= '"') s in if null b then a else let (c, d) = span (/= '"') $ tail b in a ++ '(' : convertStringToList c ++ ')' : rewriteStrings (tail d)
-
-convertStringToList :: String -> String
-convertStringToList "" = "[]"
-convertStringToList (x:xs) = "'" ++ [x] ++ "' : " ++ convertStringToList xs
-
-rewriteLists :: String -> String
-rewriteLists s = let (a, b) = span (/= '[') s in if null b then a else let (c, d) = span (/= ']') $ tail b in a ++ (if null c then "[]" else '(' : convertListToString c ++ ")") ++ rewriteLists (tail d)
-
-convertListToString :: String -> String
-convertListToString s = let (a, b) = span (/= ',') s in if null b then a ++ " : []" else a ++ " :" ++ convertListToString (tail b)
-
 p :: String -> ([Error], Maybe (Code, SPL))
 p s = case r of
     Nothing -> (e, Nothing)
