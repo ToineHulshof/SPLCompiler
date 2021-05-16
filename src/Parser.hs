@@ -35,6 +35,19 @@ charP x = satisfy (==x) True
 stringP :: String -> Parser String
 stringP = traverse charP
 
+-- This function takes 2 strings and determines which part of the first string need to be cut of
+-- To make it equal to the second string.
+stringDev :: String -> String -> String 
+stringDev s1 s2 = take (length s1 - length s2) s1
+
+pp :: Parser (P -> a) -> Parser a
+pp p = (\(p1, s1) f (p2, s2) -> f (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
+
+pP :: Parser P
+pP = Parser $ \case
+  c@((p, _) : _) -> ([], Just (c, (p, map snd c)))
+  [] -> ([Error ParseError "Unexpected EOF" ((1, 1), "")], Nothing)
+
 -- Creates a Parser that parses a Char with a specific requirement
 -- If the Char is fulfilling the requirement, return a (Code, Char)
 -- If the Char doesnt fulfill the requirement, return an Error with the Char and its position
@@ -166,7 +179,7 @@ expP :: Parser Exp
 expP = expOp2P <|> expNOp2P
 
 expNOp2P :: Parser Exp 
-expNOp2P = ExpInt <$> intP <|> expBoolP <|> ExpOp1 <$> op1P <*> expP <|> ExpFunCall <$> funCallP <|> ExpField Nothing <$> idP <*> fieldP <|> expCharP <|> ExpEmptyList <$ w (stringP "[]") <|> (ExpError <$> errorP (`elem` "\n;") False)
+expNOp2P = pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP <|> pp (ExpEmptyList <$ w (stringP "[]")) <|> (ExpError <$> errorP (`elem` "\n;") False)
 
 expOp2P :: Parser Exp
 expOp2P = Parser $ expBP 0
@@ -191,7 +204,7 @@ lhsP l m e c = case r of
       Nothing -> (e3, Nothing)
       Just (c''', lhs) -> ([], Just (c''', lhs))
       where
-        (e3, r3) = lhsP lBP m (Exp Nothing o e rhs) c''
+        (e3, r3) = lhsP lBP m (Exp Nothing o e rhs ((1, 1), "")) c'' -- Not sure if I can put a random P here
     where
       (lBP, rBP) = bp o
       (e2, r2) = expBP rBP c'
@@ -209,16 +222,16 @@ bp o
   | o == Cons = (8, 7)
 
 expBoolP :: Parser Exp
-expBoolP = ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
+expBoolP = pp $ ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
 
 expCharP :: Parser Exp
-expCharP = ExpChar <$> (charP '\'' *> satisfy (const True) True <* charP '\'')
+expCharP = pp $ ExpChar <$> (charP '\'' *> satisfy (const True) True <* charP '\'')
 
 expTupleP :: Parser Exp
-expTupleP = curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
+expTupleP = pp $ curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
 
 expBracketsP :: Parser Exp
-expBracketsP = ExpBrackets <$> (c '(' *> expP <* c ')')
+expBracketsP = pp $ ExpBrackets <$> (c '(' *> expP <* c ')')
 
 stmtIfP :: Parser Stmt
 stmtIfP = (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (w (stringP "else") *> stmtsP) <|> (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP
@@ -340,10 +353,10 @@ erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts)) = concatMap (erDecl . DeclVarDecl)
 erDecl (DeclError s) = [Error ParseError "Unknown declaration" s]
 
 erExp :: Exp -> [Error]
-erExp (Exp _ _ o e1 e2) = erOp2 o ++ erExp e1 ++ erExp e2
-erExp (ExpOp1 _ _ e) = erExp e
-erExp (ExpTuple _ (e1, e2)) = erExp e1 ++ erExp e2
-erExp (ExpBrackets _ e) = erExp e
+erExp (Exp _ o e1 e2 _) = erOp2 o ++ erExp e1 ++ erExp e2
+erExp (ExpOp1 _ e _) = erExp e
+erExp (ExpTuple (e1, e2) _) = erExp e1 ++ erExp e2
+erExp (ExpBrackets e _) = erExp e
 erExp (ExpError s) = [Error ParseError "Incorrect expression" s]
 erExp _ = []
 

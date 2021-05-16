@@ -87,15 +87,15 @@ ppStmtElse _ Nothing = ""
 ppStmtElse d (Just s) = printf " else {\n%s%s}" (unlines $ map (ppStmt (d + 1)) s) (tab d)
 
 ppExp :: Exp -> String
-ppExp (Exp _ _ o e1 e2) = ppExp e1 ++ " " ++ ppOp2 o ++ " " ++ ppExp e2
-ppExp (ExpOp1 _ o e) = ppOp1 o ++ ppExp e
-ppExp (ExpTuple _ (e1, e2)) = printf "(%s, %s)" (ppExp e1) (ppExp e2)
-ppExp (ExpBrackets _ e) = printf "(%s)" (ppExp e)
-ppExp (ExpField _ _ s f) = s ++ concatMap ppField f
-ppExp (ExpInt _ i) = show i
-ppExp (ExpChar _ c) = printf "'%s'" [c]
-ppExp (ExpBool _ b) = if b then "True" else "False"
-ppExp (ExpFunCall _ f) = ppFunCall f
+ppExp (Exp _ o e1 e2 _) = ppExp e1 ++ " " ++ ppOp2 o ++ " " ++ ppExp e2
+ppExp (ExpOp1 o e _) = ppOp1 o ++ ppExp e
+ppExp (ExpTuple (e1, e2) _) = printf "(%s, %s)" (ppExp e1) (ppExp e2)
+ppExp (ExpBrackets e _) = printf "(%s)" (ppExp e)
+ppExp (ExpField _ s f _) = s ++ concatMap ppField f
+ppExp (ExpInt i _) = show i
+ppExp (ExpChar c _) = printf "'%s'" [c]
+ppExp (ExpBool b _) = if b then "True" else "False"
+ppExp (ExpFunCall f _) = ppFunCall f
 ppExp ExpEmptyList {} = "[]"
 
 ppOp1 :: Op1 -> String

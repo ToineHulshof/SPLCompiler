@@ -2,7 +2,8 @@ module Errors where
 
 import Data.Array
 
-type Positioned a = ((Int, Int), a)
+type Position = (Int, Int)
+type Positioned a = (Position, a)
 type P = Positioned String
 
 -- Code is the list of chars in a program including its position, where the integers are the line and column respectively
