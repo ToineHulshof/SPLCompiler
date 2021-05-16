@@ -72,7 +72,7 @@ satisfy' :: (Char -> Bool) -> Bool -> Parser (Positioned Char)
 satisfy' p consume = Parser $ \case
   ((l, c), y) : xs
     | p y -> ([], Just (if consume then xs else ((l, c), y) : xs, ((l, c), y)))
-    | otherwise -> ([Error ParseError [y] (Just ((l, c), [y]))], Nothing)
+    | otherwise -> ([Error ParseError ("Unknown token '" ++ [y] ++ "'") (Just ((l, c), [y]))], Nothing)
   [] -> ([Error ParseError "Unexpected EOF" Nothing], Nothing)
 
 satisfy :: (Char -> Bool) -> Bool -> Parser Char
@@ -125,7 +125,7 @@ optP :: Char -> Parser Char
 optP ch = Parser $ \case
   a@((p, x):xs)
     | x == ch -> ([], Just (xs, ch))
-    | otherwise -> trace (show a) ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (Just (p, " "))], Just ((p, x):xs, ch))
+    | otherwise -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (Just (p, " "))], Just ((p, x):xs, ch))
   [] -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") Nothing], Just ([], ch))
 
 varDeclP :: Parser VarDecl
