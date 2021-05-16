@@ -41,12 +41,7 @@ ppFunDecl d (FunDecl n a t v s) = printf "%s%s(%s) %s{\n%s%s%s%s}" (tab d) n (jo
 
 ppFunType :: Maybe Type -> String
 ppFunType Nothing = ""
-ppFunType (Just t) = ":: " ++ ppType t -- printf ":: %s-> %s " (join "" (map ((++ " ") . ppType) t)) (ppRetType r)
--- ppFunType (Just (FunType t r)) = printf ":: %s-> %s " (join "" (map ((++ " ") . ppType) t)) (ppRetType r)
-
--- ppRetType :: RetType -> String
--- ppRetType (RetTypeType t) = ppType t
--- ppRetType Void = "Void"
+ppFunType (Just t) = ":: " ++ ppType t
 
 ppType :: Type -> String
 ppType (TypeBasic t) = ppBasicType t

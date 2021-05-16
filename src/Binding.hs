@@ -15,6 +15,7 @@ import Debug.Trace ( trace )
 import Data.Graph ( stronglyConnCompR, SCC(..) )
 import Data.Tuple ( swap )
 import Data.Array ( listArray )
+import System.Exit
 
 components :: SPL -> [SCC Decl]
 components ds = map ((\(a, _, _) -> a) <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
@@ -124,18 +125,10 @@ tiResult llvm s f spl e = do
     if null e
         then case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
-            Just filePath -> if containsMain spl' then genCode llvm filePath spl' else putStrLn "\x1b[31mNo main function\x1b[0m"
-        else print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) (removeDuplicates e))
+            Just filePath -> if containsMain spl' then genCode llvm filePath spl' else putStrLn "\x1b[31mNo main function\x1b[0m" >> exitFailure
+        else print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) (removeDuplicates e)) >> exitFailure
     where
         l = lines s
--- tiResult :: Bool -> Maybe FilePath -> SPL -> TypeEnv -> IO ()
--- tiResult llvm f spl e = do
---     (bt, _) <- runTI $ ti' spl e
---     case bt of
---         Left err -> putStrLn $ "\x1b[31mTypeError:\x1b[0m " ++ err ++ "\n"
---         Right (env, spl') -> case f of
---             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
---             Just filePath -> if containsMain spl' then genCode llvm filePath spl' else putStrLn "\x1b[31mNo main function\x1b[0m"
 
 containsMain :: SPL -> Bool
 containsMain = any isMain
@@ -146,7 +139,7 @@ containsMain = any isMain
 
 testEnv :: Bool -> Maybe FilePath -> TypeEnv -> String -> IO ()
 testEnv llvm f env s
-    | not $ null e = print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) e)
+    | not $ null e = print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) e) >> exitFailure
     | otherwise = case r of
         Nothing -> print e
         Just (_, spl) -> tiResult llvm s f spl env
