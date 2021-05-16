@@ -44,8 +44,11 @@ pp :: Parser (P -> a) -> Parser a
 pp p = (\(p1, s1) f (p2, s2) -> f (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
 
 ppE :: Parser Exp -> Parser Exp
-ppE p = (\(p1, s1) e (p2, s2) -> trace (show e) ExpEmptyList (p1, "")) <$> pP <*> p <*> pP
--- ppE p = (\(p1, s1) (Exp t o e1 e2 _) (p2, s2) -> Exp t o e1 e2 (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
+ppE p = (\(p1, s1) e (p2, s2) -> posE (p1, stringDev s1 s2) e) <$> pP <*> p <*> pP
+
+posE :: P -> Exp -> Exp
+posE p (Exp t o e1 e2 _) = Exp t o e1 e2 p
+posE _ e = e
 
 pP :: Parser P
 pP = Parser $ \case
@@ -123,7 +126,7 @@ varDeclVarP :: Parser VarDecl
 varDeclVarP = VarDecl Nothing <$> (stringP "var" *> w idP <* charP '=' <* ws) <*> expP
 
 varDeclTypeP :: Parser VarDecl
-varDeclTypeP = VarDecl . Just <$> typeP <*> (w idP <* charP '=' <* ws) <*> expP
+varDeclTypeP = VarDecl . Just <$> typeP <*> (w idP <* charP '=' <* ws) <*> exp'P
 
 retTypeP :: Parser Type
 retTypeP = voidP <|> retTypeTypeP
@@ -179,28 +182,34 @@ f p = (\c -> (fromMaybe (1, 1) (listToMaybe (map fst c)), map snd c)) <$> notNul
 errorP :: (Char -> Bool) -> Bool -> Parser P
 errorP p consume = (\s ((l, c), _) -> ((l, c - length s), s)) <$> notNull (spanP (not . p)) <*> satisfy' p consume
 
+exp'P :: Parser Exp
+exp'P = expOp2P False <|> expNOp2P'
+
 expP :: Parser Exp
-expP = expOp2P <|> expNOp2P
+expP = expOp2P True <|> expNOp2P
 
 expNOp2P :: Parser Exp 
-expNOp2P = pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP <|> pp (ExpEmptyList <$ w (stringP "[]")) <|> (ExpError <$> errorP (`elem` "\n;") False)
+expNOp2P = expNOp2P' <|> (ExpError <$> errorP (`elem` "\n;") False)
 
-expOp2P :: Parser Exp
-expOp2P = ppE (Parser $ expBP 0)
+expNOp2P' :: Parser Exp 
+expNOp2P' = pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP <|> pp (ExpEmptyList <$ w (stringP "[]"))
 
-expBP :: Int -> Code -> ([Error], Maybe (Code, Exp))
-expBP minBP c = case r1 of
+expOp2P :: Bool -> Parser Exp
+expOp2P b = ppE (Parser $ expBP b 0)
+
+expBP :: Bool -> Int -> Code -> ([Error], Maybe (Code, Exp))
+expBP b minBP c = case r1 of
   Nothing -> (e1, Nothing)
   Just (c', lhs) -> case r2 of
     Nothing -> (e2, Nothing)
     Just (c'', lhs') -> ([], Just (c'', lhs'))
     where
-      (e2, r2) = lhsP 0 minBP lhs c'
+      (e2, r2) = lhsP b 0 minBP lhs c'
   where
-    (e1, r1) = parse (expBracketsP <|> expTupleP <|> expNOp2P) c
+    (e1, r1) = parse (expBracketsP <|> expTupleP <|> (if b then expNOp2P else expNOp2P')) c
 
-lhsP :: Int -> Int -> Exp -> Code -> ([Error], Maybe (Code, Exp))
-lhsP l m e c = case r of
+lhsP :: Bool -> Int -> Int -> Exp -> Code -> ([Error], Maybe (Code, Exp))
+lhsP b l m e c = case r of
   Nothing -> (e1, Just (c, e))
   Just (c', o) -> if lBP < m then (e1, Just (c, e)) else case r2 of
     Nothing -> (e2, Nothing)
@@ -208,10 +217,10 @@ lhsP l m e c = case r of
       Nothing -> (e3, Nothing)
       Just (c''', lhs) -> ([], Just (c''', lhs))
       where
-        (e3, r3) = lhsP lBP m (Exp Nothing o e rhs ((1, 1), "")) c''
+        (e3, r3) = lhsP b lBP m (Exp Nothing o e rhs ((1, 1), "")) c''
     where
       (lBP, rBP) = bp o
-      (e2, r2) = expBP rBP c'
+      (e2, r2) = expBP b rBP c'
   where
     (e1, r) = parse (w op2P) c
 
