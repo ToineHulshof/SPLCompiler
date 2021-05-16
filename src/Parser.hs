@@ -340,10 +340,10 @@ erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts)) = concatMap (erDecl . DeclVarDecl)
 erDecl (DeclError s) = [Error ParseError "Unknown declaration" s]
 
 erExp :: Exp -> [Error]
-erExp (Exp _ o e1 e2) = erOp2 o ++ erExp e1 ++ erExp e2
-erExp (ExpOp1 _ e) = erExp e
-erExp (ExpTuple (e1, e2)) = erExp e1 ++ erExp e2
-erExp (ExpBrackets e) = erExp e
+erExp (Exp _ _ o e1 e2) = erOp2 o ++ erExp e1 ++ erExp e2
+erExp (ExpOp1 _ _ e) = erExp e
+erExp (ExpTuple _ (e1, e2)) = erExp e1 ++ erExp e2
+erExp (ExpBrackets _ e) = erExp e
 erExp (ExpError s) = [Error ParseError "Incorrect expression" s]
 erExp _ = []
 

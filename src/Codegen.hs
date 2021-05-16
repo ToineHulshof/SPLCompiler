@@ -341,7 +341,7 @@ genEq' name (TypeList t) = do
     addLabel name
 
 genExp :: Exp -> CG [Instruction]
-genExp (Exp (Just t) o e1 e2) = do
+genExp (Exp _ (Just t) o e1 e2) = do
     i1 <- genExp e1
     i2 <- genExp e2
     let i3 = genOp2 o
@@ -351,12 +351,12 @@ genExp (Exp (Just t) o e1 e2) = do
             i4 <- genEq t
             return $ i1 ++ i2 ++ i4 ++ [NotI | o /= Equals]
     else return $ i1 ++ i2 ++ [i3]
-genExp (ExpOp1 o e) = do
+genExp (ExpOp1 _ o e) = do
     i <- genExp e
     return $ i ++ [genOp1 o]
-genExp (ExpBrackets e) = genExp e
-genExp (ExpFunCall f) = genFunCall f
-genExp (ExpField _ n fs) = do
+genExp (ExpBrackets _ e) = genExp e
+genExp (ExpFunCall _ f) = genFunCall f
+genExp (ExpField _ _ n fs) = do
     let i1 = map (LoadHeap . genField) fs
     lm <- gets localMap
     gm <- gets globalMap
@@ -365,14 +365,14 @@ genExp (ExpField _ n fs) = do
             Nothing -> trace (show lm) (error "")
             Just i -> return $ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i1
         Just i -> return $ LoadLocal i : i1
-genExp (ExpInt i) = return [LoadConstant $ fromInteger i]
-genExp (ExpBool b) = return [LoadConstant $ if b then 1 else 0]
-genExp (ExpChar c) = return [LoadConstant $ ord c]
-genExp (ExpTuple (e1, e2)) = do
+genExp (ExpInt _ i) = return [LoadConstant $ fromInteger i]
+genExp (ExpBool _ b) = return [LoadConstant $ if b then 1 else 0]
+genExp (ExpChar _ c) = return [LoadConstant $ ord c]
+genExp (ExpTuple _ (e1, e2)) = do
     i1 <- genExp e1
     i2 <- genExp e2
     return $ i1 ++ i2 ++ [StoreMultipleHeap 2]
-genExp ExpEmptyList = return [LoadConstant 0]
+genExp ExpEmptyList {} = return [LoadConstant 0]
 
 genOp2 :: Op2 -> Instruction
 genOp2 Plus = Add

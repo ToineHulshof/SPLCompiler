@@ -449,7 +449,7 @@ refresh False t = return t
 refresh True t = instantiate $ generalize emptyEnv t
 
 tiExp' :: Bool -> TypeEnv -> Exp -> TI (Subst, Type, Exp)
-tiExp' b env (Exp _ o e1 e2) = do
+tiExp' b env (Exp p _ o e1 e2) = do
     (t1, t2, t3) <- tiOp2 o
     (s1, t1', e1') <- tiExp' b env e1
     s2 <- mgu t1' (apply s1 t1)
@@ -458,27 +458,29 @@ tiExp' b env (Exp _ o e1 e2) = do
     let cs2 = s3 `composeSubst` cs1
     s4 <- mgu (apply cs2 t2') (apply cs2 t2)
     let cs3 = s4 `composeSubst` cs2
-    return (cs3, apply cs3 t3, Exp (Just t1') o e1' e2')
-tiExp' b env (ExpOp1 o e) = do
+    return (cs3, apply cs3 t3, Exp p (Just t1') o e1' e2')
+tiExp' b env (ExpOp1 p o e) = do
     let (t1, t2) = tiOp1 o
     (s1, t1', e') <- tiExp' b env e
     s2 <- mgu t1 t1'
-    return (s2 `composeSubst` s1, t2, ExpOp1 o e')
-tiExp' b env (ExpTuple (e1, e2)) = do
+    return (s2 `composeSubst` s1, t2, ExpOp1 p o e')
+tiExp' b env (ExpTuple p (e1, e2)) = do
     (s1, t1, e1') <- tiExp' b env e1
     (s2, t2, e2') <- tiExp' b (apply s1 env) e2
-    return (s2 `composeSubst` s1, TypeTuple t1 t2, ExpTuple (e1', e2'))
-tiExp' b env (ExpBrackets e) = tiExp' b env e
-tiExp' b (TypeEnv env) e@(ExpField _ n fs) = case M.lookup (Var, n) env of
+    return (s2 `composeSubst` s1, TypeTuple t1 t2, ExpTuple p (e1', e2'))
+tiExp' b env (ExpBrackets p e) = do
+    (s, t, e') <- tiExp' b env e
+    return (s, t, ExpBrackets p e')
+tiExp' b (TypeEnv env) e@(ExpField p _ n fs) = case M.lookup (Var, n) env of
     Nothing -> tell [Error TypeError (n ++ " is not defined") x] >> return (nullSubst, Void, e)
     Just sigma -> do
         t <- instantiate sigma
         t' <- refresh b t
-        (\(s, ty) -> (s, ty, ExpField Nothing n fs)) <$> tiFields t' fs
-tiExp' _ _ e@(ExpInt _) = return (nullSubst, TypeBasic IntType, e)
-tiExp' _ _ e@(ExpBool _) = return (nullSubst, TypeBasic BoolType, e)
-tiExp' _ _ e@(ExpChar _) = return (nullSubst, TypeBasic CharType, e)
-tiExp' _ env (ExpFunCall f) = fmap ExpFunCall <$> tiFunCall env f
-tiExp' _ _ e@ExpEmptyList = do
+        (\(s, ty) -> (s, ty, ExpField p Nothing n fs)) <$> tiFields t' fs
+tiExp' _ _ e@(ExpInt _ _) = return (nullSubst, TypeBasic IntType, e)
+tiExp' _ _ e@(ExpBool _ _) = return (nullSubst, TypeBasic BoolType, e)
+tiExp' _ _ e@(ExpChar _ _) = return (nullSubst, TypeBasic CharType, e)
+tiExp' _ env (ExpFunCall p f) = fmap (ExpFunCall p) <$> tiFunCall env f
+tiExp' _ _ e@(ExpEmptyList _) = do
     t <- newTyVar Nothing "l"
     return (nullSubst, TypeList t, e)

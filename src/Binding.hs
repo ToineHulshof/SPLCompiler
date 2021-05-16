@@ -37,14 +37,14 @@ ctStmt args (StmtReturn Nothing) = []
 ctStmt args (StmtReturn (Just e)) = ctExp args e
 
 ctExp :: [String] -> Exp -> [(Kind, String)]
-ctExp args (Exp _ _ e1 e2) = ctExp args e1 ++ ctExp args e2
-ctExp args (ExpOp1 _ e) = ctExp args e
-ctExp args (ExpTuple (e1, e2)) = ctExp args e1 ++ ctExp args e2
-ctExp args (ExpBrackets e) = ctExp args e
-ctExp args (ExpField _ n _)
+ctExp args (Exp _ _ _ e1 e2) = ctExp args e1 ++ ctExp args e2
+ctExp args (ExpOp1 _ _ e) = ctExp args e
+ctExp args (ExpTuple _ (e1, e2)) = ctExp args e1 ++ ctExp args e2
+ctExp args (ExpBrackets _ e) = ctExp args e
+ctExp args (ExpField _ _ n _)
     | n `elem` args = []
     | otherwise = [(Var, n)]
-ctExp args (ExpFunCall (FunCall _ n es)) = (Fun, n) : concatMap (ctExp args) es
+ctExp args (ExpFunCall _ (FunCall _ n es)) = (Fun, n) : concatMap (ctExp args) es
 ctExp _ _ = []
 
 stdlib :: TypeEnv
