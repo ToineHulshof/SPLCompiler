@@ -62,7 +62,7 @@ posE p (ExpError _) = ExpError p
 pP :: Parser P
 pP = Parser $ \case
   c@((p, _) : _) -> ([], Just (c, (p, map snd c)))
-  [] -> ([Error ParseError "Unexpected EOF" Nothing], Nothing)
+  [] -> ([], Just ([((1, 1), '\n')], ((1, 1), "")))
 
 -- Creates a Parser that parses a Char with a specific requirement
 -- If the Char is fulfilling the requirement, return a (Code, Char)
@@ -123,9 +123,9 @@ funDeclP = FunDecl <$> idP <*> (c '(' *> sepBy (charP ',') idP <* c ')') <*> fun
 
 optP :: Char -> Parser Char
 optP ch = Parser $ \case
-  ((p, x):xs)
+  a@((p, x):xs)
     | x == ch -> ([], Just (xs, ch))
-    | otherwise -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (Just (p, " "))], Just ((p, x):xs, ch))
+    | otherwise -> trace (show a) ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (Just (p, " "))], Just ((p, x):xs, ch))
   [] -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") Nothing], Just ([], ch))
 
 varDeclP :: Parser VarDecl
@@ -259,7 +259,7 @@ expStringP :: Parser Exp
 expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> spanP (/='"') <* c '"')
 
 expListP :: Parser Exp
-expListP = (\p es -> let ps = map expToP es in foldr foldCons (ExpEmptyList p) (zipWith posE (tail ps ++ [head ps]) es)) <$> pP <*> (c '[' *> sepBy (c ',') exp'P <* c ']')
+expListP = (\p es -> let ps = map expToP es in foldr foldCons (ExpEmptyList p) (zipWith posE (tail ps ++ [head ps]) es)) <$> pP <*> (c '[' *> sepBy (c ',') exp'P <* ws <* charP ']')
 
 foldCons :: Exp -> Exp -> Exp 
 foldCons e1 e2 = Exp Nothing Cons e1 e2 (expToP e1)
@@ -290,13 +290,13 @@ stmtWhileP :: Parser Stmt
 stmtWhileP = StmtWhile <$> conditionP "while" <*> stmtsP 
 
 stmtFieldP :: Parser Stmt
-stmtFieldP = StmtField <$> idP <*> fieldP <*> (c '=' *> expP <* c ';')
+stmtFieldP = StmtField <$> idP <*> fieldP <*> (c '=' *> expP <* optP ';')
 
 stmtFunCallP :: Parser Stmt
-stmtFunCallP = StmtFunCall <$> funCallP <* c ';'
+stmtFunCallP = StmtFunCall <$> funCallP <* optP ';'
 
 stmtReturnP :: Parser Stmt
-stmtReturnP = StmtReturn Nothing <$ stringP "return" <* c ';' <|> StmtReturn . pure <$> (stringP "return" *> ws *> expP <* c ';')
+stmtReturnP = StmtReturn Nothing <$ stringP "return" <* optP ';' <|> StmtReturn . pure <$> (stringP "return" *> ws *> expP <* optP ';')
 
 stmtP :: Parser Stmt
 stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP <|> StmtError <$> errorP (`elem` "\n}") False
