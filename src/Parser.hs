@@ -48,8 +48,16 @@ ppE p = (\(p1, s1) e (p2, s2) -> posE (p1, stringDev s1 s2) e) <$> pP <*> p <*> 
 
 posE :: P -> Exp -> Exp
 posE p (Exp t o e1 e2 _) = Exp t o e1 e2 p
+posE p (ExpOp1 o e _) = ExpOp1 o e p
+posE p (ExpTuple e _) = ExpTuple e p
+posE p (ExpBrackets e _) = ExpBrackets e p
+posE p (ExpField t s fs _) = ExpField t s fs p
+posE p (ExpInt i _) = ExpInt i p
+posE p (ExpChar c _) = ExpChar c p
+posE p (ExpBool b _) = ExpBool b p
+posE p (ExpFunCall f _) = ExpFunCall f p
 posE p (ExpEmptyList _) = ExpEmptyList p
-posE _ e = e
+posE p (ExpError _) = ExpError p
 
 pP :: Parser P
 pP = Parser $ \case
@@ -251,7 +259,7 @@ expStringP :: Parser Exp
 expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> spanP (/='"') <* c '"')
 
 expListP :: Parser Exp
-expListP = foldr foldCons . ExpEmptyList <$> pP <*> (c '[' *> sepBy (c ',') exp'P <* c ']')
+expListP = (\p es -> let ps = map expToP es in foldr foldCons (ExpEmptyList p) (zipWith posE (tail ps ++ [head ps]) es)) <$> pP <*> (c '[' *> sepBy (c ',') exp'P <* c ']')
 
 foldCons :: Exp -> Exp -> Exp 
 foldCons e1 e2 = Exp Nothing Cons e1 e2 (expToP e1)
