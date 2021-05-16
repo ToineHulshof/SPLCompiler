@@ -126,8 +126,9 @@ tiResult llvm s f spl e = do
         then case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
             Just filePath -> if containsMain spl' then putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n" >> genCode llvm filePath spl' else do
-                print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError "\x1b[31mNo main function\x1b[0m" Nothing]
-                putStrLn ('\n' : show env)
+                print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError "\x1b[31mNo main function\x1b[0m\n" Nothing]
+                putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n"
+                putStr $ show env
                 exitFailure
         else print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) (removeDuplicates e)) >> exitFailure
     where

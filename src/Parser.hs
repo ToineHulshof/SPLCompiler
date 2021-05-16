@@ -110,7 +110,7 @@ declFunDeclP :: Parser Decl
 declFunDeclP = DeclFunDecl <$> funDeclP
 
 funDeclP :: Parser FunDecl
-funDeclP = FunDecl <$> idP <*> (c '(' *> sepBy (charP ',') idP <* c ')') <*> funTypeP <*> (c '{' *> many varDeclP) <*> (some (w stmtP) <* c '}')
+funDeclP = FunDecl <$> idP <*> (c '(' *> sepBy (charP ',') idP <* c ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c '}')
 
 optP :: Char -> Parser Char
 optP ch = Parser $ \case
