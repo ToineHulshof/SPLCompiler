@@ -181,7 +181,7 @@ mgu p (TypeBasic t1) (TypeBasic t2)
     | t1 == t2 = return nullSubst
     | otherwise = tell [Error TypeError (show t1 ++ "\x1b[1m does not unify with " ++ show t2 ++ "\x1b[1m") p] >> return nullSubst
 mgu _ Void Void = return nullSubst
-mgu _ t1 t2 = tell [Error TypeError (showType (varsMap t1) t1 ++ "\x1b[1m does not unify with " ++ showType (varsMap t2) t2 ++ "\x1b[1m") x] >> return nullSubst
+mgu p t1 t2 = tell [Error TypeError (showType (varsMap t1) t1 ++ "\x1b[1m does not unify with " ++ showType (varsMap t2) t2 ++ "\x1b[1m") p] >> return nullSubst
 
 condition :: Type -> String -> (Maybe Condition, Bool)
 condition (TypeID c n) s = (c, n == s)
@@ -224,7 +224,7 @@ tiVarDecl env (VarDecl Nothing s ex) = do
     return (s1, TypeEnv (M.insert (Var, s) (Scheme [] t1) env2), d)
 tiVarDecl env (VarDecl (Just t) s e) = do
     (s1, t1, e') <- tiExp' True env e
-    s2 <- mgu x t1 t
+    s2 <- trace "1" mgu x t1 t
     let cs1 = s2 `composeSubst` s1
     let TypeEnv env1 = remove env Var s
     let env2 = TypeEnv (M.insert (Var, s) (Scheme [] t1) env1)
@@ -244,11 +244,24 @@ tiVarDecls env (v:vs) = do
     (s2, env2, d2) <- tiVarDecls env1 vs
     return (s2 `composeSubst` s1, env2, d1:d2)
 
+expToP :: Exp -> P
+expToP (Exp _ _ _ _ p) = p
+expToP (ExpOp1 _ _ p) = p
+expToP (ExpTuple _ p) = p
+expToP (ExpBrackets _ p) = p
+expToP (ExpField _ _ _ p) = p
+expToP (ExpInt _ p) = p
+expToP (ExpChar _ p) = p
+expToP (ExpBool _ p) = p
+expToP (ExpFunCall _ p) = p
+expToP (ExpEmptyList p) = p
+expToP (ExpError p) = p
+
 checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
-checkReturn _ t (StmtReturn Nothing) = mgu x t Void
+checkReturn _ t (StmtReturn Nothing) = trace "2" mgu x t Void
 checkReturn env t (StmtReturn (Just e)) = do
     (s1, t1, _) <- tiExp env e
-    s2 <- mgu x t t1
+    s2 <- trace "3" mgu x t t1
     return $ s2 `composeSubst` s1
 
 getReturns :: Stmt -> [Stmt]
@@ -281,7 +294,7 @@ tiFunDecl env f@(FunDecl n args (Just t) vars stmts)
     | l1 /= l2 = tell [Error TypeError (show n ++ " got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments") x] >> return (nullSubst, t, env, f)
     | otherwise = do
         (s1, t1, env1, FunDecl _ _ _ vars' stmts') <- tiFunDecl env (FunDecl n args Nothing vars stmts)
-        s2 <- mgu x t1 t
+        s2 <- trace "4" mgu x t1 t
         let t2 = apply s2 t
         let env2 = remove env1 Fun n
         let env3 = env2 `combine` TypeEnv (M.singleton (Fun, n) (generalize env2 t2))
@@ -327,21 +340,21 @@ tiStmts env (s:ss) = do
 tiField :: Type -> Field -> TI (Subst, Type)
 tiField t Head = do
     t1 <- newTyVar Nothing "f"
-    s <- mgu x (TypeList t1) t
+    s <- trace "5" mgu x (TypeList t1) t
     return (s, apply s t1)
 tiField t Tail = do
     t1 <- newTyVar Nothing "f"
-    s <- mgu x (TypeList t1) t
+    s <- trace "6" mgu x (TypeList t1) t
     return (s, apply s $ TypeList t1)
 tiField t First = do
     t1 <- newTyVar Nothing "f"
     t2 <- newTyVar Nothing "f"
-    s <- mgu x (TypeTuple t1 t2) t
+    s <- trace "7" mgu x (TypeTuple t1 t2) t
     return (s, apply s t1)
 tiField t Second = do
     t1 <- newTyVar Nothing "f"
     t2 <- newTyVar Nothing "f"
-    s <- mgu x (TypeTuple t1 t2) t  
+    s <- trace "8" mgu x (TypeTuple t1 t2) t  
     return (s, apply s t2)
 
 tiFields :: Type -> [Field] -> TI (Subst, Type)
@@ -354,7 +367,7 @@ tiFields t (f:fs) = do
 tiStmt :: TypeEnv -> Stmt -> TI (Subst, Stmt)
 tiStmt env (StmtIf e ss1 ss2) = do
     (s1, t1, e') <- tiExp env e
-    s2 <- mgu x (TypeBasic BoolType) t1
+    s2 <- trace "9" mgu x (TypeBasic BoolType) t1
     let cs1 = s2 `composeSubst` s1
     (s3, ss1') <- tiStmts (apply cs1 env) ss1
     let cs2 = s3 `composeSubst` cs1
@@ -362,7 +375,7 @@ tiStmt env (StmtIf e ss1 ss2) = do
     return (s4 `composeSubst` cs2, StmtIf e' ss1' (if isNothing ss2 then Nothing else Just ss2'))
 tiStmt env (StmtWhile e ss) = do
     (s1, t1, e') <- tiExp env e
-    s2 <- mgu x (TypeBasic BoolType) t1
+    s2 <- trace "10" mgu x (TypeBasic BoolType) t1
     let cs1 = s2 `composeSubst` s1
     (s3, stmts') <- tiStmts (apply cs1 env) ss
     return (s3 `composeSubst` cs1, StmtWhile e' stmts')
@@ -374,7 +387,7 @@ tiStmt e s@(StmtField n fs ex) = do
         Just sigma -> do
             t <- instantiate sigma
             (s2, t') <- tiFields t fs
-            s3 <- mgu x t1 t'
+            s3 <- trace "11" mgu x t1 t'
             return (s3 `composeSubst` s2 `composeSubst` s1, StmtField n fs e')
 tiStmt env (StmtFunCall f) = do
     (s, _, f) <- tiFunCall env f
@@ -411,7 +424,7 @@ mguList :: [Type] -> [Type] -> TI Subst
 mguList [] _ = return nullSubst
 mguList _ [] = return nullSubst
 mguList (a:as) (b:bs) = do
-    s1 <- mgu x a b
+    s1 <- trace "12" mgu x a b
     s2 <- mguList as bs
     return $ s2 `composeSubst` s1
 
