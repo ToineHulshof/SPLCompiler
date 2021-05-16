@@ -44,7 +44,8 @@ pp :: Parser (P -> a) -> Parser a
 pp p = (\(p1, s1) f (p2, s2) -> f (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
 
 ppE :: Parser Exp -> Parser Exp
-ppE p = (\(p1, s1) (Exp t o e1 e2 _) (p2, s2) -> Exp t o e1 e2 (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
+ppE p = (\(p1, s1) e (p2, s2) -> trace (show e) ExpEmptyList (p1, "")) <$> pP <*> p <*> pP
+-- ppE p = (\(p1, s1) (Exp t o e1 e2 _) (p2, s2) -> Exp t o e1 e2 (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
 
 pP :: Parser P
 pP = Parser $ \case
