@@ -43,6 +43,9 @@ stringDev s1 s2 = take (length s1 - length s2) s1
 pp :: Parser (P -> a) -> Parser a
 pp p = (\(p1, s1) f (p2, s2) -> f (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
 
+ppE :: Parser Exp -> Parser Exp
+ppE p = (\(p1, s1) (Exp t o e1 e2 _) (p2, s2) -> Exp t o e1 e2 (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
+
 pP :: Parser P
 pP = Parser $ \case
   c@((p, _) : _) -> ([], Just (c, (p, map snd c)))
@@ -182,7 +185,7 @@ expNOp2P :: Parser Exp
 expNOp2P = pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP <|> pp (ExpEmptyList <$ w (stringP "[]")) <|> (ExpError <$> errorP (`elem` "\n;") False)
 
 expOp2P :: Parser Exp
-expOp2P = Parser $ expBP 0
+expOp2P = ppE (Parser $ expBP 0)
 
 expBP :: Int -> Code -> ([Error], Maybe (Code, Exp))
 expBP minBP c = case r1 of
@@ -204,7 +207,7 @@ lhsP l m e c = case r of
       Nothing -> (e3, Nothing)
       Just (c''', lhs) -> ([], Just (c''', lhs))
       where
-        (e3, r3) = lhsP lBP m (Exp Nothing o e rhs ((1, 1), "")) c'' -- Not sure if I can put a random P here
+        (e3, r3) = lhsP lBP m (Exp Nothing o e rhs ((1, 1), "")) c''
     where
       (lBP, rBP) = bp o
       (e2, r2) = expBP rBP c'
