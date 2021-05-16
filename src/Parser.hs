@@ -44,10 +44,11 @@ pp :: Parser (P -> a) -> Parser a
 pp p = (\(p1, s1) f (p2, s2) -> f (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
 
 ppE :: Parser Exp -> Parser Exp
-ppE p = (\(p1, s1) e (p2, s2) -> posE (p1, stringDev s1 s2) e) <$> pP <*> p <*> pP
+ppE p = (\(p1, s1) e (p2, s2) -> trace (show p1 ++ ", " ++ show p2) posE (p1, stringDev s1 s2) e) <$> pP <*> p <*> pP
 
 posE :: P -> Exp -> Exp
 posE p (Exp t o e1 e2 _) = Exp t o e1 e2 p
+posE p (ExpEmptyList _) = ExpEmptyList p
 posE _ e = e
 
 pP :: Parser P
@@ -195,7 +196,7 @@ expNOp2P' :: Parser Exp
 expNOp2P' = pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP <|> pp (ExpEmptyList <$ w (stringP "[]"))
 
 expOp2P :: Bool -> Parser Exp
-expOp2P b = ppE (Parser $ expBP b 0)
+expOp2P b = ppE (expListP b) <|> ppE (Parser $ expBP b 0)
 
 expBP :: Bool -> Int -> Code -> ([Error], Maybe (Code, Exp))
 expBP b minBP c = case r1 of
@@ -245,6 +246,9 @@ expTupleP = pp $ curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
 
 expBracketsP :: Parser Exp
 expBracketsP = pp $ ExpBrackets <$> (c '(' *> expP <* c ')')
+
+expListP :: Bool -> Parser Exp
+expListP b = foldr (\e1 e2 -> Exp Nothing Cons e1 e2 ((1, 1), "")) (ExpEmptyList ((1, 1), "")) <$> (c '[' *> sepBy (c ',') exp'P <* c ']')
 
 stmtIfP :: Parser Stmt
 stmtIfP = (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (w (stringP "else") *> stmtsP) <|> (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP
@@ -327,7 +331,7 @@ parseFile = parseFileP splP result
 
 -- A helper function to test if a parser behaves correctly on a given input.
 testP :: Parser a -> String -> ([Error], Maybe (Code, a))
-testP p s = comments False 0 (code $ syntacticSugar s) >>= parse p
+testP p s = comments False 0 (code s) >>= parse p
 
 t :: Parser a -> String -> ([Error], Maybe (String, a))
 t p s = fmap (first (map snd)) <$> testP p s

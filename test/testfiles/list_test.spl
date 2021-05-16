@@ -1,8 +1,1 @@
-main () {
-    // var x = 1 : 2 : 3 : [];
-    // var y = 4 : 5 : [];
-    // var z = x : y : [];
-    var x = True : False : [];
-    var z = x : [];
-    print(z);
-}
+var x = [1, 2, True];
