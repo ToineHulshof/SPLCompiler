@@ -1,3 +1,5 @@
 main() {
-    return [4] + 3;
+    var x = True - 5;
+    
+    return [] + 3;
 }

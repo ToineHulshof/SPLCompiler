@@ -13,24 +13,19 @@ testFiles = ["2D", "3D", "Example", "SumProduct", "a_bit_of_everything", "a_bit_
 testAllFiles :: IO [()]
 testAllFiles = forM testFiles (testFile True False)
 
-changeSuffix :: Bool -> FilePath -> FilePath -> FilePath
-changeSuffix llvm c ".spl" = c ++ (if llvm then ".ll" else ".ssm")
-changeSuffix llvm c (x:xs) = changeSuffix llvm (c ++ [x]) xs
-changeSuffix _ _ _ = error "File does not have spl as extension"
-
 testFile :: Bool -> Bool -> FilePath -> IO ()
 testFile addPrefix llvm f = do
     let file = if addPrefix then "../test/testfiles/" ++ f ++ ".spl" else f
     s <- readFile file
     -- putStrLn $ "\x1b[3m" ++ f ++ ".spl \x1b[0m"
-    compile llvm (changeSuffix llvm "" f) s
+    compile llvm f s
 
 testFileWindows :: Bool -> String -> IO ()
 testFileWindows addPrefix f = do
     let file = if addPrefix then "..\\\\test\\\\testfiles\\\\" ++ f ++ ".spl" else f
     s <- readFile file
     -- putStrLn $ "\x1b[3m" ++ f ++ ".spl \x1b[0m"
-    compile False (changeSuffix False "" f) s
+    compile False f s
 
 test :: IO [()]
 test = testAllFiles

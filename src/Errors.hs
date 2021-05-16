@@ -14,11 +14,12 @@ data Error = Error ErrorKind String (Maybe P) deriving (Eq, Show)
 
 data Errors = Errors FilePath (Array Int String) [Error]
 
-data ErrorKind = ParseError | TypeError deriving Eq
+data ErrorKind = ParseError | TypeError | CodegenError deriving Eq
 
 instance Show ErrorKind where
   show ParseError = "Parse error: "
   show TypeError = "Type error: "
+  show CodegenError = "Codegen error: "
 
 -- Joins a list of strings with a given seperator
 join :: String -> [String] -> String
