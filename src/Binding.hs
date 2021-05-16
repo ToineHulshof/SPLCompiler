@@ -75,11 +75,11 @@ btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _) = do
             ret <- newTyVar Nothing "r"
             let t = foldr1 TypeFun $ nvars ++ [ret]
             return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") x] >> return (TypeEnv env)
+        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") defaultP] >> return (TypeEnv env)
 btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _) = do
     case M.lookup (Fun, s) env of
         Nothing -> return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") x] >> return (TypeEnv env)
+        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") defaultP] >> return (TypeEnv env)
     
 hasEffect :: (String, Type) -> Bool
 hasEffect (s, TypeID _ n) = n /= s
@@ -115,7 +115,7 @@ ti' :: SPL -> TypeEnv -> TI (TypeEnv, SPL)
 ti' spl e = do
     bt <- btSPL emptyEnv spl
     let comps = components spl
-    if any varCycle comps then tell [Error TypeError "Cycle found in global variables" x] >> return (e, spl) else
+    if any varCycle comps then tell [Error TypeError "Cycle found in global variables" defaultP] >> return (e, spl) else
         tiComps (stdlib `combine` e `combine` bt) comps
 
 tiResult :: Bool -> String -> Maybe FilePath -> SPL -> TypeEnv -> IO ()

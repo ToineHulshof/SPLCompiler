@@ -53,7 +53,7 @@ posE _ e = e
 pP :: Parser P
 pP = Parser $ \case
   c@((p, _) : _) -> ([], Just (c, (p, map snd c)))
-  [] -> ([Error ParseError "Unexpected EOF" ((1, 1), "")], Nothing)
+  [] -> ([Error ParseError "Unexpected EOF" Nothing], Nothing)
 
 -- Creates a Parser that parses a Char with a specific requirement
 -- If the Char is fulfilling the requirement, return a (Code, Char)
@@ -63,8 +63,8 @@ satisfy' :: (Char -> Bool) -> Bool -> Parser (Positioned Char)
 satisfy' p consume = Parser $ \case
   ((l, c), y) : xs
     | p y -> ([], Just (if consume then xs else ((l, c), y) : xs, ((l, c), y)))
-    | otherwise -> ([Error ParseError [y] ((l, c), [y])], Nothing)
-  [] -> ([Error ParseError "Unexpected EOF" ((1, 1), "")], Nothing)
+    | otherwise -> ([Error ParseError [y] (Just ((l, c), [y]))], Nothing)
+  [] -> ([Error ParseError "Unexpected EOF" Nothing], Nothing)
 
 satisfy :: (Char -> Bool) -> Bool -> Parser Char
 satisfy p consume = snd <$> satisfy' p consume
@@ -82,7 +82,7 @@ notNull (Parser p) = Parser help
   where
     help c = case r of
       Nothing -> (e, Nothing)
-      Just (c', xs) -> if null xs then ([Error ParseError "Found 0, while at least 1 is expected." (fst $ head c', "")], Nothing) else (e, Just (c', xs))
+      Just (c', xs) -> if null xs then ([Error ParseError "Found 0, while at least 1 is expected." (Just (fst $ head c', ""))], Nothing) else (e, Just (c', xs))
       where
         (e, r) = p c
 
@@ -116,8 +116,8 @@ optP :: Char -> Parser Char
 optP ch = Parser $ \case
   ((p, x):xs)
     | x == ch -> ([], Just (xs, ch))
-    | otherwise -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (p, " ")], Just ((p, x):xs, ch))
-  [] -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") ((1, 1), " ")], Just ([], ch))
+    | otherwise -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (Just (p, " "))], Just ((p, x):xs, ch))
+  [] -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") Nothing], Just ([], ch))
 
 varDeclP :: Parser VarDecl
 varDeclP = (varDeclVarP <|> varDeclTypeP) <* optP ';'
@@ -291,7 +291,7 @@ typeP = typeTupleP <|> typeListP <|> TypeBasic <$> basicTypeP <|> TypeID Nothing
 result :: Show a => ([Error], Maybe (Code, a)) -> String
 result ([], Just (c, a))
   | null c = "Parsed succesfully" -- ++ show a
-  | otherwise = show $ Error ParseError "Did not complete parsing" (fst $ head c, map snd c)
+  | otherwise = show $ Error ParseError "Did not complete parsing" (Just (fst $ head c, map snd c))
 result (es, _) = join "\n" $ map show es
 
 -- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
@@ -300,16 +300,16 @@ result (es, _) = join "\n" $ map show es
 comments :: Bool -> Int -> Code -> ([Error], Code)
 comments _ d []
     | d == 0 = ([], []) -- Parser is done and the parser is not currently in a block comment 
-    | otherwise = ([Error ParseError "Did not close all comments" ((1, 1), "")], []) -- Parser is done, but is currently in a block comment
+    | otherwise = ([Error ParseError "Did not close all comments" Nothing], []) -- Parser is done, but is currently in a block comment
 comments s d [((l, c), x)]
-    | d /= 0 = ([Error ParseError "Did not close all comments" ((l, c), "")], []) -- Parser only has one character left, but it is still in a block comment, so this can't be closed
+    | d /= 0 = ([Error ParseError "Did not close all comments" (Just ((l, c), ""))], []) -- Parser only has one character left, but it is still in a block comment, so this can't be closed
     | s = ([], []) -- Parser only has one character left and is currently in a line comment
     | otherwise = ([], [((l, c), x)]) -- Parser has only one character left and isn't in a comment
 comments s d (((l1, c1), x1) : ((l2, c2), x2) : xs)
     | t == "//" = comments True d xs -- Parser recognizes it is in a line comment
     | t == "/*" = comments s (d + 1) xs -- Parser starts a new recursive block comment
     | t == "*/" && (d /= 0) = comments s (d - 1) xs -- Parser closes a valid recursive block comment 
-    | t == "*/" && (d == 0) = ([Error ParseError "Trying to close comment that doesn't exist" ((l2, c2), "*/")], xs) -- Parser closes an invalid recursive block comment
+    | t == "*/" && (d == 0) = ([Error ParseError "Trying to close comment that doesn't exist" (Just ((l2, c2), "*/"))], xs) -- Parser closes an invalid recursive block comment
     | l2 > l1 && s = comments False d (((l2, c2), x2) : xs) -- The end of line is reached, so the line comment is reset if it was active
     | s || (d > 0) = comments s d (((l2, c2), x2) : xs) -- Parser is currently in a comment and ignores the next character
     | otherwise = (:) ((l1, c1), x1) <$> comments s d (((l2, c2), x2) : xs) -- Parser isn't in a comment currently and adds the current character to the returned Code
@@ -351,7 +351,7 @@ convertListToString s = let (a, b) = span (/= ',') s in if null b then a ++ " : 
 p :: String -> ([Error], Maybe (Code, SPL))
 p s = case r of
     Nothing -> (e, Nothing)
-    Just (c, spl) -> (e ++ e2 ++ ([Error ParseError "Did not finish parsing" (fst $ head c, map snd c) | not $ null c]), Just (c, spl))
+    Just (c, spl) -> (e ++ e2 ++ ([Error ParseError "Did not finish parsing" (Just (fst $ head c, map snd c)) | not $ null c]), Just (c, spl))
       where
         e2 = extractErrors spl
   where
@@ -363,25 +363,25 @@ extractErrors = concatMap erDecl
 erDecl :: Decl -> [Error]
 erDecl (DeclVarDecl (VarDecl _ _ e)) = erExp e
 erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts)) = concatMap (erDecl . DeclVarDecl) vs ++ erStmts stmts
-erDecl (DeclError s) = [Error ParseError "Unknown declaration" s]
+erDecl (DeclError s) = [Error ParseError "Unknown declaration" (Just s)]
 
 erExp :: Exp -> [Error]
 erExp (Exp _ o e1 e2 _) = erOp2 o ++ erExp e1 ++ erExp e2
 erExp (ExpOp1 _ e _) = erExp e
 erExp (ExpTuple (e1, e2) _) = erExp e1 ++ erExp e2
 erExp (ExpBrackets e _) = erExp e
-erExp (ExpError s) = [Error ParseError "Incorrect expression" s]
+erExp (ExpError s) = [Error ParseError "Incorrect expression" (Just s)]
 erExp _ = []
 
 erOp2 :: Op2 -> [Error]
-erOp2 (Op2Error s) = [Error ParseError "Unknown binary operator" s]
+erOp2 (Op2Error s) = [Error ParseError "Unknown binary operator" (Just s)]
 erOp2 _ = []
 
 erStmts :: [Stmt] -> [Error]
 erStmts = concatMap erStmt
 
 erStmt :: Stmt -> [Error]
-erStmt (StmtError s) = [Error ParseError "Unknown statement" s]
+erStmt (StmtError s) = [Error ParseError "Unknown statement" (Just s)]
 erStmt _ = []
 
 -- A function that transforms a string to a list of tuples with (character, line, column)
