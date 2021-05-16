@@ -180,7 +180,7 @@ mgu _ (TypeID c u) t = varBind u c t
 mgu _ t (TypeID c u) = varBind u c t
 mgu p (TypeBasic t1) (TypeBasic t2)
     | t1 == t2 = return nullSubst
-    | otherwise = trace (show p) tell [Error TypeError (show t1 ++ "\x1b[1m does not unify with " ++ show t2 ++ "\x1b[1m") p] >> return nullSubst
+    | otherwise = tell [Error TypeError (show t1 ++ "\x1b[1m does not unify with " ++ show t2 ++ "\x1b[1m") p] >> return nullSubst
 mgu _ Void Void = return nullSubst
 mgu p t1 t2 = tell [Error TypeError (showType (varsMap t1) t1 ++ "\x1b[1m does not unify with " ++ showType (varsMap t2) t2 ++ "\x1b[1m") p] >> return nullSubst
 

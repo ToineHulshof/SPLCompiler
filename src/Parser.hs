@@ -44,7 +44,7 @@ pp :: Parser (P -> a) -> Parser a
 pp p = (\(p1, s1) f (p2, s2) -> f (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
 
 ppE :: Parser Exp -> Parser Exp
-ppE p = (\(p1, s1) e (p2, s2) -> trace (show p1 ++ ", " ++ show p2) posE (p1, stringDev s1 s2) e) <$> pP <*> p <*> pP
+ppE p = (\(p1, s1) e (p2, s2) -> posE (p1, stringDev s1 s2) e) <$> pP <*> p <*> pP
 
 posE :: P -> Exp -> Exp
 posE p (Exp t o e1 e2 _) = Exp t o e1 e2 p
@@ -196,7 +196,7 @@ expNOp2P' :: Parser Exp
 expNOp2P' = pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP <|> pp (ExpEmptyList <$ w (stringP "[]"))
 
 expOp2P :: Bool -> Parser Exp
-expOp2P b = ppE (expListP b) <|> ppE (Parser $ expBP b 0)
+expOp2P b = ppE expStringP <|> ppE expListP <|> ppE (Parser $ expBP b 0)
 
 expBP :: Bool -> Int -> Code -> ([Error], Maybe (Code, Exp))
 expBP b minBP c = case r1 of
@@ -247,8 +247,27 @@ expTupleP = pp $ curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
 expBracketsP :: Parser Exp
 expBracketsP = pp $ ExpBrackets <$> (c '(' *> expP <* c ')')
 
-expListP :: Bool -> Parser Exp
-expListP b = foldr (\e1 e2 -> Exp Nothing Cons e1 e2 ((1, 1), "")) (ExpEmptyList ((1, 1), "")) <$> (c '[' *> sepBy (c ',') exp'P <* c ']')
+expStringP :: Parser Exp
+expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> spanP (/='"') <* c '"')
+
+expListP :: Parser Exp
+expListP = foldr foldCons . ExpEmptyList <$> pP <*> (c '[' *> sepBy (c ',') exp'P <* c ']')
+
+foldCons :: Exp -> Exp -> Exp 
+foldCons e1 e2 = Exp Nothing Cons e1 e2 (expToP e1)
+
+expToP :: Exp -> P
+expToP (Exp _ _ _ _ p) = p
+expToP (ExpOp1 _ _ p) = p
+expToP (ExpTuple _ p) = p
+expToP (ExpBrackets _ p) = p
+expToP (ExpField _ _ _ p) = p
+expToP (ExpInt _ p) = p
+expToP (ExpChar _ p) = p
+expToP (ExpBool _ p) = p
+expToP (ExpFunCall _ p) = p
+expToP (ExpEmptyList p) = p
+expToP (ExpError p) = p
 
 stmtIfP :: Parser Stmt
 stmtIfP = (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (w (stringP "else") *> stmtsP) <|> (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP
