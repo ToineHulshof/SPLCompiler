@@ -116,7 +116,7 @@ ti' :: SPL -> TypeEnv -> TI (TypeEnv, SPL)
 ti' spl e = do
     bt <- btSPL emptyEnv spl
     let comps = components spl
-    if any varCycle comps then tell [Error TypeError "Cycle found in global variables" defaultP] >> return (e, spl) else
+    if any varCycle comps then tell [Error TypeError "Cycle found in global variables" Nothing] >> return (e, spl) else
         tiComps (stdlib `combine` e `combine` bt) comps
 
 tiResult :: Bool -> String -> Maybe FilePath -> SPL -> TypeEnv -> IO ()
