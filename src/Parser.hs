@@ -19,6 +19,9 @@ import Debug.Trace ( trace )
 ws :: Parser String
 ws = spanP isSpace
 
+ws' :: Parser String
+ws' = spanP (\c -> isSpace c && c /= '\n')
+
 -- Ignores all surrounded whitespaces for the given parser
 w :: Parser a -> Parser a
 w p = ws *> p <* ws
@@ -129,7 +132,7 @@ funDeclP :: Parser FunDecl
 funDeclP = (\(a, f) b c d e -> FunDecl a b c d e f) <$> pp' idP <*> (c '(' *> sepBy (c ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
 
 optP :: Char -> Parser Char
-optP ch = optP' ch <* ws where
+optP ch = ws' *> optP' ch <* ws where
   optP' ch = Parser $ \case
     a@((p, x):xs)
       | x == ch -> ([], Just (xs, ch))
