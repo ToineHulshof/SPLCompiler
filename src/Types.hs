@@ -451,11 +451,11 @@ tiExp' :: Bool -> TypeEnv -> Exp -> TI (Subst, Type, Exp)
 tiExp' b env (Exp _ o e1 e2 p) = do
     (t1, t2, t3) <- tiOp2 o
     (s1, t1', e1') <- tiExp' b env e1
-    s2 <- mgu p t1' (apply s1 t1)
+    s2 <- mgu (expToP e1) t1' (apply s1 t1)
     let cs1 = s2 `composeSubst` s1
     (s3, t2', e2') <- tiExp' b (apply cs1 env) e2
     let cs2 = s3 `composeSubst` cs1
-    s4 <- mgu p (apply cs2 t2') (apply cs2 t2)
+    s4 <- mgu (expToP e2) (apply cs2 t2') (apply cs2 t2)
     let cs3 = s4 `composeSubst` cs2
     return (cs3, apply cs3 t3, Exp (Just t1') o e1' e2' p)
 tiExp' b env (ExpOp1 o e p) = do

@@ -43,8 +43,12 @@ stringP = traverse charP
 stringDev :: String -> String -> String 
 stringDev s1 s2 = take (length s1 - length s2) s1
 
+-- Parser that determines the position and string corresponding to the given parser
 pp :: Parser (P -> a) -> Parser a
 pp p = (\(p1, s1) f (p2, s2) -> f (p1, stringDev s1 s2)) <$> pP <*> p <*> pP
+
+pp' :: Parser a -> Parser (a, P)
+pp' p = (\(p1, s1) a (p2, s2) -> (a, (p1, stringDev s1 s2))) <$> pP <*> p <*> pP
 
 ppE :: Parser Exp -> Parser Exp
 ppE p = (\(p1, s1) e (p2, s2) -> posE (p1, stringDev s1 s2) e) <$> pP <*> p <*> pP
@@ -122,10 +126,10 @@ declFunDeclP :: Parser Decl
 declFunDeclP = DeclFunDecl <$> funDeclP
 
 funDeclP :: Parser FunDecl
-funDeclP = pp $ FunDecl <$> idP <*> (c '(' *> sepBy (c ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
+funDeclP = (\(a, f) b c d e -> FunDecl a b c d e f) <$> pp' idP <*> (c '(' *> sepBy (c ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
 
 optP :: Char -> Parser Char
-optP ch = w $ optP' ch where
+optP ch = optP' ch <* ws where
   optP' ch = Parser $ \case
     a@((p, x):xs)
       | x == ch -> ([], Just (xs, ch))
@@ -264,7 +268,7 @@ expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*
 
 cycleList :: [a] -> [a]
 cycleList [] = []
-cycleList l = tail l ++ [head l]
+cycleList l = last l : tail l
 
 expListP :: Parser Exp
 expListP = (\p es -> let ps = map expToP es in foldr foldCons (ExpEmptyList p) (zipWith posE (cycleList ps) es)) <$> pP <*> (c '[' *> sepBy (c ',') exp'P <* c' ']')
