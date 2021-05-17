@@ -62,7 +62,7 @@ ppStmt d (StmtIf e s es) = printf "%sif (%s) {\n%s%s}%s" (tab d) (ppExp e) (unli
 ppStmt d (StmtWhile e s) = printf "%swhile (%s) {\n%s%s}" (tab d) (ppExp e) (unlines $ map (ppStmt (d + 1)) s) (tab d)
 ppStmt d (StmtField n f e _) = printf "%s%s%s = %s;" (tab d) n (concatMap ppField f) (ppExp e)
 ppStmt d (StmtFunCall f) = printf "%s%s;" (tab d) (ppFunCall f)
-ppStmt d (StmtReturn e) = printf "%sreturn%s;" (tab d) (ppMExp e)
+ppStmt d (StmtReturn e _) = printf "%sreturn%s;" (tab d) (ppMExp e)
 
 ppMExp :: Maybe Exp -> String
 ppMExp Nothing = ""
@@ -72,10 +72,10 @@ ppFunCall :: FunCall -> String
 ppFunCall (FunCall _ n a _) = printf "%s(%s)" n (join ", " (map ppExp a))
 
 ppField :: Field -> String
-ppField Head = ".hd"
-ppField Tail = ".tl"
-ppField First = ".fst"
-ppField Second = ".snd"
+ppField (Head _) = ".hd"
+ppField (Tail _) = ".tl"
+ppField (First _) = ".fst"
+ppField (Second _) = ".snd"
 
 ppStmtElse :: Depth -> Maybe [Stmt] -> String
 ppStmtElse _ Nothing = ""

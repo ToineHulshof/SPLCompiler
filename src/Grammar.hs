@@ -100,7 +100,7 @@ data Stmt
   | StmtWhile Exp [Stmt]
   | StmtField String [Field] Exp P
   | StmtFunCall FunCall
-  | StmtReturn (Maybe Exp)
+  | StmtReturn (Maybe Exp) P
   | StmtError P
   deriving (Show)
 
@@ -144,10 +144,10 @@ data Op1
   deriving (Show)
 
 data Field
-  = Head
-  | Tail
-  | First
-  | Second
+  = Head P
+  | Tail P
+  | First P
+  | Second P
   deriving (Show)
 
 data FunCall

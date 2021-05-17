@@ -34,8 +34,8 @@ ctStmt args (StmtField n _ e _)
     | n `elem` args = []
     | otherwise = [(Var, n)]
 ctStmt args (StmtFunCall (FunCall _ n es _)) = (Fun, n) : concatMap (ctExp args) es
-ctStmt args (StmtReturn Nothing) = []
-ctStmt args (StmtReturn (Just e)) = ctExp args e
+ctStmt args (StmtReturn Nothing _) = []
+ctStmt args (StmtReturn (Just e) _) = ctExp args e
 
 ctExp :: [String] -> Exp -> [(Kind, String)]
 ctExp args (Exp _ _ e1 e2 _) = ctExp args e1 ++ ctExp args e2

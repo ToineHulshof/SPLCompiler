@@ -255,19 +255,19 @@ genStmt (StmtField n fs e _) = do
             Just i -> do
                 return $ i1 ++ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i2 ++ [StoreAddress $ genField (last fs)]
         Just i -> return $ i1 ++ [LoadLocal i] ++ i2 ++ [StoreAddress $ genField (last fs)]
-genStmt (StmtReturn Nothing) = do 
+genStmt (StmtReturn Nothing _) = do 
     funName <- gets funName
     return [BranchAlways $ funName ++ "End"]
-genStmt (StmtReturn (Just e)) = do 
+genStmt (StmtReturn (Just e) _) = do 
     i1 <- genExp e
     funName <- gets funName
     return $ i1 ++ [StoreRegister ReturnRegister, BranchAlways $ funName ++ "End"]
 
 genField :: Field -> Int
-genField First = -1
-genField Second = 0
-genField Head = 0
-genField Tail = -1
+genField (First _) = -1
+genField (Second _) = 0
+genField (Head _) = 0
+genField (Tail _) = -1
 
 genFunCall :: FunCall -> CG [Instruction]
 genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do

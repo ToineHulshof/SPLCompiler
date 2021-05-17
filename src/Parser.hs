@@ -163,7 +163,7 @@ funCallP :: Parser FunCall
 funCallP = pp (FunCall Nothing <$> idP <*> (c '(' *> sepBy (charP ',') exp'P <* c' ')'))
 
 fieldFunP :: Parser Field
-fieldFunP = Head <$ stringP "hd" <|> Tail <$ stringP "tl" <|> First <$ stringP "fst" <|> Second <$ stringP "snd"
+fieldFunP = pp (Head <$ stringP "hd") <|> pp (Tail <$ stringP "tl") <|> pp (First <$ stringP "fst") <|> pp (Second <$ stringP "snd")
 
 fieldP :: Parser [Field]
 fieldP = many (c '.' *> fieldFunP)
@@ -304,7 +304,7 @@ stmtFunCallP :: Parser Stmt
 stmtFunCallP = StmtFunCall <$> funCallP <* optP ';'
 
 stmtReturnP :: Parser Stmt
-stmtReturnP = StmtReturn . pure <$> (stringP "return" *> ws *> expP <* optP ';') <|> StmtReturn Nothing <$ stringP "return" <* optP ';'
+stmtReturnP = pp (StmtReturn . pure <$> (stringP "return" *> ws *> expP <* optP ';')) <|> pp (StmtReturn Nothing <$ stringP "return") <* optP ';'
 
 stmtP :: Parser Stmt
 stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP <|> StmtError <$> errorP (`elem` "\n}") False
