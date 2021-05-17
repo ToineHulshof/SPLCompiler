@@ -1,2 +1,7 @@
-var z = [1, 2]
+var z = [1, 2];
 var x = 3;
+
+main() {
+    print(x)
+    print(z)
+}

@@ -37,7 +37,7 @@ ppVarDecl (VarDecl Nothing n e) = printf "var %s = %s;" n (ppExp e)
 ppVarDecl (VarDecl (Just t) n e) = printf "%s %s = %s;" (ppType t) n (ppExp e)
 
 ppFunDecl :: Depth -> FunDecl -> String
-ppFunDecl d (FunDecl n a t v s) = printf "%s%s(%s) %s{\n%s%s%s%s}" (tab d) n (join ", " a) (ppFunType t) (unlines $ map (printf "%s%s" (tab (d + 1)) . ppVarDecl) v) (if null v then "" else "\n") (unlines $ map (ppStmt (d + 1)) s) (tab d)
+ppFunDecl d (FunDecl n a t v s _) = printf "%s%s(%s) %s{\n%s%s%s%s}" (tab d) n (join ", " a) (ppFunType t) (unlines $ map (printf "%s%s" (tab (d + 1)) . ppVarDecl) v) (if null v then "" else "\n") (unlines $ map (ppStmt (d + 1)) s) (tab d)
 
 ppFunType :: Maybe Type -> String
 ppFunType Nothing = ""
@@ -60,7 +60,7 @@ ppBasicType CharType = "Char"
 ppStmt :: Depth -> Stmt -> String
 ppStmt d (StmtIf e s es) = printf "%sif (%s) {\n%s%s}%s" (tab d) (ppExp e) (unlines $ map (ppStmt (d + 1)) s) (tab d) (ppStmtElse d es)
 ppStmt d (StmtWhile e s) = printf "%swhile (%s) {\n%s%s}" (tab d) (ppExp e) (unlines $ map (ppStmt (d + 1)) s) (tab d)
-ppStmt d (StmtField n f e) = printf "%s%s%s = %s;" (tab d) n (concatMap ppField f) (ppExp e)
+ppStmt d (StmtField n f e _) = printf "%s%s%s = %s;" (tab d) n (concatMap ppField f) (ppExp e)
 ppStmt d (StmtFunCall f) = printf "%s%s;" (tab d) (ppFunCall f)
 ppStmt d (StmtReturn e) = printf "%sreturn%s;" (tab d) (ppMExp e)
 
@@ -69,7 +69,7 @@ ppMExp Nothing = ""
 ppMExp (Just e) = " " ++ ppExp e
 
 ppFunCall :: FunCall -> String
-ppFunCall (FunCall _ n a) = printf "%s(%s)" n (join ", " (map ppExp a))
+ppFunCall (FunCall _ n a _) = printf "%s(%s)" n (join ", " (map ppExp a))
 
 ppField :: Field -> String
 ppField Head = ".hd"

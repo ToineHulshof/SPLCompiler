@@ -27,6 +27,9 @@ w p = ws *> p <* ws
 c :: Char -> Parser Char
 c x = w (charP x)
 
+c' :: Char -> Parser Char
+c' x = ws *> charP x
+
 -- Creates a Parser that parses the next Char that is equal to the Char in the Parser
 charP :: Char -> Parser Char
 charP x = satisfy (==x) True
@@ -119,14 +122,15 @@ declFunDeclP :: Parser Decl
 declFunDeclP = DeclFunDecl <$> funDeclP
 
 funDeclP :: Parser FunDecl
-funDeclP = FunDecl <$> idP <*> (c '(' *> sepBy (charP ',') idP <* c ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c '}')
+funDeclP = pp $ FunDecl <$> idP <*> (c '(' *> sepBy (c ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
 
 optP :: Char -> Parser Char
-optP ch = Parser $ \case
-  a@((p, x):xs)
-    | x == ch -> ([], Just (xs, ch))
-    | otherwise -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (Just (p, " "))], Just ((p, x):xs, ch))
-  [] -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") Nothing], Just ([], ch))
+optP ch = w $ optP' ch where
+  optP' ch = Parser $ \case
+    a@((p, x):xs)
+      | x == ch -> ([], Just (xs, ch))
+      | otherwise -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") (Just (p, " "))], Just ((p, x):xs, ch))
+    [] -> ([Error ParseError ("Missing \"" ++ [ch] ++ "\" inserted") Nothing], Just ([], ch))
 
 varDeclP :: Parser VarDecl
 varDeclP = (varDeclVarP <|> varDeclTypeP) <* optP ';'
@@ -156,7 +160,7 @@ digitP :: Parser String
 digitP = notNull $ spanP isDigit
 
 funCallP :: Parser FunCall
-funCallP = FunCall Nothing <$> idP <*> (c '(' *> sepBy (charP ',') expP <* c ')')
+funCallP = pp (FunCall Nothing <$> idP <*> (c '(' *> sepBy (charP ',') exp'P <* c' ')'))
 
 fieldFunP :: Parser Field
 fieldFunP = Head <$ stringP "hd" <|> Tail <$ stringP "tl" <|> First <$ stringP "fst" <|> Second <$ stringP "snd"
@@ -250,16 +254,20 @@ expCharP :: Parser Exp
 expCharP = pp $ ExpChar <$> (charP '\'' *> satisfy (const True) True <* charP '\'')
 
 expTupleP :: Parser Exp
-expTupleP = pp $ curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c ')'
+expTupleP = pp $ curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c' ')'
 
 expBracketsP :: Parser Exp
-expBracketsP = pp $ ExpBrackets <$> (c '(' *> expP <* c ')')
+expBracketsP = pp $ ExpBrackets <$> (c '(' *> expP <* c' ')')
 
 expStringP :: Parser Exp
-expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> spanP (/='"') <* c '"')
+expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> spanP (/='"') <* c' '"')
+
+cycleList :: [a] -> [a]
+cycleList [] = []
+cycleList l = tail l ++ [head l]
 
 expListP :: Parser Exp
-expListP = (\p es -> let ps = map expToP es in foldr foldCons (ExpEmptyList p) (zipWith posE (tail ps ++ [head ps]) es)) <$> pP <*> (c '[' *> sepBy (c ',') exp'P <* ws <* charP ']')
+expListP = (\p es -> let ps = map expToP es in foldr foldCons (ExpEmptyList p) (zipWith posE (cycleList ps) es)) <$> pP <*> (c '[' *> sepBy (c ',') exp'P <* c' ']')
 
 foldCons :: Exp -> Exp -> Exp 
 foldCons e1 e2 = Exp Nothing Cons e1 e2 (expToP e1)
@@ -281,7 +289,7 @@ stmtIfP :: Parser Stmt
 stmtIfP = (\ex i e -> StmtIf ex i (Just e)) <$> conditionP "if" <*> stmtsP <*> (w (stringP "else") *> stmtsP) <|> (\ex i -> StmtIf ex i Nothing) <$> conditionP "if" <*> stmtsP
 
 conditionP :: String -> Parser Exp
-conditionP s = stringP s *> c '(' *> expP <* c ')'
+conditionP s = stringP s *> c '(' *> expP <* c' ')'
 
 stmtsP :: Parser [Stmt]
 stmtsP = c '{' *> many stmtP <* c '}'
@@ -290,13 +298,13 @@ stmtWhileP :: Parser Stmt
 stmtWhileP = StmtWhile <$> conditionP "while" <*> stmtsP 
 
 stmtFieldP :: Parser Stmt
-stmtFieldP = StmtField <$> idP <*> fieldP <*> (c '=' *> expP <* optP ';')
+stmtFieldP = pp $ StmtField <$> idP <*> fieldP <*> (c '=' *> expP <* optP ';')
 
 stmtFunCallP :: Parser Stmt
 stmtFunCallP = StmtFunCall <$> funCallP <* optP ';'
 
 stmtReturnP :: Parser Stmt
-stmtReturnP = StmtReturn Nothing <$ stringP "return" <* optP ';' <|> StmtReturn . pure <$> (stringP "return" *> ws *> expP <* optP ';')
+stmtReturnP = StmtReturn . pure <$> (stringP "return" *> ws *> expP <* optP ';') <|> StmtReturn Nothing <$ stringP "return" <* optP ';'
 
 stmtP :: Parser Stmt
 stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP <|> StmtError <$> errorP (`elem` "\n}") False
@@ -308,10 +316,10 @@ funTypeP :: Parser (Maybe Type)
 funTypeP = (\args ret -> Just $ foldr1 TypeFun $ args ++ [ret]) <$> (w (stringP "::") *> many (w typeP)) <*> (w (stringP "->") *> retTypeP) <|> pure Nothing
 
 typeTupleP :: Parser Type
-typeTupleP = TypeTuple <$> (c '(' *> typeP <* c ',') <*> typeP <* c ')'  
+typeTupleP = TypeTuple <$> (c '(' *> typeP <* c ',') <*> typeP <* c' ')'  
 
 typeListP :: Parser Type
-typeListP = TypeList <$> (c '[' *> typeP <* c ']')
+typeListP = TypeList <$> (c '[' *> typeP <* c' ']')
 
 typeP :: Parser Type
 typeP = typeTupleP <|> typeListP <|> TypeBasic <$> basicTypeP <|> TypeID Nothing <$> idP
@@ -377,7 +385,7 @@ extractErrors = concatMap erDecl
 
 erDecl :: Decl -> [Error]
 erDecl (DeclVarDecl (VarDecl _ _ e)) = erExp e
-erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts)) = concatMap (erDecl . DeclVarDecl) vs ++ erStmts stmts
+erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts _)) = concatMap (erDecl . DeclVarDecl) vs ++ erStmts stmts
 erDecl (DeclError s) = [Error ParseError "Unknown declaration" (Just s)]
 
 erExp :: Exp -> [Error]

@@ -53,7 +53,7 @@ data VarDecl
   deriving (Show)
 
 data FunDecl
-  = FunDecl String [String] (Maybe Type) [VarDecl] [Stmt]
+  = FunDecl String [String] (Maybe Type) [VarDecl] [Stmt] P
   deriving (Show)
 
 data Condition = Eq | Ord deriving (Eq, Ord, Show)
@@ -98,7 +98,7 @@ instance Show BasicType where
 data Stmt
   = StmtIf Exp [Stmt] (Maybe [Stmt])
   | StmtWhile Exp [Stmt]
-  | StmtField String [Field] Exp
+  | StmtField String [Field] Exp P
   | StmtFunCall FunCall
   | StmtReturn (Maybe Exp)
   | StmtError P
@@ -151,5 +151,5 @@ data Field
   deriving (Show)
 
 data FunCall
-  = FunCall (Maybe Type) String [Exp]
+  = FunCall (Maybe Type) String [Exp] P
   deriving (Show)

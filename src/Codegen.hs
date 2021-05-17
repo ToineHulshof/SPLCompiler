@@ -194,7 +194,7 @@ genGlobalVars i ((VarDecl _ n e):xs) = do
     return (i1 ++ i2, M.singleton n i `M.union` m)
 
 genFunDecl :: FunDecl -> CG [Instruction]
-genFunDecl (FunDecl n args _ vars stmts) = do
+genFunDecl (FunDecl n args _ vars stmts _) = do
     m <- argsMap (-1 - length args) args
     setLocalMap m
     i1 <- genLocalVars 1 args vars
@@ -234,7 +234,7 @@ genStmt (StmtWhile e ss) = do
     i2 <- genStmts ss
     i <- show <$> new
     return $ Label ("While" ++ i) : i1 ++ [BranchFalse $ "EndWhile" ++ i] ++ i2 ++ [BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i]
-genStmt (StmtField n [] e) = do
+genStmt (StmtField n [] e _) = do
     lm <- gets localMap
     gm <- gets globalMap
     i1 <- genExp e
@@ -244,7 +244,7 @@ genStmt (StmtField n [] e) = do
             Just i -> do
                 return $ i1 ++ [LoadConstant i, StoreAddress 0]
         Just i -> return $ i1 ++ [StoreLocal i]
-genStmt (StmtField n fs e) = do
+genStmt (StmtField n fs e _) = do
     lm <- gets localMap
     gm <- gets globalMap
     i1 <- genExp e
@@ -270,12 +270,12 @@ genField Head = 0
 genField Tail = -1
 
 genFunCall :: FunCall -> CG [Instruction]
-genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg]) = do
+genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do
     i1 <- genExp arg
     i2 <- genPrint t
     return $ i1 ++ i2 ++ printString "\n"
-genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg]) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
-genFunCall (FunCall t n args) = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
+genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
+genFunCall (FunCall t n args _) = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
 printString :: String -> [Instruction]
 printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Trap Char)

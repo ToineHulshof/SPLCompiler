@@ -22,7 +22,7 @@ components ds = map ((\(a, _, _) -> a) <$>) $ stronglyConnCompR $ map (\d -> let
 
 ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
 ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)
-ctDecl (DeclFunDecl (FunDecl n args _ vars stmts)) = ((Fun, n), ctStmts args stmts ++ concatMap (\(VarDecl _ _ e) -> ctExp args e) vars)
+ctDecl (DeclFunDecl (FunDecl n args _ vars stmts _)) = ((Fun, n), ctStmts args stmts ++ concatMap (\(VarDecl _ _ e) -> ctExp args e) vars)
 
 ctStmts :: [String] -> [Stmt] -> [(Kind, String)]
 ctStmts args = concatMap (ctStmt args)
@@ -30,10 +30,10 @@ ctStmts args = concatMap (ctStmt args)
 ctStmt :: [String] -> Stmt -> [(Kind, String)]
 ctStmt args (StmtIf e ss1 ss2) = ctExp args e ++ ctStmts args ss1 ++ ctStmts args (fromMaybe [] ss2)
 ctStmt args (StmtWhile e ss) = ctExp args e ++ ctStmts args ss
-ctStmt args (StmtField n _ e)
+ctStmt args (StmtField n _ e _)
     | n `elem` args = []
     | otherwise = [(Var, n)]
-ctStmt args (StmtFunCall (FunCall _ n es)) = (Fun, n) : concatMap (ctExp args) es
+ctStmt args (StmtFunCall (FunCall _ n es _)) = (Fun, n) : concatMap (ctExp args) es
 ctStmt args (StmtReturn Nothing) = []
 ctStmt args (StmtReturn (Just e)) = ctExp args e
 
@@ -45,7 +45,7 @@ ctExp args (ExpBrackets e _) = ctExp args e
 ctExp args (ExpField _ n _ _)
     | n `elem` args = []
     | otherwise = [(Var, n)]
-ctExp args (ExpFunCall (FunCall _ n es) _) = (Fun, n) : concatMap (ctExp args) es
+ctExp args (ExpFunCall (FunCall _ n es _) _) = (Fun, n) : concatMap (ctExp args) es
 ctExp _ _ = []
 
 stdlib :: TypeEnv
@@ -69,18 +69,18 @@ btVarDecl (VarDecl Nothing s _) = TypeEnv . M.singleton (Var, s) . Scheme [] <$>
 btVarDecl (VarDecl (Just t) s _) = return $ TypeEnv $ M.singleton (Var, s) (Scheme [] t)
 
 btFunDecl :: TypeEnv -> FunDecl -> TI TypeEnv
-btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _) = do
+btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _ p) = do
     case M.lookup (Fun, s) env of
         Nothing -> do
             nvars <- mapM (newTyVar Nothing) args
             ret <- newTyVar Nothing "r"
             let t = foldr1 TypeFun $ nvars ++ [ret]
             return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") defaultP] >> return (TypeEnv env)
-btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _) = do
+        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
+btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _ p) = do
     case M.lookup (Fun, s) env of
         Nothing -> return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") defaultP] >> return (TypeEnv env)
+        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
     
 hasEffect :: (String, Type) -> Bool
 hasEffect (s, TypeID _ n) = n /= s
@@ -138,7 +138,7 @@ containsMain :: SPL -> Bool
 containsMain = any isMain
     where 
         isMain :: Decl -> Bool
-        isMain (DeclFunDecl (FunDecl "main" _ _ _ _)) = True
+        isMain (DeclFunDecl (FunDecl "main" _ _ _ _ _)) = True
         isMain _ = False
 
 testEnv :: Bool -> Maybe FilePath -> TypeEnv -> String -> IO ()
