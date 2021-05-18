@@ -30,17 +30,12 @@ join s (x : xs) = x ++ s ++ join s xs
 removePath :: FilePath -> FilePath
 removePath f = reverse $ takeWhile (/= '/') (reverse f)
 
-replaceAllButTab :: Char -> Char
-replaceAllButTab '\t' = '\t'
-replaceAllButTab _ = ' '
-
 instance Show Errors where
   show (Errors file lines errors) = join "\n\n" $ map showError errors where
     showError (Error k e Nothing) = "\x1b[1m" ++ removePath file ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ e
     showError (Error k e (Just ((li, co), c'))) = let c = takeWhile (/= '\n') c' in
       "\x1b[1m" ++ removePath file ++ ":" ++ show li ++ ":" ++ show co ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ e ++ "\n" ++
       replicate leftLength ' ' ++ "\x1b[34m|\n" ++ show li ++ " |\x1b[0m " ++
-      let (l, r) = splitAt (co - 1) line in (l ++ "\x1b[31m\x1b[1m" ++ c ++ "\x1b[0m" ++ drop (length c) r) ++ "\n" ++
-      replicate leftLength ' ' ++ "\x1b[34m\x1b[1m|\x1b[0m" ++ map replaceAllButTab (take (co - 1) line) ++ "\x1b[31m\x1b[1m" ++ replicate (length c) '^' ++ "\x1b[0m" where
+      let (l, r) = splitAt (co - 1) (lines ! li) in (l ++ "\x1b[31m\x1b[1m" ++ c ++ "\x1b[0m" ++ drop (length c) r) ++ "\n" ++
+      replicate leftLength ' ' ++ "\x1b[34m\x1b[1m|\x1b[0m" ++ replicate co ' ' ++ "\x1b[31m\x1b[1m" ++ replicate (length c) '^' ++ "\x1b[0m" where
       leftLength = length (show li) + 1
-      line = lines ! li

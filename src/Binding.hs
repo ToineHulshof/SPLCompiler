@@ -141,13 +141,18 @@ containsMain = any isMain
         isMain (DeclFunDecl (FunDecl "main" _ _ _ _ _)) = True
         isMain _ = False
 
+replaceTab :: Char -> String
+replaceTab '\t' = "    "
+replaceTab c = [c]
+
 testEnv :: Bool -> Maybe FilePath -> TypeEnv -> String -> IO ()
-testEnv llvm f env s
+testEnv llvm f env s'
     | not $ null e = print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) e) >> exitFailure
     | otherwise = case r of
         Nothing -> print e
         Just (_, spl) -> tiResult llvm s f spl env
     where
+        s = concatMap replaceTab s'
         (e, r) = p s
         l = lines s
 

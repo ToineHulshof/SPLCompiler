@@ -1,4 +1,4 @@
-main()// :: -> Void
+main() :: -> Void
 {
 	var a = (((((((((((((5)))))))))))));
 	return a;
