@@ -341,7 +341,7 @@ typeP = typeTupleP <|> typeListP <|> TypeBasic <$> basicTypeP <|> TypeID Nothing
 -- Several functions to easily apply the parser to certain programs
 
 -- Maps the result of the parsed program to a string which describes the result
-result :: Show a => ([Error], Maybe (Code, a)) -> String
+result :: ([Error], Maybe (Code, SPL)) -> String
 result ([], Just (c, a))
   | null c = "Parsed succesfully" -- ++ show a
   | otherwise = show $ Error ParseError (nes "Did not complete parsing") ((\h -> (fst h, map snd c)) <$> listToMaybe c)
@@ -369,14 +369,14 @@ comments s d (((l1, c1), x1) : ((l2, c2), x2) : xs)
     where t = [x1, x2]
 
 -- A function that parses a file for a given parser
-parseFileP :: Show a => Parser a -> (([Error], Maybe (Code, a)) -> String) -> FilePath -> IO ()
-parseFileP p r f = readFile f >>= putStrLn . help where
+parseFileP :: (([Error], Maybe (Code, SPL)) -> String) -> FilePath -> IO ()
+parseFileP r f = readFile f >>= putStrLn . help where
   help :: String -> String
-  help s = r $ comments False 0 (code s) >>= parse p
+  help s = r $ comments False 0 (code s) >>= parse splP
 
 -- A function that parses the program in the given FilePath
 parseFile :: FilePath -> IO ()
-parseFile = parseFileP splP result
+parseFile = parseFileP result
 
 -- A helper function to test if a parser behaves correctly on a given input.
 testP :: Parser a -> String -> ([Error], Maybe (Code, a))

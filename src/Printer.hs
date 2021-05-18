@@ -15,8 +15,8 @@ result' ([], Just (_, a)) = ppSPL a
 result' (e, _) = show e
 
 -- Pretty prints the program in the provided filepath
-pp :: FilePath -> IO ()
-pp = parseFileP splP result'
+ppFile :: FilePath -> IO ()
+ppFile = parseFileP result'
 
 -- Pretty prints n tabs
 tab :: Int -> String
@@ -80,6 +80,9 @@ ppField (Second _) = ".snd"
 ppStmtElse :: Depth -> Maybe [Stmt] -> String
 ppStmtElse _ Nothing = ""
 ppStmtElse d (Just s) = printf " else {\n%s%s}" (unlines $ map (ppStmt (d + 1)) s) (tab d)
+
+instance Show Exp where
+    show = ppExp
 
 ppExp :: Exp -> String
 ppExp (Exp _ o e1 e2 _) = ppExp e1 ++ " " ++ ppOp2 o ++ " " ++ ppExp e2

@@ -191,12 +191,13 @@ mgu' _ Void Void ot1 ot2 = return nullSubst
 mgu' p t1 t2 ot1 ot2 = typeError p ot1 ot2
 
 typeError :: P -> NonEmpty Type -> NonEmpty Type -> TI Subst
-typeError p@(_, a) ot1 ot2 = tell [Error TypeError (("\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2) (Just p)] >> return nullSubst
-    where 
-        extraError :: Type -> Type -> String
-        extraError t1 t2 = "\x1b[1m-> " ++ showType True (varsMap t1) t1 ++ "\x1b[1m must match " ++ showType True (varsMap t2) t2 ++ "\x1b[1m"
-        (h1 :| t1) = NE.reverse ot1
-        (h2 :| t2) = NE.reverse ot2
+typeError p@(_, a) (h1 :| _) (h2 :| _) = tell [Error TypeError (nes ("\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m")) (Just p)] >> return nullSubst
+-- typeError p@(_, a) ot1 ot2 = tell [Error TypeError (("\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2) (Just p)] >> return nullSubst
+--     where 
+--         extraError :: Type -> Type -> String
+--         extraError t1 t2 = "\x1b[1m-> " ++ showType True (varsMap t1) t1 ++ "\x1b[1m must match " ++ showType True (varsMap t2) t2 ++ "\x1b[1m"
+--         (h1 :| t1) = NE.reverse ot1
+--         (h2 :| t2) = NE.reverse ot2
 
 condition :: Type -> String -> (Maybe Condition, Bool)
 condition (TypeID c n) s = (c, n == s)
