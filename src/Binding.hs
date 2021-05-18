@@ -14,8 +14,9 @@ import qualified Data.Map as M
 import Debug.Trace ( trace )
 import Data.Graph ( stronglyConnCompR, SCC(..) )
 import Data.Tuple ( swap )
+import Data.List.NonEmpty ( NonEmpty((:|)) )
 import Data.Array ( listArray )
-import System.Exit
+import System.Exit ( exitFailure )
 
 components :: SPL -> [SCC Decl]
 components ds = map ((\(a, _, _) -> a) <$>) $ stronglyConnCompR $ map (\d -> let (a, b) = ctDecl d in (d, a, b)) ds
@@ -76,11 +77,11 @@ btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _ p) = do
             ret <- newTyVar Nothing "r"
             let t = foldr1 TypeFun $ nvars ++ [ret]
             return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
+        Just _ -> tell [Error TypeError (nes $ "Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
 btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _ p) = do
     case M.lookup (Fun, s) env of
         Nothing -> return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-        Just _ -> tell [Error TypeError ("Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
+        Just _ -> tell [Error TypeError (nes $ "Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
     
 hasEffect :: (String, Type) -> Bool
 hasEffect (s, TypeID _ n) = n /= s
@@ -116,7 +117,7 @@ ti' :: SPL -> TypeEnv -> TI (TypeEnv, SPL)
 ti' spl e = do
     bt <- btSPL emptyEnv spl
     let comps = components spl
-    if any varCycle comps then tell [Error TypeError "Cycle found in global variables" Nothing] >> return (e, spl) else
+    if any varCycle comps then tell [Error TypeError (nes "Cycle found in global variables") Nothing] >> return (e, spl) else
         tiComps (stdlib `combine` e `combine` bt) comps
 
 tiResult :: Bool -> String -> Maybe FilePath -> SPL -> TypeEnv -> IO ()
@@ -126,7 +127,7 @@ tiResult llvm s f spl e = do
         then case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
             Just filePath -> if containsMain spl' then putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n" >> genCode llvm filePath spl' else do
-                print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError "\x1b[31mNo main function\x1b[0m\n" Nothing]
+                print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError (nes "\x1b[31mNo main function\x1b[0m\n") Nothing]
                 putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n"
                 putStr $ show env
                 exitFailure

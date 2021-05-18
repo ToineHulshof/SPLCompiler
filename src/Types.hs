@@ -104,7 +104,7 @@ showType f m (TypeFun t1 t2) = showType f m t1 ++ " -> " ++ showType f m t2
 showType f m Void = "\x1b[34mVoid\x1b[0m"
 
 debug :: Bool
-debug = True
+debug = False
 
 instance Show TypeEnv where
     show env = help funs ++ help vars
@@ -166,24 +166,26 @@ generalize :: TypeEnv -> Type -> Scheme
 generalize env t = Scheme vars t
     where vars = S.toList (ftv t `S.difference` ftv env)
 
-mgu :: P -> Type -> Type -> TI Subst
-mgu p (TypeFun l1 r1) (TypeFun l2 r2) = do
-    s1 <- mgu p l1 l2
-    s2 <- mgu p (apply s1 r1) (apply s1 r2)
+mgu p t1 t2 = mgu' p t1 t2 t1 t2
+
+mgu' :: P -> Type -> Type -> Type -> Type -> TI Subst
+mgu' p (TypeFun l1 r1) (TypeFun l2 r2) ot1 ot2 = do
+    s1 <- mgu' p l1 l2 ot1 ot2
+    s2 <- mgu' p (apply s1 r1) (apply s1 r2) ot1 ot2
     return $ s2 `composeSubst` s1
-mgu p (TypeList t1) (TypeList t2) = mgu p t1 t2
-mgu p (TypeTuple l1 r1) (TypeTuple l2 r2) = do
-    s1 <- mgu p l1 l2
-    s2 <- mgu p (apply s1 r1) (apply s1 r2)
+mgu' p (TypeList t1) (TypeList t2) ot1 ot2 = mgu' p t1 t2 ot1 ot2
+mgu' p (TypeTuple l1 r1) (TypeTuple l2 r2) ot1 ot2 = do
+    s1 <- mgu' p l1 l2 ot1 ot2
+    s2 <- mgu' p (apply s1 r1) (apply s1 r2) ot1 ot2
     return $ s2 `composeSubst` s1
-mgu _ (TypeID c1 u1) (TypeID c2 u2) = return $ M.singleton u1 (TypeID (composeConditions c1 c2) u2)
-mgu p (TypeID c u) t = varBind p u c t
-mgu p t (TypeID c u) = varBind p u c t
-mgu p (TypeBasic t1) (TypeBasic t2)
+mgu' _ (TypeID c1 u1) (TypeID c2 u2) ot1 ot2 = return $ M.singleton u1 (TypeID (composeConditions c1 c2) u2)
+mgu' p (TypeID c u) t ot1 ot2 = varBind p u c t
+mgu' p t (TypeID c u) ot1 ot2 = varBind p u c t
+mgu' p (TypeBasic t1) (TypeBasic t2) ot1 ot2
     | t1 == t2 = return nullSubst
-    | otherwise = tell [Error TypeError (show t1 ++ "\x1b[1m does not unify with " ++ show t2 ++ "\x1b[1m") (Just p)] >> return nullSubst
-mgu _ Void Void = return nullSubst
-mgu p t1 t2 = tell [Error TypeError (showType True (varsMap t1) t1 ++ "\x1b[1m does not unify with " ++ showType True (varsMap t2) t2 ++ "\x1b[1m") (Just p)] >> return nullSubst
+    | otherwise = tell [Error TypeError (nes $ showType True (varsMap ot1) ot1 ++ "\x1b[1m does not unify with " ++ showType True (varsMap ot2) ot2 ++ "\x1b[1m") (Just p)] >> return nullSubst
+mgu' _ Void Void ot1 ot2 = return nullSubst
+mgu' p t1 t2 ot1 ot2 = tell [Error TypeError (nes $ showType True (varsMap t1) t1 ++ "\x1b[1m does not unify with " ++ showType True (varsMap t2) t2 ++ "\x1b[1m") (Just p)] >> return nullSubst
 
 condition :: Type -> String -> (Maybe Condition, Bool)
 condition (TypeID c n) s = (c, n == s)
@@ -199,13 +201,13 @@ varBind :: P -> String -> Maybe Condition -> Type -> TI Subst
 varBind _ u (Just Eq) t = return $ M.singleton u t
 varBind p u (Just Ord) t
     | isOrd t = return $ M.singleton u t
-    | otherwise = tell [Error TypeError (showType True (varsMap t) t ++ "\x1b[1m is not Ord") (Just p)] >> return nullSubst
+    | otherwise = tell [Error TypeError (nes $ showType True (varsMap t) t ++ "\x1b[1m is not Ord") (Just p)] >> return nullSubst
     where
         isOrd (TypeBasic IntType) = True
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
 varBind p u c t
-    | u `S.member` ftv t = tell [Error TypeError (showType True (varsMap (TypeID c u)) (TypeID c u) ++ "\x1b[1m does not unify with " ++ showType True (varsMap t) t ++ "\x1b[1m") (Just p)] >> return nullSubst
+    | u `S.member` ftv t = tell [Error TypeError (nes $ showType True (varsMap (TypeID c u)) (TypeID c u) ++ "\x1b[1m does not unify with " ++ showType True (varsMap t) t ++ "\x1b[1m") (Just p)] >> return nullSubst
     | otherwise = return $ M.singleton u t
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv, SPL)
@@ -280,7 +282,7 @@ returnType env (StmtReturn (Just e) _) = do
 
 tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type, TypeEnv, FunDecl)
 tiFunDecl env f@(FunDecl n args (Just t) vars stmts p)
-    | l1 /= l2 = tell [Error TypeError (show n ++ " got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments") (Just p)] >> return (nullSubst, t, env, f)
+    | l1 /= l2 = tell [Error TypeError (nes $ show n ++ " got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments") (Just p)] >> return (nullSubst, t, env, f)
     | otherwise = do
         (s1, t1, env1, FunDecl _ _ _ vars' stmts' _) <- tiFunDecl env (FunDecl n args Nothing vars stmts p)
         s2 <- mgu p t1 t
@@ -292,7 +294,7 @@ tiFunDecl env f@(FunDecl n args (Just t) vars stmts p)
         l1 = length (funTypeToList t) - 1
         l2 = length args
 tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lookup (Fun, n) envt of
-    Nothing -> tell [Error TypeError ("function " ++ n ++ " was not found in the environment, while it should be present.") (Just p)] >> return (nullSubst, Void, env, f)
+    Nothing -> tell [Error TypeError (nes $ "function " ++ n ++ " was not found in the environment, while it should be present.") (Just p)] >> return (nullSubst, Void, env, f)
     Just s -> do
         funT <- instantiate s
         tvs <- mapM (newTyVar Nothing) args
@@ -311,7 +313,7 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lo
                 let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
                 return (cs1, t, apply cs1 env5, FunDecl n args (Just t) vars' stmts' p)
             Just r -> do
-                if not $ correctReturn stmts then tell [Error TypeError "Not every path has a return statment" (Just p)] >> return (nullSubst, Void, env4, f) else do
+                if not $ correctReturn stmts then tell [Error TypeError (nes "Not every path has a return statment") (Just p)] >> return (nullSubst, Void, env4, f) else do
                 (s3, t2) <- returnType (apply cs1 env4) r
                 let cs2 = s3 `composeSubst` cs1
                 ss <- mapM (checkReturn (apply cs2 env4) t2) returns
@@ -374,7 +376,7 @@ tiStmt e s@(StmtField n fs ex p) = do
     (s1, t1, e') <- tiExp' False e ex
     let TypeEnv env1 = apply s1 e
     case M.lookup (Var, n) env1 of
-        Nothing -> tell [Error TypeError (n ++ " is not defined") (Just p)] >> return (nullSubst, s)
+        Nothing -> tell [Error TypeError (nes $ n ++ " is not defined") (Just p)] >> return (nullSubst, s)
         Just sigma -> do
             t <- instantiate sigma
             (s2, t') <- tiFields t fs
@@ -420,12 +422,12 @@ mguList ((a, p):as) (b:bs) = do
 
 tiFunCall :: TypeEnv -> FunCall -> TI (Subst, Type, FunCall)
 tiFunCall e@(TypeEnv env) f@(FunCall _ n es p) = case M.lookup (Fun, n) env of
-    Nothing -> tell [Error TypeError ("function " ++ n ++ " doesn't exist") (Just p)] >> return (nullSubst, Void, f)
+    Nothing -> tell [Error TypeError (nes $ "function " ++ n ++ " doesn't exist") (Just p)] >> return (nullSubst, Void, f)
     Just sigma -> do
         t <- instantiate sigma
         case funType t of 
-            Nothing -> if null es then return (nullSubst, retType t, FunCall (Just t) n es p) else tell [Error TypeError (show n ++ " got " ++ show (length es)  ++ " arguments, but expected 0 arguments") (Just p)] >> return (nullSubst, t, f)
-            Just funT -> if length es /= length (funTypeToList funT) then tell [Error TypeError (show n ++ " got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments") (Just p)] >> return (nullSubst, t, f) else do
+            Nothing -> if null es then return (nullSubst, retType t, FunCall (Just t) n es p) else tell [Error TypeError (nes $ show n ++ " got " ++ show (length es)  ++ " arguments, but expected 0 arguments") (Just p)] >> return (nullSubst, t, f)
+            Just funT -> if length es /= length (funTypeToList funT) then tell [Error TypeError (nes $ show n ++ " got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments") (Just p)] >> return (nullSubst, t, f) else do
                 (s1, ts, es') <- tiExps e es
                 s2 <- mguList (zip ts (map expToP es)) (apply s1 $ funTypeToList funT)
                 let cs1 = s2 `composeSubst` s1
@@ -475,7 +477,7 @@ tiExp' b env (ExpBrackets e p) = do
     (s, t, e') <- tiExp' b env e
     return (s, t, ExpBrackets e' p)
 tiExp' b (TypeEnv env) e@(ExpField _ n fs p) = case M.lookup (Var, n) env of
-    Nothing -> tell [Error TypeError (n ++ " is not defined") (Just p)] >> return (nullSubst, Void, e)
+    Nothing -> tell [Error TypeError (nes $ n ++ " is not defined") (Just p)] >> return (nullSubst, Void, e)
     Just sigma -> do
         t <- instantiate sigma
         t' <- refresh b t

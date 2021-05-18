@@ -1,6 +1,7 @@
 module Errors where
 
 import Data.Array
+import Data.List.NonEmpty ( NonEmpty ((:|)) )
 
 type Position = (Int, Int)
 type Positioned a = (Position, a)
@@ -10,7 +11,7 @@ type P = Positioned String
 type Code = [Positioned Char]
 
 -- Error is a datatype to store an error message as a String with its position, where the integers are the line and column respectively
-data Error = Error ErrorKind String (Maybe P) deriving (Eq, Show)
+data Error = Error ErrorKind (NonEmpty String) (Maybe P) deriving (Eq, Show)
 
 data Errors = Errors FilePath (Array Int String) [Error]
 
@@ -27,14 +28,21 @@ join _ [] = []
 join _ [x] = x
 join s (x : xs) = x ++ s ++ join s xs
 
+nes :: a -> NonEmpty a
+nes a = a :| []
+
 removePath :: FilePath -> FilePath
 removePath f = reverse $ takeWhile (/= '/') (reverse f)
 
+showErrorStrings :: NonEmpty String -> String
+showErrorStrings (s :| []) = s
+showErrorStrings (s :| ss) = concatMap ("\n\t" ++) (s : ss)
+
 instance Show Errors where
   show (Errors file lines errors) = join "\n\n" $ map showError errors where
-    showError (Error k e Nothing) = "\x1b[1m" ++ removePath file ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ e
+    showError (Error k e Nothing) = "\x1b[1m" ++ removePath file ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ showErrorStrings e
     showError (Error k e (Just ((li, co), c'))) = let c = takeWhile (/= '\n') c' in
-      "\x1b[1m" ++ removePath file ++ ":" ++ show li ++ ":" ++ show co ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ e ++ "\n" ++
+      "\x1b[1m" ++ removePath file ++ ":" ++ show li ++ ":" ++ show co ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ showErrorStrings e ++ "\n" ++
       replicate leftLength ' ' ++ "\x1b[34m|\n" ++ show li ++ " |\x1b[0m " ++
       let (l, r) = splitAt (co - 1) (lines ! li) in (l ++ "\x1b[31m\x1b[1m" ++ c ++ "\x1b[0m" ++ drop (length c) r) ++ "\n" ++
       replicate leftLength ' ' ++ "\x1b[34m\x1b[1m|\x1b[0m" ++ replicate co ' ' ++ "\x1b[31m\x1b[1m" ++ replicate (length c) '^' ++ "\x1b[0m" where
