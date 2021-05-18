@@ -95,18 +95,21 @@ removeDuplicates (x:xs)
 varsMap :: Type -> M.Map String String
 varsMap t = M.fromList $ zip (reverse $ removeDuplicates $ reverse $ varStrings t) (map (: []) ['a' .. 'z'])
 
-showType :: M.Map String String -> Type -> String
-showType m (TypeBasic b) = show b
-showType m (TypeTuple t1 t2) = "(" ++ showType m t1 ++ ", " ++ showType m t2 ++ ")"
-showType m (TypeList t) = "[" ++ showType m t ++ "]"
-showType m (TypeID _ s) = "\x1b[36m" ++ fromMaybe s (M.lookup s m) ++ "\x1b[0m"
-showType m (TypeFun t1 t2) = showType m t1 ++ " -> " ++ showType m t2
-showType m Void = "\x1b[34mVoid\x1b[0m"
+showType :: Bool -> M.Map String String -> Type -> String
+showType f m (TypeBasic b) = show b
+showType f m (TypeTuple t1 t2) = "(" ++ showType f m t1 ++ "\x1b[1m, " ++ showType f m t2 ++ "\x1b[1m)\x1b[0m"
+showType f m (TypeList t) = "[" ++ showType f m t ++ "]"
+showType f m (TypeID _ s) = "\x1b[36m" ++ (if debug then s else fromMaybe s (M.lookup s m)) ++ "\x1b[0m"
+showType f m (TypeFun t1 t2) = showType f m t1 ++ " -> " ++ showType f m t2
+showType f m Void = "\x1b[34mVoid\x1b[0m"
+
+debug :: Bool
+debug = True
 
 instance Show TypeEnv where
     show env = help funs ++ help vars
         where
-            help (TypeEnv e) = unlines $ map (\((k, n), Scheme _ t) -> show k ++ " " ++ "\x1b[33m" ++ n ++ "\x1b[0m" ++ " :: " ++ showConditions (varsMap t) (map head $ group $ sort $ conditions t) ++ showType (varsMap t) t) $ filter (\((_, n), _) -> n `notElem` ["print", "isEmpty"]) $ M.toList e
+            help (TypeEnv e) = unlines $ map (\((k, n), Scheme _ t) -> show k ++ " " ++ "\x1b[33m" ++ n ++ "\x1b[0m" ++ " :: " ++ showConditions (varsMap t) (map head $ group $ sort $ conditions t) ++ showType False (varsMap t) t) $ filter (\((_, n), _) -> n `notElem` ["print", "isEmpty"]) $ M.toList e
             (funs, vars) = woFun env
 
 emptyEnv :: TypeEnv
@@ -180,7 +183,7 @@ mgu p (TypeBasic t1) (TypeBasic t2)
     | t1 == t2 = return nullSubst
     | otherwise = tell [Error TypeError (show t1 ++ "\x1b[1m does not unify with " ++ show t2 ++ "\x1b[1m") (Just p)] >> return nullSubst
 mgu _ Void Void = return nullSubst
-mgu p t1 t2 = tell [Error TypeError (showType (varsMap t1) t1 ++ "\x1b[1m does not unify with " ++ showType (varsMap t2) t2 ++ "\x1b[1m") (Just p)] >> return nullSubst
+mgu p t1 t2 = tell [Error TypeError (showType True (varsMap t1) t1 ++ "\x1b[1m does not unify with " ++ showType True (varsMap t2) t2 ++ "\x1b[1m") (Just p)] >> return nullSubst
 
 condition :: Type -> String -> (Maybe Condition, Bool)
 condition (TypeID c n) s = (c, n == s)
@@ -196,13 +199,13 @@ varBind :: P -> String -> Maybe Condition -> Type -> TI Subst
 varBind _ u (Just Eq) t = return $ M.singleton u t
 varBind p u (Just Ord) t
     | isOrd t = return $ M.singleton u t
-    | otherwise = tell [Error TypeError (showType (varsMap t) t ++ "\x1b[1m is not Ord") (Just p)] >> return nullSubst
+    | otherwise = tell [Error TypeError (showType True (varsMap t) t ++ "\x1b[1m is not Ord") (Just p)] >> return nullSubst
     where
         isOrd (TypeBasic IntType) = True
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
 varBind p u c t
-    | u `S.member` ftv t = tell [Error TypeError ("occur check fails: \x1b[36m" ++ u ++ "\x1b[0m vs. \x1b[1m" ++ showType (varsMap t) t ++ "\x1b[1m") (Just p)] >> return nullSubst
+    | u `S.member` ftv t = tell [Error TypeError (showType True (varsMap (TypeID c u)) (TypeID c u) ++ "\x1b[1m does not unify with " ++ showType True (varsMap t) t ++ "\x1b[1m") (Just p)] >> return nullSubst
     | otherwise = return $ M.singleton u t
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv, SPL)
@@ -293,11 +296,11 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lo
     Just s -> do
         funT <- instantiate s
         tvs <- mapM (newTyVar Nothing) args
-        s0 <- mguList (zip tvs (repeat p)) (init $ funTypeToList funT)
+        s0 <- mguList (zip (init $ funTypeToList funT) (repeat p)) tvs
         let env1 = remove (apply s0 env) Fun n
         let TypeEnv env2 = removeAll env Var args
         let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args tvs
-        let env3 = TypeEnv $ env2 `M.union` argsTvMap
+        let env3 = apply s0 (TypeEnv $ env2 `M.union` argsTvMap)
         (s1, env4, vars') <- tiVarDecls env3 vars
         (s2, stmts') <- tiStmts env4 stmts
         let cs1 = s2 `composeSubst` s1
@@ -380,12 +383,11 @@ tiStmt e s@(StmtField n fs ex p) = do
 tiStmt env (StmtFunCall f) = do
     (s, _, f) <- tiFunCall env f
     return (s, StmtFunCall f)
-tiStmt env (StmtReturn sr p) = do
-    case sr of
-        Nothing -> return (nullSubst, StmtReturn Nothing p)
-        Just e -> do
-            (s, t, e') <- tiExp env e
-            return (s, StmtReturn (Just e') p)
+tiStmt env (StmtReturn sr p) = case sr of
+    Nothing -> return (nullSubst, StmtReturn Nothing p)
+    Just e -> do
+        (s, t, e') <- tiExp env e
+        return (s, StmtReturn (Just e') p)
  
 retType :: Type -> Type
 retType (TypeFun t1 t2) = retType t2

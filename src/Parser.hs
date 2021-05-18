@@ -212,10 +212,10 @@ expNOp2P :: Parser Exp
 expNOp2P = expNOp2P' <|> (ExpError <$> errorP (`elem` "\n;") False)
 
 expNOp2P' :: Parser Exp 
-expNOp2P' = pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP <|> pp (ExpEmptyList <$ w (stringP "[]"))
+expNOp2P' = ppE expListP <|> ppE expStringP <|> pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP
 
 expOp2P :: Bool -> Parser Exp
-expOp2P b = ppE (Parser $ expBP b 0) <|> ppE expListP <|> ppE expStringP
+expOp2P b = ppE (Parser $ expBP b 0)
 
 expBP :: Bool -> Int -> Code -> ([Error], Maybe (Code, Exp))
 expBP b minBP c = case r1 of

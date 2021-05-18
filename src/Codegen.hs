@@ -278,7 +278,7 @@ genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [Lo
 genFunCall (FunCall t n args _) = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
 printString :: String -> [Instruction]
-printString s = map (LoadConstant . ord) (reverse s) ++ replicate (length s) (Trap Char)
+printString = concatMap (\c -> [LoadConstant (ord c), Trap Char])
 
 genPrint :: Type -> CG [Instruction]
 genPrint (TypeBasic IntType) = return [Trap Int]

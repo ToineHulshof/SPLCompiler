@@ -1,5 +1,6 @@
-main() :: -> Void
+main()// :: -> Void
 {
 	var a = (((((((((((((5)))))))))))));
-	return;
+	return a;
+	return True;
 }
