@@ -43,7 +43,7 @@ removePath f = reverse $ takeWhile (/= '/') (reverse f)
 
 showErrorStrings :: NonEmpty String -> String
 showErrorStrings (s :| []) = s
-showErrorStrings (s :| ss) = concatMap ("\n\t• " ++) (s : ss)
+showErrorStrings (s :| ss) = concatMap ("\n  • " ++) (s : ss)
 
 instance Show Errors where
   show (Errors file lines errors) = join "\n\n" $ map showError (sort errors) where

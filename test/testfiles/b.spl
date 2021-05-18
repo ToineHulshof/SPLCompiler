@@ -1,1 +1,1 @@
-([Int], Bool) x = (3, True);
+(([Int], Bool), ([Bool], Char)) x = (([4], True), (False, 'a'));
