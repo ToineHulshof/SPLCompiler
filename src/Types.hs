@@ -216,13 +216,13 @@ tiDecl e (DeclFunDecl f) = do
 
 tiVarDecl :: TypeEnv -> VarDecl -> TI (Subst, TypeEnv, VarDecl)
 tiVarDecl env (VarDecl Nothing s ex) = do
-    (s1, t1, ex') <- tiExp' True env ex
+    (s1, t1, ex') <- tiExp env ex
     let env1@(TypeEnv e) = apply s1 env
     let d = VarDecl (Just t1) s ex'
     let TypeEnv env2 = remove env1 Var s
     return (s1, TypeEnv (M.insert (Var, s) (Scheme [] t1) env2), d)
 tiVarDecl env (VarDecl (Just t) s e) = do
-    (s1, t1, e') <- tiExp' True env e
+    (s1, t1, e') <- tiExp env e
     s2 <- mgu (expToP e) t1 t
     let cs1 = s2 `composeSubst` s1
     let TypeEnv env1 = remove env Var s
@@ -290,9 +290,11 @@ tiFunDecl env f@(FunDecl n args (Just t) vars stmts p)
         l2 = length args
 tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lookup (Fun, n) envt of
     Nothing -> tell [Error TypeError ("function " ++ n ++ " was not found in the environment, while it should be present.") (Just p)] >> return (nullSubst, Void, env, f)
-    Just _ -> do
+    Just s -> do
+        funT <- instantiate s
         tvs <- mapM (newTyVar Nothing) args
-        let env1 = remove env Fun n
+        s0 <- mguList (zip tvs (repeat p)) (init $ funTypeToList funT)
+        let env1 = remove (apply s0 env) Fun n
         let TypeEnv env2 = removeAll env Var args
         let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args tvs
         let env3 = TypeEnv $ env2 `M.union` argsTvMap
