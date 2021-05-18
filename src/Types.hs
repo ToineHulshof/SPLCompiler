@@ -12,6 +12,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Grammar
 import Errors
+import Data.List.NonEmpty ( NonEmpty((:|)) )
 import Parser ( expToP )
 import Debug.Trace ( trace )
 
@@ -97,7 +98,7 @@ varsMap t = M.fromList $ zip (reverse $ removeDuplicates $ reverse $ varStrings 
 
 showType :: Bool -> M.Map String String -> Type -> String
 showType f m (TypeBasic b) = show b
-showType f m (TypeTuple t1 t2) = "(" ++ showType f m t1 ++ "\x1b[1m, " ++ showType f m t2 ++ "\x1b[1m)\x1b[0m"
+showType f m (TypeTuple t1 t2) = "(" ++ showType f m t1 ++ (if f then "\x1b[1m" else "") ++ ", " ++ showType f m t2 ++ (if f then "\x1b[1m" else "") ++ ")\x1b[0m"
 showType f m (TypeList t) = "[" ++ showType f m t ++ "]"
 showType f m (TypeID _ s) = "\x1b[36m" ++ (if debug then s else fromMaybe s (M.lookup s m)) ++ "\x1b[0m"
 showType f m (TypeFun t1 t2) = showType f m t1 ++ " -> " ++ showType f m t2
@@ -166,6 +167,7 @@ generalize :: TypeEnv -> Type -> Scheme
 generalize env t = Scheme vars t
     where vars = S.toList (ftv t `S.difference` ftv env)
 
+mgu :: P -> Type -> Type -> TI Subst
 mgu p t1 t2 = mgu' p t1 t2 t1 t2
 
 mgu' :: P -> Type -> Type -> Type -> Type -> TI Subst
@@ -183,7 +185,7 @@ mgu' p (TypeID c u) t ot1 ot2 = varBind p u c t
 mgu' p t (TypeID c u) ot1 ot2 = varBind p u c t
 mgu' p (TypeBasic t1) (TypeBasic t2) ot1 ot2
     | t1 == t2 = return nullSubst
-    | otherwise = tell [Error TypeError (nes $ showType True (varsMap ot1) ot1 ++ "\x1b[1m does not unify with " ++ showType True (varsMap ot2) ot2 ++ "\x1b[1m") (Just p)] >> return nullSubst
+    | otherwise = tell [Error TypeError ((showType True (varsMap ot1) ot1 ++ "\x1b[1m does not unify with " ++ showType True (varsMap ot2) ot2 ++ "\x1b[1m") :| []) (Just p)] >> return nullSubst
 mgu' _ Void Void ot1 ot2 = return nullSubst
 mgu' p t1 t2 ot1 ot2 = tell [Error TypeError (nes $ showType True (varsMap t1) t1 ++ "\x1b[1m does not unify with " ++ showType True (varsMap t2) t2 ++ "\x1b[1m") (Just p)] >> return nullSubst
 

@@ -101,7 +101,7 @@ notNull (Parser p) = Parser help
   where
     help c = case r of
       Nothing -> (e, Nothing)
-      Just (c', xs) -> if null xs then ([Error ParseError (nes "Found 0, while at least 1 is expected.") (Just (fst $ head c', ""))], Nothing) else (e, Just (c', xs))
+      Just (c', xs) -> if null xs then ([Error ParseError (nes "Found 0, while at least 1 is expected.") ((\h -> (fst h, "")) <$> listToMaybe c')], Nothing) else (e, Just (c', xs))
       where
         (e, r) = p c
 
@@ -129,14 +129,18 @@ declFunDeclP :: Parser Decl
 declFunDeclP = DeclFunDecl <$> funDeclP
 
 funDeclP :: Parser FunDecl
-funDeclP = (\(a, f) b c d e -> FunDecl a b c d e f) <$> pp' idP <*> (c '(' *> sepBy (c ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
+funDeclP = (\(a, f) b c d e -> FunDecl a b c d e f) <$> pp' idP <*> (c '(' *> sepBy (optP ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
+
+adjustPosition :: Position -> Char -> Position
+adjustPosition p '\n' = p
+adjustPosition (l, c) _ = (l, c - 1)
 
 optP :: Char -> Parser Char
 optP ch = ws' *> optP' ch <* ws where
   optP' ch = Parser $ \case
-    a@((p, x):xs)
+    ((p, x):xs)
       | x == ch -> ([], Just (xs, ch))
-      | otherwise -> ([Error ParseError (nes $ "Missing \"" ++ [ch] ++ "\" inserted") (Just (p, " "))], Just ((p, x):xs, ch))
+      | otherwise -> ([Error ParseError (nes $ "Missing '" ++ [ch] ++ "' inserted") (Just (adjustPosition p x, " "))], Just ((p, x):xs, ch))
     [] -> ([Error ParseError (nes $ "Missing \"" ++ [ch] ++ "\" inserted") Nothing], Just ([], ch))
 
 varDeclP :: Parser VarDecl
@@ -337,7 +341,7 @@ typeP = typeTupleP <|> typeListP <|> TypeBasic <$> basicTypeP <|> TypeID Nothing
 result :: Show a => ([Error], Maybe (Code, a)) -> String
 result ([], Just (c, a))
   | null c = "Parsed succesfully" -- ++ show a
-  | otherwise = show $ Error ParseError (nes "Did not complete parsing") (Just (fst $ head c, map snd c))
+  | otherwise = show $ Error ParseError (nes "Did not complete parsing") ((\h -> (fst h, map snd c)) <$> listToMaybe c)
 result (es, _) = join "\n" $ map show es
 
 -- A funtion to parse (recursive) comments and returns either an Error or the Code without the comments
@@ -381,7 +385,7 @@ t p s = fmap (first (map snd)) <$> testP p s
 p :: String -> ([Error], Maybe (Code, SPL))
 p s = case r of
     Nothing -> (e, Nothing)
-    Just (c, spl) -> (e ++ e2 ++ ([Error ParseError (nes "Did not finish parsing") (Just (fst $ head c, map snd c)) | not $ null c]), Just (c, spl))
+    Just (c, spl) -> (e ++ e2 ++ ([Error ParseError (nes "Did not finish parsing") ((\h -> (fst h, map snd c)) <$> listToMaybe c) | not $ null c]), Just (c, spl))
       where
         e2 = extractErrors spl
   where
