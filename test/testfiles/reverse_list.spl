@@ -8,6 +8,6 @@ reverse ( list ) {
 }
 
 main() {
-    var l = [];
+    var l = [1, 2, 3];
     print(reverse(l));
 }

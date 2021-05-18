@@ -3,9 +3,9 @@ f (x) {
 }
 
 g (x) {
-	return f (x);
+	return f (x) + 1;
 }
 
-main () {
-	print(g(42));
-}
+// main () {
+// 	print(g(42));
+// }

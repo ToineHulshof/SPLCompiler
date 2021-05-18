@@ -318,7 +318,10 @@ stmtReturnP :: Parser Stmt
 stmtReturnP = pp (StmtReturn . pure <$> (stringP "return" *> ws *> expP <* optP ';')) <|> pp (StmtReturn Nothing <$ stringP "return") <* optP ';'
 
 stmtP :: Parser Stmt
-stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP <|> StmtError <$> errorP (`elem` "\n}") False
+stmtP = stmtIfP <|> stmtWhileP <|> stmtFieldP <|> stmtReturnP <|> stmtFunCallP <|> stmtVarDeclP <|> StmtError Nothing <$> errorP (`elem` "\n}") False
+
+stmtVarDeclP :: Parser Stmt
+stmtVarDeclP = (\(_, p) -> StmtError (Just "Variable declarations are only allowed at the start of a function.") p) <$> pp' declVarDeclP
 
 basicTypeP :: Parser BasicType
 basicTypeP = IntType <$ stringP "Int" <|> BoolType <$ stringP "Bool" <|> CharType <$ stringP "Char"
@@ -415,7 +418,11 @@ erStmts :: [Stmt] -> [Error]
 erStmts = concatMap erStmt
 
 erStmt :: Stmt -> [Error]
-erStmt (StmtError s) = [Error ParseError (nes "Unknown statement") (Just s)]
+erStmt (StmtIf e ss1 ss2) = erExp e ++ erStmts ss1 ++ erStmts (fromMaybe [] ss2)
+erStmt (StmtWhile e ss) = erExp e ++ erStmts ss
+erStmt (StmtField _ _ e _) = erExp e
+erStmt (StmtReturn (Just e) _) = erExp e
+erStmt (StmtError s p) = [Error ParseError (nes (fromMaybe "Unknown statement" s)) (Just p)]
 erStmt _ = []
 
 -- A function that transforms a string to a list of tuples with (character, line, column)

@@ -99,9 +99,9 @@ varsMap t = M.fromList $ zip (reverse $ removeDuplicates $ reverse $ varStrings 
 showType :: Bool -> M.Map String String -> Type -> String
 showType f m (TypeBasic b) = show b
 showType f m (TypeTuple t1 t2) = "(" ++ showType f m t1 ++ (if f then "\x1b[1m" else "") ++ ", " ++ showType f m t2 ++ (if f then "\x1b[1m" else "") ++ ")\x1b[0m"
-showType f m (TypeList t) = "[" ++ showType f m t ++ "]"
+showType f m (TypeList t) = (if f then "\x1b[1m" else "") ++ "[" ++ showType f m t ++ (if f then "\x1b[1m" else "") ++ "]\x1b[0m"
 showType f m (TypeID _ s) = "\x1b[36m" ++ (if debug then s else fromMaybe s (M.lookup s m)) ++ "\x1b[0m"
-showType f m (TypeFun t1 t2) = showType f m t1 ++ " -> " ++ showType f m t2
+showType f m (TypeFun t1 t2) = showType f m t1 ++ (if f then "\x1b[1m" else "") ++ " -> " ++ showType f m t2
 showType f m Void = "\x1b[34mVoid\x1b[0m"
 
 debug :: Bool
@@ -284,7 +284,7 @@ returnType env (StmtReturn (Just e) _) = do
 
 tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type, TypeEnv, FunDecl)
 tiFunDecl env f@(FunDecl n args (Just t) vars stmts p)
-    | l1 /= l2 = tell [Error TypeError (nes $ show n ++ " got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments") (Just p)] >> return (nullSubst, t, env, f)
+    | l1 /= l2 = tell [Error TypeError (nes $ "\x1b[33m" ++ n ++ "\x1b[0m\x1b[1m got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments") (Just p)] >> return (nullSubst, t, env, f)
     | otherwise = do
         (s1, t1, env1, FunDecl _ _ _ vars' stmts' _) <- tiFunDecl env (FunDecl n args Nothing vars stmts p)
         s2 <- mgu p t1 t
@@ -428,8 +428,8 @@ tiFunCall e@(TypeEnv env) f@(FunCall _ n es p) = case M.lookup (Fun, n) env of
     Just sigma -> do
         t <- instantiate sigma
         case funType t of 
-            Nothing -> if null es then return (nullSubst, retType t, FunCall (Just t) n es p) else tell [Error TypeError (nes $ show n ++ " got " ++ show (length es)  ++ " arguments, but expected 0 arguments") (Just p)] >> return (nullSubst, t, f)
-            Just funT -> if length es /= length (funTypeToList funT) then tell [Error TypeError (nes $ show n ++ " got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments") (Just p)] >> return (nullSubst, t, f) else do
+            Nothing -> if null es then return (nullSubst, retType t, FunCall (Just t) n es p) else tell [Error TypeError (nes $ "\x1b[33m" ++ n ++ "\x1b[0m\x1b[1m got " ++ show (length es)  ++ " arguments, but expected 0 arguments") (Just p)] >> return (nullSubst, t, f)
+            Just funT -> if length es /= length (funTypeToList funT) then tell [Error TypeError (nes $ "\x1b[33m" ++ n ++ "\x1b[0m\x1b[1m got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments") (Just p)] >> return (nullSubst, t, f) else do
                 (s1, ts, es') <- tiExps e es
                 s2 <- mguList (zip ts (map expToP es)) (apply s1 $ funTypeToList funT)
                 let cs1 = s2 `composeSubst` s1
