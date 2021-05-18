@@ -2,6 +2,7 @@ module Errors where
 
 import Data.Array
 import Data.List.NonEmpty ( NonEmpty ((:|)) )
+import Data.List ( sort )
 
 type Position = (Int, Int)
 type Positioned a = (Position, a)
@@ -16,6 +17,12 @@ data Error = Error ErrorKind (NonEmpty String) (Maybe P) deriving (Eq, Show)
 data Errors = Errors FilePath (Array Int String) [Error]
 
 data ErrorKind = ParseError | TypeError | CodegenError deriving Eq
+
+instance Ord Error where
+  (Error _ _ (Just ((l1, c1), _))) <= (Error _ _ (Just ((l2, c2), _))) = if l1 == l2 then c1 <= c2 else l1 <= l2
+  (Error _ _ (Just _)) <= (Error _ _ Nothing) = False
+  (Error _ _ Nothing) <= (Error _ _ (Just _)) = True
+  (Error _ _ Nothing) <= (Error _ _ Nothing) = True
 
 instance Show ErrorKind where
   show ParseError = "Parse error: "
@@ -36,10 +43,10 @@ removePath f = reverse $ takeWhile (/= '/') (reverse f)
 
 showErrorStrings :: NonEmpty String -> String
 showErrorStrings (s :| []) = s
-showErrorStrings (s :| ss) = concatMap ("\n\t" ++) (s : ss)
+showErrorStrings (s :| ss) = concatMap ("\n\t• " ++) (s : ss)
 
 instance Show Errors where
-  show (Errors file lines errors) = join "\n\n" $ map showError errors where
+  show (Errors file lines errors) = join "\n\n" $ map showError (sort errors) where
     showError (Error k e Nothing) = "\x1b[1m" ++ removePath file ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ showErrorStrings e
     showError (Error k e (Just ((li, co), c'))) = let c = takeWhile (/= '\n') c' in
       "\x1b[1m" ++ removePath file ++ ":" ++ show li ++ ":" ++ show co ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ showErrorStrings e ++ "\n" ++

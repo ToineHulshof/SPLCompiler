@@ -181,13 +181,13 @@ mgu' p (TypeTuple l1 r1) (TypeTuple l2 r2) ot1 ot2 = do
     s2 <- mgu' p (apply s1 r1) (apply s1 r2) ot1 ot2
     return $ s2 `composeSubst` s1
 mgu' _ (TypeID c1 u1) (TypeID c2 u2) ot1 ot2 = return $ M.singleton u1 (TypeID (composeConditions c1 c2) u2)
-mgu' p (TypeID c u) t ot1 ot2 = varBind p u c t
-mgu' p t (TypeID c u) ot1 ot2 = varBind p u c t
-mgu' p (TypeBasic t1) (TypeBasic t2) ot1 ot2
+mgu' p (TypeID c u) t ot1 ot2 = varBind p u c t ot1 ot2
+mgu' p t (TypeID c u) ot1 ot2 = varBind p u c t ot1 ot2
+mgu' p@(_, a) (TypeBasic t1) (TypeBasic t2) ot1 ot2
     | t1 == t2 = return nullSubst
-    | otherwise = tell [Error TypeError ((showType True (varsMap ot1) ot1 ++ "\x1b[1m does not unify with " ++ showType True (varsMap ot2) ot2 ++ "\x1b[1m") :| []) (Just p)] >> return nullSubst
+    | otherwise = tell [Error TypeError (nes $ "\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap ot1) ot1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap ot2) ot2 ++ "\x1b[1m") (Just p)] >> return nullSubst
 mgu' _ Void Void ot1 ot2 = return nullSubst
-mgu' p t1 t2 ot1 ot2 = tell [Error TypeError (nes $ showType True (varsMap t1) t1 ++ "\x1b[1m does not unify with " ++ showType True (varsMap t2) t2 ++ "\x1b[1m") (Just p)] >> return nullSubst
+mgu' p@(_, a) t1 t2 ot1 ot2 = tell [Error TypeError (nes $ "\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap ot1) ot1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap ot2) ot2 ++ "\x1b[1m") (Just p)] >> return nullSubst
 
 condition :: Type -> String -> (Maybe Condition, Bool)
 condition (TypeID c n) s = (c, n == s)
@@ -199,17 +199,17 @@ composeConditions (Just Ord) _ = Just Ord
 composeConditions c Nothing = c
 composeConditions _ c = c
      
-varBind :: P -> String -> Maybe Condition -> Type -> TI Subst
-varBind _ u (Just Eq) t = return $ M.singleton u t
-varBind p u (Just Ord) t
+varBind :: P -> String -> Maybe Condition -> Type -> Type -> Type -> TI Subst
+varBind _ u (Just Eq) t ot1 ot2 = return $ M.singleton u t
+varBind p u (Just Ord) t ot1 ot2
     | isOrd t = return $ M.singleton u t
     | otherwise = tell [Error TypeError (nes $ showType True (varsMap t) t ++ "\x1b[1m is not Ord") (Just p)] >> return nullSubst
     where
         isOrd (TypeBasic IntType) = True
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
-varBind p u c t
-    | u `S.member` ftv t = tell [Error TypeError (nes $ showType True (varsMap (TypeID c u)) (TypeID c u) ++ "\x1b[1m does not unify with " ++ showType True (varsMap t) t ++ "\x1b[1m") (Just p)] >> return nullSubst
+varBind p@(_, a) u c t ot1 ot2
+    | u `S.member` ftv t = tell [Error TypeError (nes $ "\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap ot1) ot1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap ot2) ot2 ++ "\x1b[1m") (Just p)] >> return nullSubst
     | otherwise = return $ M.singleton u t
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv, SPL)
@@ -254,7 +254,7 @@ checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
 checkReturn _ t (StmtReturn Nothing p) = mgu p t Void
 checkReturn env t (StmtReturn (Just e) _) = do
     (s1, t1, _) <- tiExp env e
-    s2 <- mgu (expToP e) t t1
+    s2 <- mgu (expToP e) t1 t
     return $ s2 `composeSubst` s1
 
 getReturns :: Stmt -> [Stmt]
