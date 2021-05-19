@@ -1,6 +1,7 @@
 (([Int], Bool), ([Bool], Char)) x = (([4], True), (False, 'a'));
 
-[[Int]] y = [4];
+Int y = [
+    4];
 
 var x = 3;
 [Bool] y = [x];
