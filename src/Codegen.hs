@@ -160,7 +160,7 @@ addLabel l = do
     e <- get
     put e { labels = l : labels e }
 
-genCode :: Bool -> FilePath -> SPL -> IO ()
+genCode :: Bool -> FilePath -> FunDecl -> SPL -> IO ()
 genCode False = genCodeSSM
 genCode True = genCodeLLVM
 
@@ -169,13 +169,13 @@ changeSuffix llvm c ".spl" = c ++ (if llvm then ".ll" else ".ssm")
 changeSuffix llvm c (x:xs) = changeSuffix llvm (c ++ [x]) xs
 changeSuffix _ _ _ = error "File does not have spl as extension"
 
-genCodeSSM :: FilePath -> SPL -> IO ()
-genCodeSSM f spl = do
+genCodeSSM :: FilePath -> FunDecl -> SPL -> IO ()
+genCodeSSM f main spl = do
     (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", localMap = M.empty, globalMap = M.empty, functions = [], labels = [], spl = spl })
     writeFile (changeSuffix False [] f) (unlines $ map show instructions)
 
-genCodeLLVM :: FilePath -> SPL -> IO ()
-genCodeLLVM f spl = writeFile (changeSuffix True [] f) "; ModuleID = 'multiply.c'\nsource_filename = \"multiply.c\"\ntarget datalayout = \"e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128\"\ntarget triple = \"x86_64-apple-macosx11.0.0\"\n\n@.str = private unnamed_addr constant [3 x i8] c\"%d\00\", align 1\n\n; Function Attrs: noinline nounwind optnone ssp uwtable\ndefine i32 @fib(i32 %0) #0 {\n  %2 = alloca i32, align 4\n  %3 = alloca i32, align 4\n  store i32 %0, i32* %3, align 4\n  %4 = load i32, i32* %3, align 4\n  %5 = icmp sle i32 %4, 1\n  br i1 %5, label %6, label %8\n\n6:                                                ; preds = %1\n  %7 = load i32, i32* %3, align 4\n  store i32 %7, i32* %2, align 4\n  br label %16\n\n8:                                                ; preds = %1\n  %9 = load i32, i32* %3, align 4\n  %10 = sub nsw i32 %9, 1\n  %11 = call i32 @fib(i32 %10)\n  %12 = load i32, i32* %3, align 4\n  %13 = sub nsw i32 %12, 2\n  %14 = call i32 @fib(i32 %13)\n  %15 = add nsw i32 %11, %14\n  store i32 %15, i32* %2, align 4\n  br label %16\n\n16:                                               ; preds = %8, %6\n  %17 = load i32, i32* %2, align 4\n  ret i32 %17\n}\n\n; Function Attrs: noinline nounwind optnone ssp uwtable\ndefine i32 @main() #0 {\n  %1 = alloca i32, align 4\n  store i32 0, i32* %1, align 4\n  %2 = call i32 @fib(i32 18)\n  %3 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 %2)\n  ret i32 0\n}\n\ndeclare i32 @printf(i8*, ...) #1\n\nattributes #0 = { noinline nounwind optnone ssp uwtable \"correctly-rounded-divide-sqrt-fp-math\"=\"false\" \"darwin-stkchk-strong-link\" \"disable-tail-calls\"=\"false\" \"frame-pointer\"=\"all\" \"less-precise-fpmad\"=\"false\" \"min-legal-vector-width\"=\"0\" \"no-infs-fp-math\"=\"false\" \"no-jump-tables\"=\"false\" \"no-nans-fp-math\"=\"false\" \"no-signed-zeros-fp-math\"=\"false\" \"no-trapping-math\"=\"true\" \"probe-stack\"=\"___chkstk_darwin\" \"stack-protector-buffer-size\"=\"8\" \"target-cpu\"=\"penryn\" \"target-features\"=\"+cx16,+cx8,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87\" \"unsafe-fp-math\"=\"false\" \"use-soft-float\"=\"false\" }\nattributes #1 = { \"correctly-rounded-divide-sqrt-fp-math\"=\"false\" \"darwin-stkchk-strong-link\" \"disable-tail-calls\"=\"false\" \"frame-pointer\"=\"all\" \"less-precise-fpmad\"=\"false\" \"no-infs-fp-math\"=\"false\" \"no-nans-fp-math\"=\"false\" \"no-signed-zeros-fp-math\"=\"false\" \"no-trapping-math\"=\"true\" \"probe-stack\"=\"___chkstk_darwin\" \"stack-protector-buffer-size\"=\"8\" \"target-cpu\"=\"penryn\" \"target-features\"=\"+cx16,+cx8,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87\" \"unsafe-fp-math\"=\"false\" \"use-soft-float\"=\"false\" }\n\n!llvm.module.flags = !{!0, !1, !2}\n!llvm.ident = !{!3}\n\n!0 = !{i32 2, !\"SDK Version\", [2 x i32] [i32 11, i32 3]}\n!1 = !{i32 1, !\"wchar_size\", i32 4}\n!2 = !{i32 7, !\"PIC Level\", i32 2}\n!3 = !{!\"Apple clang version 12.0.5 (clang-1205.0.22.9)\"}"
+genCodeLLVM :: FilePath -> FunDecl -> SPL -> IO ()
+genCodeLLVM f main spl = writeFile (changeSuffix True [] f) "; ModuleID = 'multiply.c'\nsource_filename = \"multiply.c\"\ntarget datalayout = \"e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128\"\ntarget triple = \"x86_64-apple-macosx11.0.0\"\n\n@.str = private unnamed_addr constant [3 x i8] c\"%d\00\", align 1\n\n; Function Attrs: noinline nounwind optnone ssp uwtable\ndefine i32 @fib(i32 %0) #0 {\n  %2 = alloca i32, align 4\n  %3 = alloca i32, align 4\n  store i32 %0, i32* %3, align 4\n  %4 = load i32, i32* %3, align 4\n  %5 = icmp sle i32 %4, 1\n  br i1 %5, label %6, label %8\n\n6:                                                ; preds = %1\n  %7 = load i32, i32* %3, align 4\n  store i32 %7, i32* %2, align 4\n  br label %16\n\n8:                                                ; preds = %1\n  %9 = load i32, i32* %3, align 4\n  %10 = sub nsw i32 %9, 1\n  %11 = call i32 @fib(i32 %10)\n  %12 = load i32, i32* %3, align 4\n  %13 = sub nsw i32 %12, 2\n  %14 = call i32 @fib(i32 %13)\n  %15 = add nsw i32 %11, %14\n  store i32 %15, i32* %2, align 4\n  br label %16\n\n16:                                               ; preds = %8, %6\n  %17 = load i32, i32* %2, align 4\n  ret i32 %17\n}\n\n; Function Attrs: noinline nounwind optnone ssp uwtable\ndefine i32 @main() #0 {\n  %1 = alloca i32, align 4\n  store i32 0, i32* %1, align 4\n  %2 = call i32 @fib(i32 18)\n  %3 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 %2)\n  ret i32 0\n}\n\ndeclare i32 @printf(i8*, ...) #1\n\nattributes #0 = { noinline nounwind optnone ssp uwtable \"correctly-rounded-divide-sqrt-fp-math\"=\"false\" \"darwin-stkchk-strong-link\" \"disable-tail-calls\"=\"false\" \"frame-pointer\"=\"all\" \"less-precise-fpmad\"=\"false\" \"min-legal-vector-width\"=\"0\" \"no-infs-fp-math\"=\"false\" \"no-jump-tables\"=\"false\" \"no-nans-fp-math\"=\"false\" \"no-signed-zeros-fp-math\"=\"false\" \"no-trapping-math\"=\"true\" \"probe-stack\"=\"___chkstk_darwin\" \"stack-protector-buffer-size\"=\"8\" \"target-cpu\"=\"penryn\" \"target-features\"=\"+cx16,+cx8,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87\" \"unsafe-fp-math\"=\"false\" \"use-soft-float\"=\"false\" }\nattributes #1 = { \"correctly-rounded-divide-sqrt-fp-math\"=\"false\" \"darwin-stkchk-strong-link\" \"disable-tail-calls\"=\"false\" \"frame-pointer\"=\"all\" \"less-precise-fpmad\"=\"false\" \"no-infs-fp-math\"=\"false\" \"no-nans-fp-math\"=\"false\" \"no-signed-zeros-fp-math\"=\"false\" \"no-trapping-math\"=\"true\" \"probe-stack\"=\"___chkstk_darwin\" \"stack-protector-buffer-size\"=\"8\" \"target-cpu\"=\"penryn\" \"target-features\"=\"+cx16,+cx8,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87\" \"unsafe-fp-math\"=\"false\" \"use-soft-float\"=\"false\" }\n\n!llvm.module.flags = !{!0, !1, !2}\n!llvm.ident = !{!3}\n\n!0 = !{i32 2, !\"SDK Version\", [2 x i32] [i32 11, i32 3]}\n!1 = !{i32 1, !\"wchar_size\", i32 4}\n!2 = !{i32 7, !\"PIC Level\", i32 2}\n!3 = !{!\"Apple clang version 12.0.5 (clang-1205.0.22.9)\"}"
 
 genSPL :: SPL -> CG [Instruction]
 genSPL ds = do
@@ -317,15 +317,16 @@ monoExp _ e = e
 genPolyFunDecl :: FunDecl -> Type -> String -> CG ()
 genPolyFunDecl f@(FunDecl n args (Just ft) vars stmts p) t l = do
     let s = subst ft t
-    is <- genFunDecl (FunDecl l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p)
-    addFunction is
     addLabel l
+    let f' = FunDecl l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p
+    is <- genFunDecl f'
+    addFunction is
 
 funCallInstructions :: String -> [Exp] -> CG [Instruction]
 funCallInstructions n args = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
 findFunction :: [Decl] -> String -> Maybe FunDecl
-findFunction [] _ = Nothing 
+findFunction [] _ = Nothing
 findFunction ((DeclFunDecl f@(FunDecl n _ _ _ _ _)) : ds) s
     | n == s = Just f
     | otherwise = findFunction ds s
@@ -428,7 +429,9 @@ genExp (ExpField _ n fs _) = do
     gm <- gets globalMap
     case M.lookup n lm of
         Nothing -> case M.lookup n gm of
-            Nothing -> trace (show lm) (error "")
+            Nothing -> do
+                f <- gets funName
+                trace (f ++ ", " ++ n ++ " " ++ show lm) (error "")
             Just i -> return $ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i1
         Just i -> return $ LoadLocal i : i1
 genExp (ExpInt i _) = return [LoadConstant $ fromInteger i]

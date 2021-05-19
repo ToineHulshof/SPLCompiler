@@ -2,21 +2,24 @@ id(x,y) {
     return x == y;
 }
 
-K(a, b) {
-    return a;
-}
+// K(a, b) {
+//     return a;
+// }
 
-equals(a, b) {
-    return a == b;
-}
+// equals(a, b) {
+//     return a == b;
+// }
 
 f(a, b) {
-    return id(a,b);
+    var x = id(a + 1,b);
+    return;
 }
 
 main() {
     // print(f(3:[], 3:[]));
     // print(id(2 : 3 : []));
-    print( 3 : [] == 3 : [] );
-    print(f(2 : [], 2 : []));
+    // print( 3 : [] == 3 : [] );
+    // print(f(2 : [], 2 : []));
+    // print(equals([3], [3]));
+    print(f(3, 3));
 }

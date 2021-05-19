@@ -126,21 +126,22 @@ tiResult llvm s f spl e = do
     if null e
         then case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
-            Just filePath -> if containsMain spl' then putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n" >> genCode llvm filePath spl' else do
-                print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError (nes "\x1b[31mNo main function\x1b[0m\n") Nothing]
-                putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n"
-                putStr $ show env
-                exitFailure
+            Just filePath -> case getMain spl' of
+                Just main -> putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n" >> genCode llvm filePath spl'
+                Nothing -> do
+                    print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError (nes "\x1b[31mNo main function\x1b[0m\n") Nothing]
+                    putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n"
+                    putStr $ show env
+                    exitFailure
         else print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) (removeDuplicates e)) >> exitFailure
     where
         l = lines s
 
-containsMain :: SPL -> Bool
-containsMain = any isMain
-    where 
-        isMain :: Decl -> Bool
-        isMain (DeclFunDecl (FunDecl "main" _ _ _ _ _)) = True
-        isMain _ = False
+getMain :: SPL -> Maybe FunDecl
+getMain [] = Nothing
+getMain (DeclFunDecl f@(FunDecl n _ _ _ _ _) : ds)
+    | n == "main" = Just f
+    | otherwise = getMain ds
 
 replaceTab :: Char -> String
 replaceTab '\t' = "    "

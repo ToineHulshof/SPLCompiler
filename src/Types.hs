@@ -111,7 +111,7 @@ showType f m (TypeFun t1 t2) = showType f m t1 ++ (if f then "\x1b[1m" else "") 
 showType f m Void = "\x1b[34mVoid\x1b[0m"
 
 debug :: Bool
-debug = False
+debug = True
 
 instance Show TypeEnv where
     show env = help funs ++ help vars
@@ -442,7 +442,7 @@ mguList _ [] = return nullSubst
 mguList ((a, p):as) (b:bs) = do
     s1 <- mgu Nothing p a b
     s2 <- mguList as bs
-    return $ s2 `composeSubst` s1
+    return $ s1 `composeSubst` s2
 
 tiFunCall :: TypeEnv -> FunCall -> TI (Subst, Type, FunCall)
 tiFunCall e@(TypeEnv env) f@(FunCall _ n es p) = case M.lookup (Fun, n) env of
