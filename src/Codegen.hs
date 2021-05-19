@@ -171,18 +171,18 @@ changeSuffix _ _ _ = error "File does not have spl as extension"
 
 genCodeSSM :: FilePath -> FunDecl -> SPL -> IO ()
 genCodeSSM f main spl = do
-    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", localMap = M.empty, globalMap = M.empty, functions = [], labels = [], spl = spl })
+    (instructions, _) <- runStateT (genSPL main spl) (GenEnv { ifCounter = 0, funName = "", localMap = M.empty, globalMap = M.empty, functions = [], labels = [], spl = spl })
     writeFile (changeSuffix False [] f) (unlines $ map show instructions)
 
 genCodeLLVM :: FilePath -> FunDecl -> SPL -> IO ()
 genCodeLLVM f main spl = writeFile (changeSuffix True [] f) "; ModuleID = 'multiply.c'\nsource_filename = \"multiply.c\"\ntarget datalayout = \"e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128\"\ntarget triple = \"x86_64-apple-macosx11.0.0\"\n\n@.str = private unnamed_addr constant [3 x i8] c\"%d\00\", align 1\n\n; Function Attrs: noinline nounwind optnone ssp uwtable\ndefine i32 @fib(i32 %0) #0 {\n  %2 = alloca i32, align 4\n  %3 = alloca i32, align 4\n  store i32 %0, i32* %3, align 4\n  %4 = load i32, i32* %3, align 4\n  %5 = icmp sle i32 %4, 1\n  br i1 %5, label %6, label %8\n\n6:                                                ; preds = %1\n  %7 = load i32, i32* %3, align 4\n  store i32 %7, i32* %2, align 4\n  br label %16\n\n8:                                                ; preds = %1\n  %9 = load i32, i32* %3, align 4\n  %10 = sub nsw i32 %9, 1\n  %11 = call i32 @fib(i32 %10)\n  %12 = load i32, i32* %3, align 4\n  %13 = sub nsw i32 %12, 2\n  %14 = call i32 @fib(i32 %13)\n  %15 = add nsw i32 %11, %14\n  store i32 %15, i32* %2, align 4\n  br label %16\n\n16:                                               ; preds = %8, %6\n  %17 = load i32, i32* %2, align 4\n  ret i32 %17\n}\n\n; Function Attrs: noinline nounwind optnone ssp uwtable\ndefine i32 @main() #0 {\n  %1 = alloca i32, align 4\n  store i32 0, i32* %1, align 4\n  %2 = call i32 @fib(i32 18)\n  %3 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 %2)\n  ret i32 0\n}\n\ndeclare i32 @printf(i8*, ...) #1\n\nattributes #0 = { noinline nounwind optnone ssp uwtable \"correctly-rounded-divide-sqrt-fp-math\"=\"false\" \"darwin-stkchk-strong-link\" \"disable-tail-calls\"=\"false\" \"frame-pointer\"=\"all\" \"less-precise-fpmad\"=\"false\" \"min-legal-vector-width\"=\"0\" \"no-infs-fp-math\"=\"false\" \"no-jump-tables\"=\"false\" \"no-nans-fp-math\"=\"false\" \"no-signed-zeros-fp-math\"=\"false\" \"no-trapping-math\"=\"true\" \"probe-stack\"=\"___chkstk_darwin\" \"stack-protector-buffer-size\"=\"8\" \"target-cpu\"=\"penryn\" \"target-features\"=\"+cx16,+cx8,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87\" \"unsafe-fp-math\"=\"false\" \"use-soft-float\"=\"false\" }\nattributes #1 = { \"correctly-rounded-divide-sqrt-fp-math\"=\"false\" \"darwin-stkchk-strong-link\" \"disable-tail-calls\"=\"false\" \"frame-pointer\"=\"all\" \"less-precise-fpmad\"=\"false\" \"no-infs-fp-math\"=\"false\" \"no-nans-fp-math\"=\"false\" \"no-signed-zeros-fp-math\"=\"false\" \"no-trapping-math\"=\"true\" \"probe-stack\"=\"___chkstk_darwin\" \"stack-protector-buffer-size\"=\"8\" \"target-cpu\"=\"penryn\" \"target-features\"=\"+cx16,+cx8,+fxsr,+mmx,+sahf,+sse,+sse2,+sse3,+sse4.1,+ssse3,+x87\" \"unsafe-fp-math\"=\"false\" \"use-soft-float\"=\"false\" }\n\n!llvm.module.flags = !{!0, !1, !2}\n!llvm.ident = !{!3}\n\n!0 = !{i32 2, !\"SDK Version\", [2 x i32] [i32 11, i32 3]}\n!1 = !{i32 1, !\"wchar_size\", i32 4}\n!2 = !{i32 7, !\"PIC Level\", i32 2}\n!3 = !{!\"Apple clang version 12.0.5 (clang-1205.0.22.9)\"}"
 
-genSPL :: SPL -> CG [Instruction]
-genSPL ds = do
+genSPL :: FunDecl -> SPL -> CG [Instruction]
+genSPL main ds = do
     let vardecls = [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
     (i1, m) <- genGlobalVars 1 vardecls
     setGlobalMap m
-    i2 <- concat <$> mapM genFunDecl [(\(DeclFunDecl f) -> f) x | x@DeclFunDecl {} <- ds]
+    i2 <- genFunDecl main
     functions <- gets functions
     return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i2 ++ concat functions
 
@@ -194,16 +194,14 @@ genGlobalVars i ((VarDecl _ n e):xs) = do
     return (i1 ++ i2, M.singleton n i `M.union` m)
 
 genFunDecl :: FunDecl -> CG [Instruction]
-genFunDecl (FunDecl n args (Just t) vars stmts _)
-    | isPoly t = return []
-    | otherwise = do
-        m <- argsMap (-1 - length args) args
-        setLocalMap m
-        i1 <- genLocalVars 1 args vars
-        setFunName n
-        i2 <- genStmts stmts
-        setLocalMap M.empty
-        return $ Label n : Link (length vars) : i1 ++ i2 ++ [Label $ n ++ "End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
+genFunDecl (FunDecl n args (Just t) vars stmts _) = do
+    m <- argsMap (-1 - length args) args
+    setLocalMap m
+    i1 <- genLocalVars 1 args vars
+    setFunName n
+    i2 <- genStmts stmts
+    setLocalMap M.empty
+    return $ Label n : Link (length vars) : i1 ++ i2 ++ [Label $ n ++ "End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
 
 argsMap :: Int -> [String] -> CG (M.Map String Int)
 argsMap _ [] = return M.empty
@@ -280,13 +278,14 @@ genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [Lo
 genFunCall (FunCall (Just t') n args _) = do
     ds <- gets spl
     let f@(FunDecl _ _ (Just t) _ _ _) = fromJust $ findFunction ds n
-    if not $ isPoly t
-        then funCallInstructions n args
-        else do
-            let name = n ++ join "-" (map typeName (init (funTypeToList t')))
-            labels <- gets labels
-            when (name `notElem` labels) $ genPolyFunDecl f t' name
-            funCallInstructions name args
+    let name = n ++ join "-" (map typeName (init (funTypeToList t')))
+    labels <- gets labels
+    when (name `notElem` labels) $ genPolyFunDecl f t' name
+    funCallInstructions name args
+
+-- Could also be a hash function
+funLabel :: String -> Type -> String
+funLabel = undefined
 
 monoStmts :: Subst -> [Stmt] -> [Stmt]
 monoStmts s = map $ monoStmt s
@@ -331,13 +330,6 @@ findFunction ((DeclFunDecl f@(FunDecl n _ _ _ _ _)) : ds) s
     | n == s = Just f
     | otherwise = findFunction ds s
 findFunction (d : ds) s = findFunction ds s
-
-isPoly :: Type -> Bool
-isPoly (TypeTuple t1 t2) = isPoly t1 || isPoly t2
-isPoly (TypeList t) = isPoly t
-isPoly (TypeID _ _) = True
-isPoly (TypeFun t1 t2) = isPoly t1 || isPoly t2
-isPoly _ = False
 
 printString :: String -> [Instruction]
 printString = concatMap (\c -> [LoadConstant (ord c), Trap Char])
