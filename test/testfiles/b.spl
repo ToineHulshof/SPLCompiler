@@ -1,1 +1,3 @@
-(([Int], Bool), ([Bool], Char)) x = (([4], True), (False, 'a'));
+// (([Int], Bool), ([Bool], Char)) x = (([4], True), (False, 'a'));
+
+[[Int]] y = [4];

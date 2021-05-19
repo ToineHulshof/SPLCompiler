@@ -4,7 +4,7 @@ module Printer where
 
 import Grammar
 import Errors
-import Parser (code, expP, parseFileP, splP, testP, funDeclP)
+import Parser
 import Text.Printf (printf)
 
 type Depth = Int
@@ -80,9 +80,6 @@ ppField (Second _) = ".snd"
 ppStmtElse :: Depth -> Maybe [Stmt] -> String
 ppStmtElse _ Nothing = ""
 ppStmtElse d (Just s) = printf " else {\n%s%s}" (unlines $ map (ppStmt (d + 1)) s) (tab d)
-
-instance Show Exp where
-    show = ppExp
 
 ppExp :: Exp -> String
 ppExp (Exp _ o e1 e2 _) = ppExp e1 ++ " " ++ ppOp2 o ++ " " ++ ppExp e2

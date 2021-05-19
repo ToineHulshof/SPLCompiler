@@ -12,6 +12,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Grammar
 import Errors
+import Printer ()
 import Data.List.NonEmpty ( NonEmpty((:|)), cons )
 import qualified Data.List.NonEmpty as NE
 import Parser ( expToP )
@@ -168,27 +169,30 @@ generalize :: TypeEnv -> Type -> Scheme
 generalize env t = Scheme vars t
     where vars = S.toList (ftv t `S.difference` ftv env)
 
-mgu :: P -> Type -> Type -> TI Subst
-mgu p t1 t2 = mgu' p t1 t2 (nes t1) (nes t2)
+mgu :: Maybe Exp -> P -> Type -> Type -> TI Subst
+mgu e p t1 t2 = mgu' e p t1 t2 (nes t1) (nes t2)
 
-mgu' :: P -> Type -> Type -> NonEmpty Type -> NonEmpty Type -> TI Subst
-mgu' p (TypeFun l1 r1) (TypeFun l2 r2) ot1 ot2 = do
-    s1 <- mgu' p l1 l2 (l1 `cons` ot1) (l2 `cons` ot2)
-    s2 <- mgu' p (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)
+mgu' :: Maybe Exp -> P -> Type -> Type -> NonEmpty Type -> NonEmpty Type -> TI Subst
+mgu' e p (TypeFun l1 r1) (TypeFun l2 r2) ot1 ot2 = do
+    s1 <- mgu' e p l1 l2 (l1 `cons` ot1) (l2 `cons` ot2)
+    s2 <- mgu' e p (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)
     return $ s2 `composeSubst` s1
-mgu' p (TypeList t1) (TypeList t2) ot1 ot2 = mgu' p t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
-mgu' p (TypeTuple l1 r1) (TypeTuple l2 r2) ot1 ot2 = do
-    s1 <- mgu' p l1 l2 (l1 `cons` ot1) (l2 `cons` ot2)
-    s2 <- mgu' p (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)
+mgu' e@(Just (Exp _ Cons e1 e2 _)) p (TypeList t1) (TypeList t2) ot1 ot2 = mgu' e (expToP e1) t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
+mgu' (Just (ExpTuple (e1, e2) _)) p (TypeTuple l1 r1) (TypeTuple l2 r2) ot1 ot2 = do
+    s1 <- mgu' (Just e1) (expToP e1) l1 l2 (l1 `cons` ot1) (l2 `cons` ot2)
+    s2 <- mgu' (Just e2) (expToP e2) (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)
     return $ s2 `composeSubst` s1
-mgu' _ (TypeID c1 u1) (TypeID c2 u2) ot1 ot2 = return $ M.singleton u1 (TypeID (composeConditions c1 c2) u2)
-mgu' p (TypeID c u) t ot1 ot2 = varBind p u c t ot1 ot2
-mgu' p t (TypeID c u) ot1 ot2 = varBind p u c t ot1 ot2
-mgu' p (TypeBasic t1) (TypeBasic t2) ot1 ot2
+mgu' e _ (TypeID c1 u1) (TypeID c2 u2) ot1 ot2 = return $ M.singleton u1 (TypeID (composeConditions c1 c2) u2)
+mgu' e p (TypeID c u) t ot1 ot2 = varBind p e u c t ot1 ot2
+mgu' e p t (TypeID c u) ot1 ot2 = varBind p e u c t ot1 ot2
+mgu' e p l@(TypeBasic t1) r@(TypeBasic t2) ot1 ot2
     | t1 == t2 = return nullSubst
-    | otherwise = typeError p ot1 ot2
-mgu' _ Void Void ot1 ot2 = return nullSubst
-mgu' p t1 t2 ot1 ot2 = typeError p ot1 ot2
+    | otherwise = typeError' p e l r -- typeError p ot1 ot2
+mgu' e _ Void Void ot1 ot2 = return nullSubst
+mgu' e p t1 t2 ot1 ot2 = typeError' p e t1 t2 --typeError p ot1 ot2
+
+typeError' :: P -> Maybe Exp -> Type -> Type -> TI Subst
+typeError' p@(_, a) e t1 t2 = tell [Error TypeError (nes ("\x1b[1m\x1b[33m" ++ takeWhile (/= '\n') a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap t1) t1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap t2) t2 ++ "\x1b[1m")) (Just p)] >> return nullSubst
 
 typeError :: P -> NonEmpty Type -> NonEmpty Type -> TI Subst
 typeError p@(_, a) (h1 :| _) (h2 :| _) = tell [Error TypeError (nes ("\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m")) (Just p)] >> return nullSubst
@@ -209,17 +213,17 @@ composeConditions (Just Ord) _ = Just Ord
 composeConditions c Nothing = c
 composeConditions _ c = c
      
-varBind :: P -> String -> Maybe Condition -> Type -> NonEmpty Type -> NonEmpty Type -> TI Subst
-varBind _ u (Just Eq) t ot1 ot2 = return $ M.singleton u t
-varBind p u (Just Ord) t ot1 ot2
+varBind :: P -> Maybe Exp -> String -> Maybe Condition -> Type -> NonEmpty Type -> NonEmpty Type -> TI Subst
+varBind _ _ u (Just Eq) t ot1 ot2 = return $ M.singleton u t
+varBind p _ u (Just Ord) t ot1 ot2
     | isOrd t = return $ M.singleton u t
     | otherwise = tell [Error TypeError (nes $ showType True (varsMap t) t ++ "\x1b[1m is not Ord") (Just p)] >> return nullSubst
     where
         isOrd (TypeBasic IntType) = True
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
-varBind p@(_, a) u c t ot1 ot2
-    | u `S.member` ftv t = typeError p ot1 ot2
+varBind p@(_, a) e u c t ot1 ot2
+    | u `S.member` ftv t = typeError' p e t (TypeID c u) -- typeError p ot1 ot2
     | otherwise = return $ M.singleton u t
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv, SPL)
@@ -240,7 +244,7 @@ tiVarDecl env (VarDecl Nothing s ex) = do
     return (s1, TypeEnv (M.insert (Var, s) (Scheme [] t1) env2), d)
 tiVarDecl env (VarDecl (Just t) s e) = do
     (s1, t1, e') <- tiExp env e
-    s2 <- mgu (expToP e) t1 t
+    s2 <- trace (show e) mgu (Just e) (expToP e) t1 t
     let cs1 = s2 `composeSubst` s1
     let TypeEnv env1 = remove env Var s
     let env2 = TypeEnv (M.insert (Var, s) (Scheme [] t1) env1)
@@ -261,10 +265,10 @@ tiVarDecls env (v:vs) = do
     return (s2 `composeSubst` s1, env2, d1:d2)
 
 checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
-checkReturn _ t (StmtReturn Nothing p) = mgu p t Void
+checkReturn _ t (StmtReturn Nothing p) = mgu Nothing p t Void
 checkReturn env t (StmtReturn (Just e) _) = do
     (s1, t1, _) <- tiExp env e
-    s2 <- mgu (expToP e) t1 t
+    s2 <- mgu (Just e) (expToP e) t1 t
     return $ s2 `composeSubst` s1
 
 getReturns :: Stmt -> [Stmt]
@@ -297,7 +301,7 @@ tiFunDecl env f@(FunDecl n args (Just t) vars stmts p)
     | l1 /= l2 = tell [Error TypeError (nes $ "\x1b[33m" ++ n ++ "\x1b[0m\x1b[1m got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments") (Just p)] >> return (nullSubst, t, env, f)
     | otherwise = do
         (s1, t1, env1, FunDecl _ _ _ vars' stmts' _) <- tiFunDecl env (FunDecl n args Nothing vars stmts p)
-        s2 <- mgu p t1 t
+        s2 <- mgu Nothing p t1 t
         let t2 = apply s2 t
         let env2 = remove env1 Fun n
         let env3 = env2 `combine` TypeEnv (M.singleton (Fun, n) (generalize env2 t2))
@@ -345,21 +349,21 @@ tiStmts env (s:ss) = do
 tiField :: Type -> Field -> TI (Subst, Type)
 tiField t (Head p) = do
     t1 <- newTyVar Nothing "f"
-    s <- mgu p (TypeList t1) t
+    s <- mgu Nothing p (TypeList t1) t
     return (s, apply s t1)
 tiField t (Tail p) = do
     t1 <- newTyVar Nothing "f"
-    s <- mgu p (TypeList t1) t
+    s <- mgu Nothing p (TypeList t1) t
     return (s, apply s $ TypeList t1)
 tiField t (First p) = do
     t1 <- newTyVar Nothing "f"
     t2 <- newTyVar Nothing "f"
-    s <- mgu p (TypeTuple t1 t2) t
+    s <- mgu Nothing p (TypeTuple t1 t2) t
     return (s, apply s t1)
 tiField t (Second p) = do
     t1 <- newTyVar Nothing "f"
     t2 <- newTyVar Nothing "f"
-    s <- mgu p (TypeTuple t1 t2) t  
+    s <- mgu Nothing p (TypeTuple t1 t2) t  
     return (s, apply s t2)
 
 tiFields :: Type -> [Field] -> TI (Subst, Type)
@@ -372,7 +376,7 @@ tiFields t (f:fs) = do
 tiStmt :: TypeEnv -> Stmt -> TI (Subst, Stmt)
 tiStmt env (StmtIf e ss1 ss2) = do
     (s1, t1, e') <- tiExp env e
-    s2 <- mgu (expToP e) (TypeBasic BoolType) t1
+    s2 <- mgu (Just e) (expToP e) (TypeBasic BoolType) t1
     let cs1 = s2 `composeSubst` s1
     (s3, ss1') <- tiStmts (apply cs1 env) ss1
     let cs2 = s3 `composeSubst` cs1
@@ -380,7 +384,7 @@ tiStmt env (StmtIf e ss1 ss2) = do
     return (s4 `composeSubst` cs2, StmtIf e' ss1' (if isNothing ss2 then Nothing else Just ss2'))
 tiStmt env (StmtWhile e ss) = do
     (s1, t1, e') <- tiExp env e
-    s2 <- mgu (expToP e) (TypeBasic BoolType) t1
+    s2 <- mgu (Just e) (expToP e) (TypeBasic BoolType) t1
     let cs1 = s2 `composeSubst` s1
     (s3, stmts') <- tiStmts (apply cs1 env) ss
     return (s3 `composeSubst` cs1, StmtWhile e' stmts')
@@ -392,7 +396,7 @@ tiStmt e s@(StmtField n fs ex p) = do
         Just sigma -> do
             t <- instantiate sigma
             (s2, t') <- tiFields t fs
-            s3 <- mgu (expToP ex) t1 t'
+            s3 <- mgu (Just ex) (expToP ex) t1 t'
             return (s3 `composeSubst` s2 `composeSubst` s1, StmtField n fs e' p)
 tiStmt env (StmtFunCall f) = do
     (s, _, f) <- tiFunCall env f
@@ -428,7 +432,7 @@ mguList :: [(Type, P)] -> [Type] -> TI Subst
 mguList [] _ = return nullSubst
 mguList _ [] = return nullSubst
 mguList ((a, p):as) (b:bs) = do
-    s1 <- mgu p a b
+    s1 <- mgu Nothing p a b
     s2 <- mguList as bs
     return $ s2 `composeSubst` s1
 
@@ -469,17 +473,17 @@ tiExp' :: Bool -> TypeEnv -> Exp -> TI (Subst, Type, Exp)
 tiExp' b env (Exp _ o e1 e2 p) = do
     (t1, t2, t3) <- tiOp2 o
     (s1, t1', e1') <- tiExp' b env e1
-    s2 <- mgu (expToP e1) t1' (apply s1 t1)
+    s2 <- mgu (Just e1) (expToP e1) t1' (apply s1 t1)
     let cs1 = s2 `composeSubst` s1
     (s3, t2', e2') <- tiExp' b (apply cs1 env) e2
     let cs2 = s3 `composeSubst` cs1
-    s4 <- mgu (expToP e2) (apply cs2 t2') (apply cs2 t2)
+    s4 <- mgu (Just e2) (expToP e2) (apply cs2 t2') (apply cs2 t2)
     let cs3 = s4 `composeSubst` cs2
     return (cs3, apply cs3 t3, Exp (Just t1') o e1' e2' p)
 tiExp' b env (ExpOp1 o e p) = do
     let (t1, t2) = tiOp1 o
     (s1, t1', e') <- tiExp' b env e
-    s2 <- mgu p t1 t1'
+    s2 <- mgu (Just e) p t1 t1'
     return (s2 `composeSubst` s1, t2, ExpOp1 o e' p)
 tiExp' b env (ExpTuple (e1, e2) p) = do
     (s1, t1, e1') <- tiExp' b env e1

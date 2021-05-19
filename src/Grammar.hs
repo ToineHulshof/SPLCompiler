@@ -46,15 +46,15 @@ data Decl
   = DeclVarDecl VarDecl
   | DeclFunDecl FunDecl
   | DeclError P
-  -- deriving (Show)
+  deriving (Show)
 
 data VarDecl
   = VarDecl (Maybe Type) String Exp
-  -- deriving (Show)
+  deriving (Show)
 
 data FunDecl
   = FunDecl String [String] (Maybe Type) [VarDecl] [Stmt] P
-  -- deriving (Show)
+  deriving (Show)
 
 data Condition = Eq | Ord deriving (Eq, Ord, Show)
 
@@ -102,7 +102,7 @@ data Stmt
   | StmtFunCall FunCall
   | StmtReturn (Maybe Exp) P
   | StmtError (Maybe String) P
-  -- deriving (Show)
+  deriving (Show)
 
 -- Here we used the provided hints to ensure precendence
 -- More details can be found in the report
@@ -118,7 +118,7 @@ data Exp
   | ExpFunCall FunCall P
   | ExpEmptyList P
   | ExpError P
-  -- deriving (Show)
+  deriving (Show)
 
 data Op2
   = Plus
@@ -152,4 +152,4 @@ data Field
 
 data FunCall
   = FunCall (Maybe Type) String [Exp] P
-  -- deriving (Show)
+  deriving (Show)
