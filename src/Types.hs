@@ -188,15 +188,11 @@ mgu' e p (TypeID c u) t ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p t (TypeID c u) ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p l@(TypeBasic t1) r@(TypeBasic t2) ot1 ot2
     | t1 == t2 = return nullSubst
-    | otherwise = typeError p ot1 ot2 -- typeError' p e l r
+    | otherwise = typeError p ot1 ot2
 mgu' e _ Void Void ot1 ot2 = return nullSubst
-mgu' e p t1 t2 ot1 ot2 = typeError p ot1 ot2 -- typeError' p e t1 t2
-
-typeError' :: P -> Maybe Exp -> Type -> Type -> TI Subst
-typeError' p@(_, a) e t1 t2 = tell [Error TypeError (nes ("\x1b[1m\x1b[33m" ++ map removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap t1) t1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap t2) t2 ++ "\x1b[1m")) (Just p)] >> return nullSubst
+mgu' e p t1 t2 ot1 ot2 = typeError p ot1 ot2
 
 typeError :: P -> NonEmpty Type -> NonEmpty Type -> TI Subst
--- typeError p@(_, a) (h1 :| _) (h2 :| _) = tell [Error TypeError (nes ("\x1b[1m\x1b[33m" ++ map removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m")) (Just p)] >> return nullSubst
 typeError p@(_, a) (h1 :| t1) (h2 :| t2) = tell [Error TypeError (("\x1b[1m\x1b[33m" ++ map removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2 ) (Just p)] >> return nullSubst
     where 
         extraError :: Type -> Type -> String
@@ -222,7 +218,7 @@ varBind p _ u (Just Ord) t ot1 ot2
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
 varBind p@(_, a) e u c t ot1 ot2
-    | u `S.member` ftv t = typeError p ot1 ot2 -- typeError' p e t (TypeID c u)
+    | u `S.member` ftv t = typeError p ot1 ot2
     | otherwise = return $ M.singleton u t
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv, SPL)
