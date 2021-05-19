@@ -178,6 +178,7 @@ mgu' e p (TypeFun l1 r1) (TypeFun l2 r2) ot1 ot2 = do
     s2 <- mgu' e p (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)
     return $ s2 `composeSubst` s1
 mgu' e@(Just (Exp _ Cons e1 e2 _)) p (TypeList t1) (TypeList t2) ot1 ot2 = mgu' e (expToP e1) t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
+mgu' e p (TypeList t1) (TypeList t2) ot1 ot2 = mgu' e p t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
 mgu' (Just (ExpTuple (e1, e2) _)) p (TypeTuple l1 r1) (TypeTuple l2 r2) ot1 ot2 = do
     s1 <- mgu' (Just e1) (expToP e1) l1 l2 (l1 `cons` ot1) (l2 `cons` ot2)
     s2 <- mgu' (Just e2) (expToP e2) (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)
@@ -187,21 +188,19 @@ mgu' e p (TypeID c u) t ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p t (TypeID c u) ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p l@(TypeBasic t1) r@(TypeBasic t2) ot1 ot2
     | t1 == t2 = return nullSubst
-    | otherwise = typeError' p e l r -- typeError p ot1 ot2
+    | otherwise = typeError p ot1 ot2 -- typeError' p e l r
 mgu' e _ Void Void ot1 ot2 = return nullSubst
-mgu' e p t1 t2 ot1 ot2 = typeError' p e t1 t2 --typeError p ot1 ot2
+mgu' e p t1 t2 ot1 ot2 = typeError p ot1 ot2 -- typeError' p e t1 t2
 
 typeError' :: P -> Maybe Exp -> Type -> Type -> TI Subst
-typeError' p@(_, a) e t1 t2 = tell [Error TypeError (nes ("\x1b[1m\x1b[33m" ++ takeWhile (/= '\n') a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap t1) t1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap t2) t2 ++ "\x1b[1m")) (Just p)] >> return nullSubst
+typeError' p@(_, a) e t1 t2 = tell [Error TypeError (nes ("\x1b[1m\x1b[33m" ++ map removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap t1) t1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap t2) t2 ++ "\x1b[1m")) (Just p)] >> return nullSubst
 
 typeError :: P -> NonEmpty Type -> NonEmpty Type -> TI Subst
-typeError p@(_, a) (h1 :| _) (h2 :| _) = tell [Error TypeError (nes ("\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m")) (Just p)] >> return nullSubst
--- typeError p@(_, a) ot1 ot2 = tell [Error TypeError (("\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2) (Just p)] >> return nullSubst
---     where 
---         extraError :: Type -> Type -> String
---         extraError t1 t2 = "\x1b[1m-> " ++ showType True (varsMap t1) t1 ++ "\x1b[1m must match " ++ showType True (varsMap t2) t2 ++ "\x1b[1m"
---         (h1 :| t1) = NE.reverse ot1
---         (h2 :| t2) = NE.reverse ot2
+-- typeError p@(_, a) (h1 :| _) (h2 :| _) = tell [Error TypeError (nes ("\x1b[1m\x1b[33m" ++ map removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m")) (Just p)] >> return nullSubst
+typeError p@(_, a) (h1 :| t1) (h2 :| t2) = tell [Error TypeError (("\x1b[1m\x1b[33m" ++ map removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2 ) (Just p)] >> return nullSubst
+    where 
+        extraError :: Type -> Type -> String
+        extraError t1 t2 = "\x1b[1m-> " ++ showType True (varsMap t1) t1 ++ "\x1b[1m must match " ++ showType True (varsMap t2) t2 ++ "\x1b[1m"
 
 condition :: Type -> String -> (Maybe Condition, Bool)
 condition (TypeID c n) s = (c, n == s)
@@ -223,7 +222,7 @@ varBind p _ u (Just Ord) t ot1 ot2
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
 varBind p@(_, a) e u c t ot1 ot2
-    | u `S.member` ftv t = typeError' p e t (TypeID c u) -- typeError p ot1 ot2
+    | u `S.member` ftv t = typeError p ot1 ot2 -- typeError' p e t (TypeID c u)
     | otherwise = return $ M.singleton u t
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv, SPL)
@@ -244,7 +243,7 @@ tiVarDecl env (VarDecl Nothing s ex) = do
     return (s1, TypeEnv (M.insert (Var, s) (Scheme [] t1) env2), d)
 tiVarDecl env (VarDecl (Just t) s e) = do
     (s1, t1, e') <- tiExp env e
-    s2 <- trace (show e) mgu (Just e) (expToP e) t1 t
+    s2 <- mgu (Just e) (expToP e) t1 t
     let cs1 = s2 `composeSubst` s1
     let TypeEnv env1 = remove env Var s
     let env2 = TypeEnv (M.insert (Var, s) (Scheme [] t1) env1)

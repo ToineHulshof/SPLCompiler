@@ -41,14 +41,18 @@ nes a = a :| []
 removePath :: FilePath -> FilePath
 removePath f = reverse $ takeWhile (/= '/') (reverse f)
 
+removeSpace :: Char -> Char
+removeSpace '\n' = ' '
+removeSpace '\t' = ' '
+removeSpace c = c
+
 showErrorStrings :: NonEmpty String -> String
-showErrorStrings (s :| []) = s
-showErrorStrings (s :| ss) = concatMap ("\n  • " ++) (s : ss)
+showErrorStrings (s :| ss) = s ++ concatMap ("\n  • " ++) ss
 
 instance Show Errors where
   show (Errors file lines errors) = join "\n\n" $ map showError (sort errors) where
     showError (Error k e Nothing) = "\x1b[1m" ++ removePath file ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ showErrorStrings e
-    showError (Error k e (Just ((li, co), c'))) = let c = takeWhile (/= '\n') c' in
+    showError (Error k e (Just ((li, co), c'))) = let c = map removeSpace c' in
       "\x1b[1m" ++ removePath file ++ ":" ++ show li ++ ":" ++ show co ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ showErrorStrings e ++ "\n" ++
       replicate leftLength ' ' ++ "\x1b[34m|\n" ++ show li ++ " |\x1b[0m " ++
       let (l, r) = splitAt (co - 1) (lines ! li) in (l ++ "\x1b[31m\x1b[1m" ++ c ++ "\x1b[0m" ++ drop (length c) r) ++ "\n" ++

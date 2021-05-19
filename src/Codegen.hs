@@ -269,13 +269,28 @@ genField (Second _) = 0
 genField (Head _) = 0
 genField (Tail _) = -1
 
+-- POLY FUNCTIONS
+-- zoek functie op
+-- check of functie poly is
+-- zo nee, gewoon normaal
+-- zo ja, check of label al bestaat
+-- zo ja, gewoon normaal (met aangepaste label)
+-- zo nee, genereren met polytype vervangen
+-- functie en label toevoegen
+-- gewoon normaal met nieuw label
+
 genFunCall :: FunCall -> CG [Instruction]
 genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do
     i1 <- genExp arg
     i2 <- genPrint t
     return $ i1 ++ i2 ++ printString "\n"
 genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
-genFunCall (FunCall t n args _) = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
+genFunCall (FunCall t n args _) = undefined
+    where
+        is n = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
+
+isPoly :: Type -> Bool
+isPoly = undefined
 
 printString :: String -> [Instruction]
 printString = concatMap (\c -> [LoadConstant (ord c), Trap Char])
