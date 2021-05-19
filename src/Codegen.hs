@@ -7,6 +7,7 @@ import Control.Monad.State
 import Control.Monad
 import Control.Applicative ( Alternative((<|>)) )
 import Debug.Trace ( trace )
+import Types ( funTypeToList )
 import qualified Data.Map as M
 
 data Instruction
@@ -125,7 +126,7 @@ instance Show Instruction where
     show NotI = "not"
     show Halt = "halt"
 
-data GenEnv = GenEnv { ifCounter :: Int, funName :: String, localMap :: M.Map String Int, globalMap :: M.Map String Int, functions :: [[Instruction]], labels :: [String] }
+data GenEnv = GenEnv { ifCounter :: Int, funName :: String, localMap :: M.Map String Int, globalMap :: M.Map String Int, functions :: [[Instruction]], labels :: [String], spl :: SPL }
 type CG a = StateT GenEnv IO a
 
 new :: CG Int
@@ -162,7 +163,6 @@ addLabel l = do
 genCode :: Bool -> FilePath -> SPL -> IO ()
 genCode False = genCodeSSM
 genCode True = genCodeLLVM
-    --putStrLn "\x1b[32mCompilation successful\x1b[0m"\
 
 changeSuffix :: Bool -> FilePath -> FilePath -> FilePath
 changeSuffix llvm c ".spl" = c ++ (if llvm then ".ll" else ".ssm")
@@ -171,7 +171,7 @@ changeSuffix _ _ _ = error "File does not have spl as extension"
 
 genCodeSSM :: FilePath -> SPL -> IO ()
 genCodeSSM f spl = do
-    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", localMap = M.empty, globalMap = M.empty, functions = [], labels = [] })
+    (instructions, _) <- runStateT (genSPL spl) (GenEnv { ifCounter = 0, funName = "", localMap = M.empty, globalMap = M.empty, functions = [], labels = [], spl = spl })
     writeFile (changeSuffix False [] f) (unlines $ map show instructions)
 
 genCodeLLVM :: FilePath -> SPL -> IO ()
@@ -285,12 +285,41 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do
     i2 <- genPrint t
     return $ i1 ++ i2 ++ printString "\n"
 genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
-genFunCall (FunCall t n args _) = undefined
-    where
-        is n = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
+genFunCall (FunCall t n args _) = do
+    ds <- gets spl
+    case findFunction ds n of
+        Nothing -> trace "Functie die wordt aangeroepen bestaat niet. Typechecker zou dit al hebben gezien"  undefined
+        Just f@(FunDecl _ _ (Just t) _ _ _) -> if not $ isPoly t
+            then funCallInstructions n args
+            else do
+                let name = n ++ typeName t
+                labels <- gets labels
+                when (name `notElem` labels) $ genPolyFunDecl f t name
+                funCallInstructions name args
+                
+genPolyFunDecl :: FunDecl -> Type -> String -> CG ()
+genPolyFunDecl f@(FunDecl n args (Just ft) vars stmts p) t l = do
+    let t' = funTypeToList t
+    is <- genFunDecl (FunDecl n args (Just (foldr1 TypeFun $ t' ++ [last (funTypeToList ft)])) vars stmts p)
+    addFunction is
+    addLabel l
+
+funCallInstructions :: String -> [Exp] -> CG [Instruction]
+funCallInstructions n args = (++ [BranchSubroutine n, AdjustStack (-length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
+
+findFunction :: [Decl] -> String -> Maybe FunDecl
+findFunction [] _ = Nothing 
+findFunction ((DeclFunDecl f@(FunDecl n _ _ _ _ _)) : ds) s
+    | n == s = Just f
+    | otherwise = findFunction ds s
+findFunction (d : ds) s = findFunction ds s
 
 isPoly :: Type -> Bool
-isPoly = undefined
+isPoly (TypeTuple t1 t2) = isPoly t1 || isPoly t2
+isPoly (TypeList t) = isPoly t
+isPoly (TypeID _ _) = True
+isPoly (TypeFun t1 t2) = isPoly t1 || isPoly t2
+isPoly _ = False
 
 printString :: String -> [Instruction]
 printString = concatMap (\c -> [LoadConstant (ord c), Trap Char])
