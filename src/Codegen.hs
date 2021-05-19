@@ -3,11 +3,11 @@ module Codegen where
 import Grammar
 import Data.Char
 import Data.Maybe
-import Control.Monad.State
-import Control.Monad
+import Control.Monad.State hiding ( join )
+import Errors
 import Control.Applicative ( Alternative((<|>)) )
 import Debug.Trace ( trace )
-import Types ( funTypeToList )
+import Types ( funTypeToList, Subst, subst, apply )
 import qualified Data.Map as M
 
 data Instruction
@@ -194,14 +194,16 @@ genGlobalVars i ((VarDecl _ n e):xs) = do
     return (i1 ++ i2, M.singleton n i `M.union` m)
 
 genFunDecl :: FunDecl -> CG [Instruction]
-genFunDecl (FunDecl n args _ vars stmts _) = do
-    m <- argsMap (-1 - length args) args
-    setLocalMap m
-    i1 <- genLocalVars 1 args vars
-    setFunName n
-    i2 <- genStmts stmts
-    setLocalMap M.empty
-    return $ Label n : Link (length vars) : i1 ++ i2 ++ [Label $ n ++ "End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
+genFunDecl (FunDecl n args (Just t) vars stmts _)
+    | isPoly t = return []
+    | otherwise = do
+        m <- argsMap (-1 - length args) args
+        setLocalMap m
+        i1 <- genLocalVars 1 args vars
+        setFunName n
+        i2 <- genStmts stmts
+        setLocalMap M.empty
+        return $ Label n : Link (length vars) : i1 ++ i2 ++ [Label $ n ++ "End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
 
 argsMap :: Int -> [String] -> CG (M.Map String Int)
 argsMap _ [] = return M.empty
@@ -269,38 +271,53 @@ genField (Second _) = 0
 genField (Head _) = 0
 genField (Tail _) = -1
 
--- POLY FUNCTIONS
--- zoek functie op
--- check of functie poly is
--- zo nee, gewoon normaal
--- zo ja, check of label al bestaat
--- zo ja, gewoon normaal (met aangepaste label)
--- zo nee, genereren met polytype vervangen
--- functie en label toevoegen
--- gewoon normaal met nieuw label
-
 genFunCall :: FunCall -> CG [Instruction]
 genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do
     i1 <- genExp arg
     i2 <- genPrint t
     return $ i1 ++ i2 ++ printString "\n"
 genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
-genFunCall (FunCall t n args _) = do
+genFunCall (FunCall (Just t') n args _) = do
     ds <- gets spl
-    case findFunction ds n of
-        Nothing -> trace "Functie die wordt aangeroepen bestaat niet. Typechecker zou dit al hebben gezien"  undefined
-        Just f@(FunDecl _ _ (Just t) _ _ _) -> if not $ isPoly t
-            then funCallInstructions n args
-            else do
-                let name = n ++ typeName t
-                labels <- gets labels
-                when (name `notElem` labels) $ genPolyFunDecl f t name
-                funCallInstructions name args
-                
+    let f@(FunDecl _ _ (Just t) _ _ _) = fromJust $ findFunction ds n
+    if not $ isPoly t
+        then funCallInstructions n args
+        else do
+            let name = n ++ join "-" (map typeName (init (funTypeToList t')))
+            labels <- gets labels
+            when (name `notElem` labels) $ genPolyFunDecl f t' name
+            funCallInstructions name args
+
+monoStmts :: Subst -> [Stmt] -> [Stmt]
+monoStmts s = map $ monoStmt s
+
+monoStmt :: Subst -> Stmt -> Stmt
+monoStmt s (StmtIf e ss1 ss2) = StmtIf (monoExp s e) (monoStmts s ss1) (monoStmts s <$> ss2)
+monoStmt s (StmtWhile e ss) = StmtWhile (monoExp s e) (monoStmts s ss)
+monoStmt s (StmtField n fs e p) = StmtField n fs (monoExp s e) p
+monoStmt s (StmtFunCall f) = StmtFunCall (monoFunCall s f)
+monoStmt s (StmtReturn Nothing p) = StmtReturn Nothing p
+monoStmt s (StmtReturn (Just e) p) = StmtReturn (Just $ monoExp s e) p
+
+monoFunCall :: Subst -> FunCall -> FunCall
+monoFunCall s (FunCall t n es p) = FunCall (apply s t) n (map (monoExp s) es) p
+
+monoVarDecl :: Subst -> VarDecl -> VarDecl
+monoVarDecl s (VarDecl t n e) = VarDecl (apply s t) n (monoExp s e)
+
+monoExp :: Subst -> Exp -> Exp
+monoExp s (Exp t o e1 e2 p) = Exp (apply s t) o (monoExp s e1) (monoExp s e2) p
+monoExp s (ExpOp1 o e p) = ExpOp1 o (monoExp s e) p
+monoExp s (ExpTuple (e1, e2) p) = ExpTuple (monoExp s e1, monoExp s e2) p
+monoExp s (ExpBrackets e p) = ExpBrackets (monoExp s e) p
+monoExp s (ExpField t n fs p) = ExpField (apply s t) n fs p
+monoExp s (ExpFunCall f p) = ExpFunCall (monoFunCall s f) p
+monoExp _ e = e
+
 genPolyFunDecl :: FunDecl -> Type -> String -> CG ()
 genPolyFunDecl f@(FunDecl n args (Just ft) vars stmts p) t l = do
-    let t' = funTypeToList t
-    is <- genFunDecl (FunDecl n args (Just (foldr1 TypeFun $ t' ++ [last (funTypeToList ft)])) vars stmts p)
+    let s = subst ft t
+    is <- genFunDecl (FunDecl l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p)
     addFunction is
     addLabel l
 

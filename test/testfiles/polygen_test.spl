@@ -1,7 +1,8 @@
-f(x) {
+f(x, y) {
     print(x);
+    print(y);
 }
 
 main() {
-    f(3);
+    f(3, True);
 }

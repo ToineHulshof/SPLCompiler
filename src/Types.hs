@@ -54,6 +54,10 @@ instance Types a => Types [a] where
   apply s = map (apply s)
   ftv l = foldr (S.union . ftv) S.empty l
 
+instance Types a => Types (Maybe a) where
+    apply s a = apply s <$> a
+    ftv = undefined
+
 nullSubst :: Subst
 nullSubst = M.empty
 
@@ -220,6 +224,15 @@ varBind p _ u (Just Ord) t ot1 ot2
 varBind p@(_, a) e u c t ot1 ot2
     | u `S.member` ftv t = typeError p ot1 ot2
     | otherwise = return $ M.singleton u t
+
+-- Helper function for replacing the types in a polymorphic function.
+-- This function is used in Codegen.hs
+subst :: Type -> Type -> Subst
+subst (TypeFun l1 r1) (TypeFun l2 r2) = subst l1 l2 `composeSubst` subst r1 r2
+subst (TypeList l) (TypeList r) = subst l r
+subst (TypeTuple l1 r1) (TypeTuple l2 r2) = subst l1 l2 `composeSubst` subst r1 r2
+subst (TypeID _ s) t = M.singleton s t
+subst _ _ = nullSubst
 
 tiSPL :: TypeEnv -> SPL -> TI (Subst, TypeEnv, SPL)
 tiSPL = tiDecls
