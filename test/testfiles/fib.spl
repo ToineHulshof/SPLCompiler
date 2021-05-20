@@ -6,14 +6,6 @@ fib(n) {
     }
 }
 
-fib(n) {
-    return n;
-}
-
-fac(n) {
-    return n;
-}
-
 fac(n) {
     if (n <= 1) {
         return 1;
