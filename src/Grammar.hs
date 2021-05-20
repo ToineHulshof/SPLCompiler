@@ -2,11 +2,11 @@
 
 module Grammar where
 
-import Errors
 import Control.Applicative (Alternative (empty, (<|>)))
+import Errors
 
 -- Our defined Parser type, which takes a Code object and parses it and returns either and Error or a parsed tuple, with Code that was not parsed yet
-newtype Parser a = Parser { parse :: Code -> ([Error], Maybe (Code, a)) }
+newtype Parser a = Parser {parse :: Code -> ([Error], Maybe (Code, a))}
 
 -- Proof that our Parser is a Functor
 instance Functor Parser where
@@ -27,14 +27,12 @@ instance Applicative Parser where
         where
           (e1, r1) = p1 c
 
-
 -- Proof that our Parser is an Alternative
 instance Alternative Parser where
   empty = Parser . const $ ([], Nothing)
   (Parser p1) <|> (Parser p2) = Parser $ \code -> case p1 code of
     (_, Nothing) -> p2 code
     res -> res
-
 
 -- Our defined types in the Grammar (pretty similar to the given grammar; implementation details are mentioned in the code or in the report)
 -- Our naming convention for the constructors: if there is only one, simply use the same name;

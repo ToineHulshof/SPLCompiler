@@ -177,7 +177,7 @@ genCodeSSM f main spl = do
 
 genCodeLLVM :: FilePath -> FunDecl -> SPL -> IO ()
 genCodeLLVM f main spl = do
-  (llvmcode, _) <- runStateT (genSPLLLVM spl) (GenEnvLLVM {uniqueInt = 0, llvmlocalmap = M.empty})
+  (llvmcode, _) <- runStateT (genSPLLLVM spl) (GenEnvLLVM {uniqueInt = 0, llvmlocalmap = M.empty, retType = Void})
   writeFile (changeSuffix True [] f) (unlines llvmcode)
 
 genSPL :: FunDecl -> SPL -> CG [Instruction]
