@@ -87,23 +87,36 @@ strFunName name t =
       args = putCommas argNames
    in "define " ++ retName ++ " @" ++ name ++ "(" ++ args ++ ") {"
 
+allocateBasic :: String -> String -> Int -> ([String], Int, Int) -- lines of code, the int address where it is stored and the new free address
+allocateBasic val typestr i =
+  let code =
+        [ "%" ++ show i ++ " = alloca " ++ typestr,
+          "store " ++ typestr ++ " " ++ val ++ ", " ++ typestr ++ "* %" ++ show i
+        ]
+   in (code, i, i + 1)
+
+allocateComplex :: [String] -> String -> String -> Int -> ([String], Int, Int)
+allocateComplex lines addr typestr i =
+  let code =
+        lines
+          ++ ["%" ++ show i ++ " = alloca " ++ typestr]
+          ++ [ "store " ++ typestr ++ " %" ++ addr ++ ", " ++ typestr ++ "* %" ++ show i
+             ]
+   in (code, i, i + 1)
+
+-- String is the type, int is the fresh address
+allocateExp :: ExpRet -> String -> Int -> ([String], Int, Int)
+allocateExp (Basic val) = allocateBasic val
+allocateExp (Lines cmds addr) = allocateComplex cmds addr
+
 genLocalVarsLLVM :: [VarDecl] -> Int -> CGLL (M.Map String String, [String], Int)
 genLocalVarsLLVM [] i = return (M.empty, [], i)
 genLocalVarsLLVM ((VarDecl (Just t) name exp) : xs) i = do
   let typestr = typeToStr t
-  (expStr, iexp) <- genExpLLVM exp (i + 1)
-  (m, others, i') <- genLocalVarsLLVM xs iexp
-  let code = case expStr of
-        Basic str ->
-          [ "%" ++ show i ++ " = alloca " ++ typestr,
-            "store " ++ typestr ++ " " ++ str ++ ", " ++ typestr ++ "* %" ++ show i
-          ]
-        Lines strs str ->
-          ["%" ++ show i ++ " = alloca " ++ typestr]
-            ++ strs
-            ++ [ "store " ++ typestr ++ " %" ++ show str ++ ", " ++ typestr ++ "* %" ++ show i
-               ]
-  return (m `M.union` M.singleton name (show i), code ++ others, i')
+  (expStr, newi) <- genExpLLVM exp i
+  let (code, addr, newi') = allocateExp expStr typestr newi
+  (m, others, newi) <- genLocalVarsLLVM xs newi'
+  return (m `M.union` M.singleton name (show addr), code ++ others, newi)
 
 data ExpRet = Basic String | Lines [String] String
 
@@ -115,6 +128,7 @@ genStmtsLLVM (s : ss) i = do
   return (codes ++ codess, i'')
 
 genStmtLLVM :: Stmt -> Int -> CGLL ([String], Int)
+genStmtLLVM (StmtFunCall fc) i = genFunCallLLVM fc i
 genStmtLLVM (StmtReturn me _) i =
   case me of
     (Just e) -> do
@@ -131,4 +145,33 @@ genExpLLVM :: Exp -> Int -> CGLL (ExpRet, Int)
 genExpLLVM (ExpInt i _) c = return (Basic (show i), c)
 genExpLLVM (ExpChar char _) c = return (Basic (show (ord char)), c)
 genExpLLVM (ExpBool b _) c = return (Basic bool, c) where bool = if b then "true" else "false"
+genExpLLVM (ExpFunCall fc _) c = do
+  (code, newi) <- genFunCallLLVM fc c
+  return (Lines code (show (newi -1)), newi)
 genExpLLVM _ _ = undefined
+
+-- [String] is the complete code, [Int] are the addresses for the exps, Int is the new fresh int
+genExpsLLVM :: [Exp] -> [Type] -> Int -> CGLL ([String], [String], Int)
+genExpsLLVM [] [] i = return ([], [], i)
+genExpsLLVM (e : es) (t : ts) i = do
+  (expstr, newi) <- genExpLLVM e i
+  let (code, addr, newi') = allocateExp expstr (typeToStr t) newi
+  (otherCode, otherAddr, newi) <- genExpsLLVM es ts newi'
+  return (code ++ otherCode, (typeToStr t ++ "* %" ++ show addr) : otherAddr, newi)
+
+generateLoadCode :: [String] -> [Type] -> Int -> ([String], [String], Int)
+generateLoadCode [] [] i = ([], [], i)
+generateLoadCode (addr : addrs) (t : ts) i =
+  let code = ["%" ++ show i ++ " = load " ++ typeToStr t ++ ", " ++ addr]
+      (othercode, newpnts, newi) = generateLoadCode addrs ts (i + 1)
+   in (code ++ othercode, (typeToStr t ++ " %" ++ show i) : newpnts, newi)
+
+genFunCallLLVM :: FunCall -> Int -> CGLL ([String], Int)
+genFunCallLLVM (FunCall (Just t) name exps _) i = do
+  let retType = getRetFromFunType t
+  let argTypes = init (funTypeToList t)
+  (argcode, addrs, newi) <- genExpsLLVM exps argTypes i
+  let (loadcode, pnts, newi') = generateLoadCode addrs argTypes newi
+  let code =
+        argcode ++ loadcode ++ ["%" ++ show newi' ++ " = call " ++ typeToStr retType ++ " @" ++ name ++ "(" ++ putCommas pnts ++ ")"]
+  return (code, newi' + 1)
