@@ -62,7 +62,7 @@ data TrapCode
   | Char
 
 instance Show TrapCode where
-  show Int = "0"
+  show Codegen.Int = "0"
   show Char = "1"
 
 data Register
@@ -177,7 +177,7 @@ genCodeSSM f main spl = do
 
 genCodeLLVM :: FilePath -> FunDecl -> SPL -> IO ()
 genCodeLLVM f main spl = do
-  (llvmcode, _) <- runStateT (genSPLLLVM spl) (GenEnvLLVM {uniqueInt = 0, llvmlocalmap = M.empty, retType = Void})
+  (llvmcode, _) <- runStateT (genSPLLLVM spl) (GenEnvLLVM {uniqueInt = 0, regCount = 0, regMap = M.empty, llvmlocalmap = M.empty, retType = Void})
   writeFile (changeSuffix True [] f) (unlines llvmcode)
 
 genSPL :: FunDecl -> SPL -> CG [Instruction]
@@ -338,7 +338,7 @@ printString :: String -> [Instruction]
 printString = concatMap (\c -> [LoadConstant (ord c), Trap Char])
 
 genPrint :: Type -> CG [Instruction]
-genPrint (TypeBasic IntType) = return [Trap Int]
+genPrint (TypeBasic IntType) = return [Trap Codegen.Int]
 genPrint (TypeBasic CharType) = return $ printString "'" ++ [Trap Char] ++ printString "'"
 genPrint (TypeID _ _) = return []
 genPrint t = do
@@ -369,7 +369,7 @@ genPrint' name (TypeList t) = do
   let f = [Label name, Link 0] ++ printString "[" ++ [Label $ "While" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile" ++ i, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then" ++ i, BranchAlways $ "EndIf" ++ i, Label $ "Then" ++ i] ++ printString ", " ++ [Label $ "EndIf" ++ i, BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i] ++ printString "]" ++ [Unlink, StoreStack (-1), Return]
   addFunction f
   addLabel name
-genPrint' _ t = trace (show t) undefined
+genPrint' _ t = undefined
 
 typeName :: Type -> String
 typeName (TypeBasic IntType) = "Int"
@@ -428,7 +428,7 @@ genExp (ExpField _ n fs _) = do
     Nothing -> case M.lookup n gm of
       Nothing -> do
         f <- gets funName
-        trace (f ++ ", " ++ n ++ " " ++ show lm) (error "")
+        error ""
       Just i -> return $ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i1
     Just i -> return $ LoadLocal i : i1
 genExp (ExpInt i _) = return [LoadConstant $ fromInteger i]

@@ -1,8 +1,10 @@
-f (x,y,z) :: Int Char Bool -> Char {
-    return 'a';
+f (x, y) :: Bool Char -> Int {
+    return 3;
 }
 
 main () {
-    var z = f(1, 'a', True);
+    var x = 2;
+    var y = 'a';
+    var z = True;
     return;
 }
