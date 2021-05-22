@@ -180,8 +180,8 @@ mgu' e p (TypeFun l1 r1) (TypeFun l2 r2) ot1 ot2 = do
     s1 <- mgu' e p l1 l2 (l1 `cons` ot1) (l2 `cons` ot2)
     s2 <- mgu' e p (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)
     return $ s2 `composeSubst` s1
-mgu' e@(Just (Exp _ Cons e1 e2 _)) p (TypeList t1) (TypeList t2) ot1 ot2 = mgu' e (expToP e1) t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
-mgu' e p (TypeList t1) (TypeList t2) ot1 ot2 = mgu' e p t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
+mgu' e@(Just (Exp _ Cons e1 e2 _)) p (TypeList t1) (TypeList t2) ot1 ot2 = trace (show e1) mgu' e (expToP e1) t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
+mgu' e p (TypeList t1) (TypeList t2) ot1 ot2 = trace (show e) mgu' e p t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
 mgu' (Just (ExpTuple (e1, e2) _)) p (TypeTuple l1 r1) (TypeTuple l2 r2) ot1 ot2 = do
     s1 <- mgu' (Just e1) (expToP e1) l1 l2 (l1 `cons` ot1) (l2 `cons` ot2)
     s2 <- mgu' (Just e2) (expToP e2) (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)

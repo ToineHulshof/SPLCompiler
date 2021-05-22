@@ -273,12 +273,8 @@ expBracketsP = pp $ ExpBrackets <$> (c '(' *> expP <* c' ')')
 expStringP :: Parser Exp
 expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> spanP (/='"') <* c' '"')
 
-cycleList :: [a] -> [a]
-cycleList [] = []
-cycleList l = last l : tail l
-
 expListP :: Parser Exp
-expListP = (\(es, p) -> let ps = map expToP es in foldr foldCons (ExpEmptyList p) (zipWith posE (cycleList ps) es)) <$> pp' (c '[' *> sepBy (c ',') exp'P <* c' ']')
+expListP = (\(es, p) -> let ps = map expToP es in foldr foldCons (ExpEmptyList (fromMaybe p (listToMaybe ps))) (zipWith posE ps es)) <$> pp' (c '[' *> sepBy (c ',') exp'P <* c' ']')
 
 foldCons :: Exp -> Exp -> Exp 
 foldCons e1 e2 = Exp Nothing Cons e1 e2 (expToP e1)

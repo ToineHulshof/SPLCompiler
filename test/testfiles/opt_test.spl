@@ -8,6 +8,6 @@ x(x) {
 }
 
 main() {
-    print(x(['a']));
-    // print(equals([10], [False]));
+    print(x([3, 4]));
+    print(equals([10], [False, 3]));
 }
