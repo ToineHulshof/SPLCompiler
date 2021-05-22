@@ -1,8 +1,13 @@
 equals(x, y) {
-    var z = [];
     return x == y;
 }
 
+x(x) {
+    var y = x.hd;
+    return y + 1;
+}
+
 main() {
-    print(equals(10, False));
+    print(x(['a']));
+    // print(equals([10], [False]));
 }

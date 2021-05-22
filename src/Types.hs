@@ -300,7 +300,7 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lo
         tvs <- mapM (newTyVar Nothing) args
         state <- get
         put state { rType = Nothing }
-        s0 <- mguList (zip (init $ funTypeToList funT) (repeat p)) tvs
+        s0 <- mguList nullSubst (map (\x -> (\a b -> (Nothing, a, b)) x p) (init $ funTypeToList funT)) tvs
         let env1 = remove (apply s0 env) Fun n
         let TypeEnv env2 = removeAll env Var args
         let argsTvMap = M.fromList $ zipWith (\a t -> ((Var, a), Scheme [] t)) args tvs
@@ -404,12 +404,11 @@ tiExps env (e:es) = do
     let cs1 = s2 `composeSubst` s1
     return (cs1, t1 : t2, e1 : e2)
 
-mguList :: [(Type, P)] -> [Type] -> TI Subst
-mguList [] _ = return nullSubst
-mguList _ [] = return nullSubst
-mguList ((a, p):as) (b:bs) = do
-    s1 <- mgu Nothing p a b
-    s2 <- mguList as bs
+mguList :: Subst -> [(Maybe Exp, Type, P)] -> [Type] -> TI Subst
+mguList s [] _ = return s
+mguList s ((e, a, p):as) (b:bs) = do
+    s1 <- mgu e p (apply s a) (apply s b)
+    s2 <- mguList s1 as bs
     return $ s1 `composeSubst` s2
 
 tiFunCall :: TypeEnv -> FunCall -> TI (Subst, Type, FunCall)
@@ -421,7 +420,7 @@ tiFunCall e@(TypeEnv env) f@(FunCall _ n es p) = case M.lookup (Fun, n) env of
             Nothing -> if null es then return (nullSubst, retType t, FunCall (Just t) n es p) else tell [Error TypeError (nes $ "\x1b[33m" ++ n ++ "\x1b[0m\x1b[1m got " ++ show (length es)  ++ " arguments, but expected 0 arguments") (Just p)] >> return (nullSubst, t, f)
             Just funT -> if length es /= length (funTypeToList funT) then tell [Error TypeError (nes $ "\x1b[33m" ++ n ++ "\x1b[0m\x1b[1m got " ++ show (length es)  ++ " arguments, but expected " ++ show (length (funTypeToList funT)) ++ " arguments") (Just p)] >> return (nullSubst, t, f) else do
                 (s1, ts, es') <- tiExps e es
-                s2 <- mguList (zip ts (map expToP es)) (apply s1 $ funTypeToList funT)
+                s2 <- mguList nullSubst (zip3 (map Just es) ts (map expToP es)) (apply s1 $ funTypeToList funT)
                 let cs1 = s2 `composeSubst` s1
                 let t' = foldr1 TypeFun $ apply cs1 (ts ++ [retType t])
                 return (cs1, apply cs1 $ retType t, FunCall (Just t') n es' p)
