@@ -1,33 +1,8 @@
-var y = (1,2);
+f (x,y,z) :: Int Char Bool -> Char {
+    return 'a';
+}
 
-// f(n) {
-//     if (n <= 1) {
-//         return n;
-//     }
-//     return n * f(n - 1);
-// }
-
-// id(x) {
-//     return x;
-// }
-
-// K(x, y) {
-//     return y;
-// }
-
-main() :: -> Void {
-    // var z = (5, 7);
-    // var y = (5, 7);
-    // var a = 3 : [];
-    // x.snd = 3;
-    // print(f(30));
-    // print(id(5));
-    // print(K(True, 1 : 2 : []));
-    // print(id(id(x)));
-    // print(y == y);
-    // print(isEmpty(a.tl));
-    // var x = ((5, 7), 3);
-    // x.fst.snd = 8;
-    y.snd = 3;
-    print(y);
+main () {
+    var z = f(1, 'a', True);
+    return;
 }
