@@ -8,6 +8,7 @@ x(x) {
 }
 
 main() {
+    Bool x = 'a';
     print(x([3, 4]));
-    print(equals([10], [False, 3]));
+    print(equals([10], [x]));
 }

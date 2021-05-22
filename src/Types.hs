@@ -254,8 +254,8 @@ tiVarDecl env (VarDecl (Just t) s e) = do
     s2 <- mgu (Just e) (expToP e) t1 t
     let cs1 = s2 `composeSubst` s1
     let TypeEnv env1 = remove env Var s
-    let env2 = TypeEnv (M.insert (Var, s) (Scheme [] t1) env1)
-    return (cs1, apply cs1 env2, VarDecl (Just t1) s e')
+    let env2 = TypeEnv (M.insert (Var, s) (Scheme [] t) env1)
+    return (cs1, apply cs1 env2, VarDecl (Just t) s e')
 
 tiDecls :: TypeEnv -> [Decl] -> TI (Subst, TypeEnv, [Decl])
 tiDecls env [] = return (nullSubst, env, [])
