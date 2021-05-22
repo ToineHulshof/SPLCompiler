@@ -43,7 +43,7 @@ ctExp args (Exp _ _ e1 e2 _) = ctExp args e1 ++ ctExp args e2
 ctExp args (ExpOp1 _ e _) = ctExp args e
 ctExp args (ExpTuple (e1, e2) _) = ctExp args e1 ++ ctExp args e2
 ctExp args (ExpBrackets e _) = ctExp args e
-ctExp args (ExpField _ n _ _)
+ctExp args (ExpField n _ _)
     | n `elem` args = []
     | otherwise = [(Var, n)]
 ctExp args (ExpFunCall (FunCall _ n es _) _) = (Fun, n) : concatMap (ctExp args) es

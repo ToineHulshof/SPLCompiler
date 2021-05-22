@@ -1,16 +1,8 @@
-// fac(n) {
-//     if (n == 0) {
-//         return 1;
-//     }
-//     return n * fac(n - 1);
-// }
-
 equals(x, y) {
-    // var b = a + 1;
+    var z = [];
     return x == y;
 }
 
 main() {
-    // print(equals([10], [10]));
-    print("hoi");
+    print(equals(10, False));
 }

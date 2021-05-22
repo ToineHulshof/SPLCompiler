@@ -309,7 +309,6 @@ monoExp s (Exp t o e1 e2 p) = Exp (apply s t) o (monoExp s e1) (monoExp s e2) p
 monoExp s (ExpOp1 o e p) = ExpOp1 o (monoExp s e) p
 monoExp s (ExpTuple (e1, e2) p) = ExpTuple (monoExp s e1, monoExp s e2) p
 monoExp s (ExpBrackets e p) = ExpBrackets (monoExp s e) p
-monoExp s (ExpField t n fs p) = ExpField (apply s t) n fs p
 monoExp s (ExpFunCall f p) = ExpFunCall (monoFunCall s f) p
 monoExp _ e = e
 
@@ -415,7 +414,7 @@ genExp (ExpOp1 o e _) = do
     return $ i ++ [genOp1 o]
 genExp (ExpBrackets e _) = genExp e
 genExp (ExpFunCall f _) = genFunCall f
-genExp (ExpField _ n fs _) = do
+genExp (ExpField n fs _) = do
     let i1 = map (LoadHeap . genField) fs
     lm <- gets localMap
     gm <- gets globalMap

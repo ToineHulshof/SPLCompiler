@@ -461,11 +461,11 @@ tiExp env (ExpTuple (e1, e2) p) = do
 tiExp env (ExpBrackets e p) = do
     (s, t, e') <- tiExp env e
     return (s, t, ExpBrackets e' p)
-tiExp (TypeEnv env) e@(ExpField _ n fs p) = case M.lookup (Var, n) env of
+tiExp (TypeEnv env) e@(ExpField n fs p) = case M.lookup (Var, n) env of
     Nothing -> tell [Error TypeError (nes $ n ++ " is not defined") (Just p)] >> return (nullSubst, Void, e)
     Just sigma -> do
         t <- instantiate sigma
-        (\(s, ty) -> (s, ty, ExpField (Just t) n fs p)) <$> tiFields t fs
+        (\(s, ty) -> (s, ty, ExpField n fs p)) <$> tiFields t fs
 tiExp _ e@(ExpInt _ _) = return (nullSubst, TypeBasic IntType, e)
 tiExp _ e@(ExpBool _ _) = return (nullSubst, TypeBasic BoolType, e)
 tiExp _ e@(ExpChar _ _) = return (nullSubst, TypeBasic CharType, e)

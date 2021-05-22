@@ -61,7 +61,7 @@ posE p (Exp t o e1 e2 _) = Exp t o e1 e2 p
 posE p (ExpOp1 o e _) = ExpOp1 o e p
 posE p (ExpTuple e _) = ExpTuple e p
 posE p (ExpBrackets e _) = ExpBrackets e p
-posE p (ExpField t s fs _) = ExpField t s fs p
+posE p (ExpField s fs _) = ExpField s fs p
 posE p (ExpInt i _) = ExpInt i p
 posE p (ExpChar c _) = ExpChar c p
 posE p (ExpBool b _) = ExpBool b p
@@ -216,7 +216,7 @@ expNOp2P :: Parser Exp
 expNOp2P = expNOp2P' <|> (ExpError <$> errorP (`elem` "\n;") False)
 
 expNOp2P' :: Parser Exp 
-expNOp2P' = ppE expListP <|> ppE expStringP <|> pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP
+expNOp2P' = ppE expListP <|> ppE expStringP <|> pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField <$> idP <*> fieldP) <|> expCharP
 
 expOp2P :: Bool -> Parser Exp
 expOp2P b = ppE (Parser $ expBP b 0)
@@ -288,7 +288,7 @@ expToP (Exp _ _ _ _ p) = p
 expToP (ExpOp1 _ _ p) = p
 expToP (ExpTuple _ p) = p
 expToP (ExpBrackets _ p) = p
-expToP (ExpField _ _ _ p) = p
+expToP (ExpField _ _ p) = p
 expToP (ExpInt _ p) = p
 expToP (ExpChar _ p) = p
 expToP (ExpBool _ p) = p

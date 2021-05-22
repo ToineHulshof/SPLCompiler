@@ -111,7 +111,7 @@ data Exp
   | ExpOp1 Op1 Exp P
   | ExpTuple (Exp, Exp) P
   | ExpBrackets Exp P
-  | ExpField (Maybe Type) String [Field] P
+  | ExpField String [Field] P
   | ExpInt Integer P
   | ExpChar Char P
   | ExpBool Bool P
