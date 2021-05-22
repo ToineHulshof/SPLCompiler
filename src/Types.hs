@@ -173,33 +173,37 @@ generalize env t = Scheme vars t
     where vars = S.toList (ftv t `S.difference` ftv env)
 
 mgu :: Maybe Exp -> P -> Type -> Type -> TI Subst
-mgu e p t1 t2 = mgu' e p t1 t2 (nes t1) (nes t2)
+mgu e p t1 t2 = mgu' e p t1 t2 (nes (p, t1)) (nes t2)
 
-mgu' :: Maybe Exp -> P -> Type -> Type -> NonEmpty Type -> NonEmpty Type -> TI Subst
+type RecError = NonEmpty (P, Type)
+
+mgu' :: Maybe Exp -> P -> Type -> Type -> RecError -> NonEmpty Type -> TI Subst
 mgu' e p (TypeFun l1 r1) (TypeFun l2 r2) ot1 ot2 = do
-    s1 <- mgu' e p l1 l2 (l1 `cons` ot1) (l2 `cons` ot2)
-    s2 <- mgu' e p (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)
+    s1 <- mgu' e p l1 l2 ((p, l1) `cons` ot1) (l2 `cons` ot2)
+    s2 <- mgu' e p (apply s1 r1) (apply s1 r2) ((p, r1) `cons` ot1) (r2 `cons` ot2)
     return $ s2 `composeSubst` s1
-mgu' e@(Just (Exp _ Cons e1 e2 _)) p (TypeList t1) (TypeList t2) ot1 ot2 = trace (show e1) mgu' e (expToP e1) t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
-mgu' e p (TypeList t1) (TypeList t2) ot1 ot2 = trace (show e) mgu' e p t1 t2 (t1 `cons` ot1) (t2 `cons` ot2)
+mgu' e@(Just (Exp _ Cons e1 e2 _)) p (TypeList t1) (TypeList t2) ot1 ot2 = let p' = expToP e1 in mgu' e p' t1 t2 ((p', t1) `cons` ot1) (t2 `cons` ot2)
+mgu' e p (TypeList t1) (TypeList t2) ot1 ot2 = mgu' e p t1 t2 ((p, t1) `cons` ot1) (t2 `cons` ot2)
 mgu' (Just (ExpTuple (e1, e2) _)) p (TypeTuple l1 r1) (TypeTuple l2 r2) ot1 ot2 = do
-    s1 <- mgu' (Just e1) (expToP e1) l1 l2 (l1 `cons` ot1) (l2 `cons` ot2)
-    s2 <- mgu' (Just e2) (expToP e2) (apply s1 r1) (apply s1 r2) (r1 `cons` ot1) (r2 `cons` ot2)
+    s1 <- let p' = expToP e1 in mgu' (Just e1) p' l1 l2 ((p', l1) `cons` ot1) (l2 `cons` ot2)
+    s2 <- let p' = expToP e2 in mgu' (Just e2) p' (apply s1 r1) (apply s1 r2) ((p', r1) `cons` ot1) (r2 `cons` ot2)
     return $ s2 `composeSubst` s1
 mgu' e _ (TypeID c1 u1) (TypeID c2 u2) ot1 ot2 = return $ M.singleton u1 (TypeID (composeConditions c1 c2) u2)
 mgu' e p (TypeID c u) t ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p t (TypeID c u) ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p l@(TypeBasic t1) r@(TypeBasic t2) ot1 ot2
     | t1 == t2 = return nullSubst
-    | otherwise = typeError p ot1 ot2
+    | otherwise = typeError ot1 ot2
 mgu' e _ Void Void ot1 ot2 = return nullSubst
-mgu' e p t1 t2 ot1 ot2 = typeError p ot1 ot2
+mgu' e p t1 t2 ot1 ot2 = typeError ot1 ot2
 
-typeError :: P -> NonEmpty Type -> NonEmpty Type -> TI Subst
-typeError p@(_, a) (h1 :| t1) (h2 :| t2) = tell [Error TypeError (("\x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2 ) (Just p)] >> return nullSubst
+typeError :: RecError -> NonEmpty Type -> TI Subst
+typeError ((p@(_, a), h1) :| t1) (h2 :| t2) = tell [Error TypeError (("\x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2 ) (Just p)] >> return nullSubst
     where 
-        extraError :: Type -> Type -> String
-        extraError t1 t2 = "\x1b[1m-> " ++ showType True (varsMap t1) t1 ++ "\x1b[1m must match " ++ showType True (varsMap t2) t2 ++ "\x1b[1m"
+        extraError :: (P, Type) -> Type -> String
+        extraError ((_, a), t1) t2 = "\x1b[1m-> Couldn't match expected type " ++ showType True (varsMap t2) t2 ++ "\x1b[0m\x1b[1m with actual type " ++ showType True (varsMap t1) t1 ++ "\x1b[1m in the expression \x1b[0m\x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m"
+        -- extraError ((_, a), t1) t2 = "-> \x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap t1) t1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap t2) t2 ++ "\x1b[1m"
+        -- extraError ((_, a), t1) t2 = "\x1b[1m-> \x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m (" ++ showType True (varsMap t1) t1 ++ "\x1b[1m) must match " ++ showType True (varsMap t2) t2 ++ "\x1b[1m"
 
 condition :: Type -> String -> (Maybe Condition, Bool)
 condition (TypeID c n) s = (c, n == s)
@@ -211,7 +215,7 @@ composeConditions (Just Ord) _ = Just Ord
 composeConditions c Nothing = c
 composeConditions _ c = c
      
-varBind :: P -> Maybe Exp -> String -> Maybe Condition -> Type -> NonEmpty Type -> NonEmpty Type -> TI Subst
+varBind :: P -> Maybe Exp -> String -> Maybe Condition -> Type -> RecError -> NonEmpty Type -> TI Subst
 varBind _ _ u (Just Eq) t ot1 ot2 = return $ M.singleton u t
 varBind p _ u (Just Ord) t ot1 ot2
     | isOrd t = return $ M.singleton u t
@@ -221,7 +225,7 @@ varBind p _ u (Just Ord) t ot1 ot2
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
 varBind p@(_, a) e u c t ot1 ot2
-    | u `S.member` ftv t = typeError p ot1 ot2
+    | u `S.member` ftv t = typeError ot1 ot2
     | otherwise = return $ M.singleton u t
 
 -- Helper function for replacing the types in a polymorphic function.
