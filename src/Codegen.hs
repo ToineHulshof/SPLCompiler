@@ -379,8 +379,7 @@ typeName (TypeList t) = "List" ++ typeName t
 typeName _ = "Int"
 
 genEq :: Type -> CG [Instruction]
-genEq (TypeBasic _) = return []
-genEq (TypeID _ _) = return [EqualsI]
+genEq (TypeBasic _) = return [EqualsI]
 genEq t = do
   let name = "equal" ++ typeName t
   labels <- gets labels

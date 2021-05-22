@@ -1,4 +1,5 @@
 equals(x, y) {
+    print(x);
     return x == y;
 }
 
@@ -8,7 +9,14 @@ x(x) {
 }
 
 main() {
-    Bool x = 'a';
-    print(x([3, 4]));
-    print(equals([10], [x]));
+    // Bool x = 'a';
+    // print(x([3, 4]));
+    // print(equals([10], [x]));
+    // print(hoi);
+    print(equals([3], [1]));
 }
+
+// substitutions applyen op annotated AST
+// Errors verbeteren -> in expression dit in funcall dit
+// Runtime errors
+// Functions overloading checken en goede labels fixen

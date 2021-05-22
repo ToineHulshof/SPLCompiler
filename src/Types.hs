@@ -282,6 +282,30 @@ hasReturn _ = False
 correctReturn :: [Stmt] -> Bool
 correctReturn = any hasReturn
 
+updateTypeStmts :: Subst -> [Stmt] -> [Stmt]
+updateTypeStmts s = map $ updateTypeStmt s
+
+updateTypeStmt :: Subst -> Stmt -> Stmt
+updateTypeStmt s (StmtIf e ss1 ss2) = StmtIf (updateTypeExp s e) (updateTypeStmts s ss1) (updateTypeStmts s <$> ss2)
+updateTypeStmt s (StmtWhile e ss) = StmtWhile (updateTypeExp s e) (updateTypeStmts s ss)
+updateTypeStmt s (StmtField n fs e p) = StmtField n fs (updateTypeExp s e) p
+updateTypeStmt s (StmtFunCall f) = StmtFunCall (updateTypeFunCall s f)
+updateTypeStmt s (StmtReturn e p) = StmtReturn (updateTypeExp s <$> e) p
+
+updateTypeVarDecl :: Subst -> VarDecl -> VarDecl 
+updateTypeVarDecl s (VarDecl t n e) = VarDecl (apply s t) n (updateTypeExp s e)
+
+updateTypeExp :: Subst -> Exp -> Exp
+updateTypeExp s (Exp t o e1 e2 p) = Exp (apply s t) o (updateTypeExp s e1) (updateTypeExp s e2) p
+updateTypeExp s (ExpOp1 o e p) = ExpOp1 o (updateTypeExp s e) p
+updateTypeExp s (ExpTuple (e1, e2) p) = ExpTuple (updateTypeExp s e1, updateTypeExp s e2) p
+updateTypeExp s (ExpBrackets e p) = ExpBrackets (updateTypeExp s e) p
+updateTypeExp s (ExpFunCall f p) = ExpFunCall (updateTypeFunCall s f) p
+updateTypeExp _ e = e
+
+updateTypeFunCall :: Subst -> FunCall -> FunCall
+updateTypeFunCall s (FunCall t n es p) = FunCall (apply s t) n (map (updateTypeExp s) es) p
+
 tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type, TypeEnv, FunDecl)
 tiFunDecl env f@(FunDecl n args (Just t) vars stmts p)
     | l1 /= l2 = tell [Error TypeError (nes $ "\x1b[33m" ++ n ++ "\x1b[0m\x1b[1m got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments") (Just p)] >> return (nullSubst, t, env, f)
@@ -314,7 +338,7 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lo
         if isJust returnType && not (correctReturn stmts) then tell [Error TypeError (nes "Not every path has a return statment") (Just p)] >> return (cs1, Void, env4, f) else do
         let t = foldr1 TypeFun $ apply cs1 (tvs ++ [fromMaybe Void returnType])
         let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (generalize env1 t))
-        return (cs1, t, apply cs1 env5, FunDecl n args (Just t) vars' stmts' p)
+        return (cs1, t, apply cs1 env5, FunDecl n args (Just t) (map (updateTypeVarDecl cs1) vars') (updateTypeStmts cs1 stmts') p)
 
 tiStmts :: TypeEnv -> [Stmt] -> TI (Subst, [Stmt])
 tiStmts _ [] = return (nullSubst, [])
@@ -449,7 +473,7 @@ tiExp env (Exp _ o e1 e2 p) = do
     let cs2 = s3 `composeSubst` cs1
     s4 <- mgu (Just e2) (expToP e2) (apply cs2 t2') (apply cs2 t2)
     let cs3 = s4 `composeSubst` cs2
-    return (cs3, apply cs3 t3, Exp (Just $ TypeFun (apply cs3 t2') (apply cs3 t2)) o e1' e2' p)
+    return (cs3, apply cs3 t3, Exp (Just (apply cs3 t2)) o e1' e2' p)
 tiExp env (ExpOp1 o e p) = do
     let (t1, t2) = tiOp1 o
     (s1, t1', e') <- tiExp env e
