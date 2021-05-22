@@ -127,7 +127,7 @@ tiResult llvm s f spl e = do
         then case f of
             Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
             Just filePath -> case getMain spl' of
-                Just main -> putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n" >> genCode llvm filePath spl'
+                Just main -> putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n" >> genCode llvm filePath main spl'
                 Nothing -> do
                     print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError (nes "\x1b[31mNo main function\x1b[0m\n") Nothing]
                     putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n"

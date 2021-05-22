@@ -179,7 +179,7 @@ genCodeLLVM f main spl = writeFile (changeSuffix True [] f) "; ModuleID = 'multi
 
 genSPL :: FunDecl -> SPL -> CG [Instruction]
 genSPL main ds = do
-    let vardecls = [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
+    let vardecls = trace (show ds) [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
     (i1, m) <- genGlobalVars 1 vardecls
     setGlobalMap m
     i2 <- genFunDecl main
@@ -278,14 +278,14 @@ genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [Lo
 genFunCall (FunCall (Just t') n args _) = do
     ds <- gets spl
     let f@(FunDecl _ _ (Just t) _ _ _) = fromJust $ findFunction ds n
-    let name = n ++ join "-" (map typeName (init (funTypeToList t')))
+    let name = funLabel n t'
     labels <- gets labels
     when (name `notElem` labels) $ genPolyFunDecl f t' name
     funCallInstructions name args
 
 -- Could also be a hash function
 funLabel :: String -> Type -> String
-funLabel = undefined
+funLabel n t = n ++ join "-" (map typeName (init (funTypeToList t)))
 
 monoStmts :: Subst -> [Stmt] -> [Stmt]
 monoStmts s = map $ monoStmt s

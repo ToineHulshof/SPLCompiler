@@ -4,7 +4,7 @@ module Types where
 
 import Control.Monad.Except ( zipWithM, runExceptT, MonadError(throwError), ExceptT )
 import Control.Monad.Reader ( ReaderT(runReaderT) )
-import Control.Monad.State ( MonadState(put, get), StateT(runStateT) )
+import Control.Monad.State
 import Control.Monad.Writer hiding ( Product, First )
 import Data.Maybe ( fromMaybe, listToMaybe, isJust, isNothing )
 import Data.List ( group, sort )
@@ -106,12 +106,9 @@ showType :: Bool -> M.Map String String -> Type -> String
 showType f m (TypeBasic b) = show b
 showType f m (TypeTuple t1 t2) = "(" ++ showType f m t1 ++ (if f then "\x1b[1m" else "") ++ ", " ++ showType f m t2 ++ (if f then "\x1b[1m" else "") ++ ")\x1b[0m"
 showType f m (TypeList t) = (if f then "\x1b[1m" else "") ++ "[" ++ showType f m t ++ (if f then "\x1b[1m" else "") ++ "]\x1b[0m"
-showType f m (TypeID _ s) = "\x1b[36m" ++ (if debug then s else fromMaybe s (M.lookup s m)) ++ "\x1b[0m"
+showType f m (TypeID _ s) = "\x1b[36m" ++ fromMaybe s (M.lookup s m) ++ "\x1b[0m"
 showType f m (TypeFun t1 t2) = showType f m t1 ++ (if f then "\x1b[1m" else "") ++ " -> " ++ showType f m t2
 showType f m Void = "\x1b[34mVoid\x1b[0m"
-
-debug :: Bool
-debug = True
 
 instance Show TypeEnv where
     show env = help funs ++ help vars
@@ -143,19 +140,21 @@ instance Types Scheme where
   ftv (Scheme vars t) = ftv t `S.difference` S.fromList vars
   apply s (Scheme vars t) = Scheme vars (apply (foldr M.delete s vars) t)
 
-data TIState = TIState { tiSupply :: Int, tiSubst :: Subst, errors :: [String] }
+data TIState = TIState { tiSupply :: Int, tiSubst :: Subst, rType :: Maybe Type }
 
 type TI a = WriterT [Error] (StateT TIState IO) a
 
 runTI :: TI a -> IO ((a, [Error]), TIState)
 runTI t = runStateT (runWriterT t) initTIState
     where 
-        initTIState = TIState { tiSupply = 1, tiSubst = M.empty, errors = [] }
+        initTIState = TIState { tiSupply = 1, tiSubst = M.empty, rType = Nothing }
 
-addError :: String -> TI ()
-addError e = do
-    s <- get
-    put s { errors = e : errors s }
+updateReturnType :: Type -> P -> Maybe Exp -> TI Subst
+updateReturnType t p e = do
+    state <- get
+    case rType state of
+        Nothing -> put state { rType = Just t } >> return nullSubst
+        Just t' -> mgu e p t t'
 
 newTyVar :: Maybe Condition -> String -> TI Type
 newTyVar c prefix = do
@@ -272,23 +271,6 @@ tiVarDecls env (v:vs) = do
     (s2, env2, d2) <- tiVarDecls env1 vs
     return (s2 `composeSubst` s1, env2, d1:d2)
 
-checkReturn :: TypeEnv -> Type -> Stmt -> TI Subst
-checkReturn _ t (StmtReturn Nothing p) = mgu Nothing p t Void
-checkReturn env t (StmtReturn (Just e) _) = do
-    (s1, t1, _) <- tiExp env e
-    s2 <- mgu (Just e) (expToP e) t1 t
-    return $ s2 `composeSubst` s1
-
-getReturns :: Stmt -> [Stmt]
-getReturns (StmtIf _ s1 s2) = allReturns s1 ++ allReturns (fromMaybe [] s2)
-getReturns (StmtWhile _ s) = allReturns s
-getReturns StmtField {} = []
-getReturns StmtFunCall {} = []
-getReturns r = [r]
-
-allReturns :: [Stmt] -> [Stmt]
-allReturns = concatMap getReturns
-
 hasReturn :: Stmt -> Bool
 hasReturn (StmtIf _ ss1 ss2) = correctReturn ss1 && correctReturn (fromMaybe [] ss2)
 hasReturn (StmtWhile _ ss) = correctReturn ss
@@ -297,12 +279,6 @@ hasReturn _ = False
 
 correctReturn :: [Stmt] -> Bool
 correctReturn = any hasReturn
-
-returnType :: TypeEnv -> Stmt -> TI (Subst, Type)
-returnType _ (StmtReturn Nothing _) = return (nullSubst, Void)
-returnType env (StmtReturn (Just e) _) = do
-    (s, t, _) <- tiExp env e
-    return (s, t)
 
 tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type, TypeEnv, FunDecl)
 tiFunDecl env f@(FunDecl n args (Just t) vars stmts p)
@@ -322,6 +298,8 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lo
     Just s -> do
         funT <- instantiate s
         tvs <- mapM (newTyVar Nothing) args
+        state <- get
+        put state { rType = Nothing }
         s0 <- mguList (zip (init $ funTypeToList funT) (repeat p)) tvs
         let env1 = remove (apply s0 env) Fun n
         let TypeEnv env2 = removeAll env Var args
@@ -330,22 +308,11 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lo
         (s1, env4, vars') <- tiVarDecls env3 vars
         (s2, stmts') <- tiStmts env4 stmts
         let cs1 = s2 `composeSubst` s1
-        let returns = allReturns stmts
-        case listToMaybe returns of
-            Nothing -> do
-                let t = foldr1 TypeFun (apply cs1 tvs ++ [Void])
-                let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (Scheme [] t))
-                return (cs1, t, apply cs1 env5, FunDecl n args (Just t) vars' stmts' p)
-            Just r -> do
-                if not $ correctReturn stmts then tell [Error TypeError (nes "Not every path has a return statment") (Just p)] >> return (nullSubst, Void, env4, f) else do
-                (s3, t2) <- returnType (apply cs1 env4) r
-                let cs2 = s3 `composeSubst` cs1
-                ss <- mapM (checkReturn (apply cs2 env4) t2) returns
-                let s4 = foldr1 composeSubst ss
-                let cs3 = s4 `composeSubst` cs2
-                let t = foldr1 TypeFun $ apply cs3 (tvs ++ [t2])
-                let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (generalize env1 t))
-                return (cs3, t, apply cs3 env5, FunDecl n args (Just t) vars' stmts' p)
+        returnType <- gets rType
+        if isJust returnType && not (correctReturn stmts) then tell [Error TypeError (nes "Not every path has a return statment") (Just p)] >> return (cs1, Void, env4, f) else do
+        let t = foldr1 TypeFun $ apply cs1 (tvs ++ [fromMaybe Void returnType])
+        let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (generalize env1 t))
+        return (cs1, t, apply cs1 env5, FunDecl n args (Just t) vars' stmts' p)
 
 tiStmts :: TypeEnv -> [Stmt] -> TI (Subst, [Stmt])
 tiStmts _ [] = return (nullSubst, [])
@@ -410,10 +377,11 @@ tiStmt env (StmtFunCall f) = do
     (s, _, f) <- tiFunCall env f
     return (s, StmtFunCall f)
 tiStmt env (StmtReturn sr p) = case sr of
-    Nothing -> return (nullSubst, StmtReturn Nothing p)
+    Nothing -> updateReturnType Void p Nothing >> return (nullSubst, StmtReturn Nothing p)
     Just e -> do
-        (s, t, e') <- tiExp env e
-        return (s, StmtReturn (Just e') p)
+        (s1, t, e') <- tiExp env e
+        s2 <- updateReturnType t p (Just e)
+        return (s1 `composeSubst` s2, StmtReturn (Just e') p)
  
 retType :: Type -> Type
 retType (TypeFun t1 t2) = retType t2
@@ -480,7 +448,7 @@ tiExp env (Exp _ o e1 e2 p) = do
     let cs2 = s3 `composeSubst` cs1
     s4 <- mgu (Just e2) (expToP e2) (apply cs2 t2') (apply cs2 t2)
     let cs3 = s4 `composeSubst` cs2
-    return (cs3, apply cs3 t3, Exp (Just t1') o e1' e2' p)
+    return (cs3, apply cs3 t3, Exp (Just $ TypeFun (apply cs3 t2') (apply cs3 t2)) o e1' e2' p)
 tiExp env (ExpOp1 o e p) = do
     let (t1, t2) = tiOp1 o
     (s1, t1', e') <- tiExp env e
@@ -497,7 +465,7 @@ tiExp (TypeEnv env) e@(ExpField _ n fs p) = case M.lookup (Var, n) env of
     Nothing -> tell [Error TypeError (nes $ n ++ " is not defined") (Just p)] >> return (nullSubst, Void, e)
     Just sigma -> do
         t <- instantiate sigma
-        (\(s, ty) -> (s, ty, ExpField Nothing n fs p)) <$> tiFields t fs
+        (\(s, ty) -> (s, ty, ExpField (Just t) n fs p)) <$> tiFields t fs
 tiExp _ e@(ExpInt _ _) = return (nullSubst, TypeBasic IntType, e)
 tiExp _ e@(ExpBool _ _) = return (nullSubst, TypeBasic BoolType, e)
 tiExp _ e@(ExpChar _ _) = return (nullSubst, TypeBasic CharType, e)
