@@ -321,15 +321,10 @@ monoExp s (ExpFunCall f p) = ExpFunCall (monoFunCall s f) p
 monoExp _ e = e
 
 genFunCall' :: Bool -> FunDecl -> Type -> String -> CG ()
-genFunCall' False f@(FunDecl o n args (Just ft) vars stmts p) t l = do
-  let s = subst ft t
+genFunCall' b f@(FunDecl o n args (Just ft) vars stmts p) t l = do
   addLabel l
-  let f' = FunDecl o l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p
+  let f' = if b then f else let s = subst ft t in FunDecl o l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p
   is <- genFunDecl f'
-  addFunction is
-genFunCall' True f t l = do
-  addLabel l
-  is <- genFunDecl f
   addFunction is
 
 funCallInstructions :: String -> [Exp] -> CG [Instruction]

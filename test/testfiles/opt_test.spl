@@ -15,6 +15,7 @@ f(a, b, c, d) {
 }
 
 id(x) {
+    // print(x);
     return x;
 }
 
