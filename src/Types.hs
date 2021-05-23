@@ -351,7 +351,35 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl _ n args Nothing vars stmts p) = case M.
         if isJust returnType && not (correctReturn stmts) then tell [Error TypeError (nes "Not every path has a return statment") (Just p)] >> return (cs1, Void, env4, f) else do
         let t = foldr1 TypeFun $ apply cs1 (tvs ++ [fromMaybe Void returnType])
         let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (generalize env1 t))
-        return (cs1, t, apply cs1 env5, FunDecl [] n args (Just t) (map (updateTypeVarDecl cs1) vars') (updateTypeStmts cs1 stmts') p)
+        let vars'' = map (updateTypeVarDecl cs1) vars'
+        let stmts'' = updateTypeStmts cs1 stmts'
+        let oa = concatMap oaVarDecl vars'' ++ oaStmts stmts''
+        return (cs1, t, apply cs1 env5, FunDecl oa n args (Just t) vars'' stmts'' p)
+
+oaStmts :: [Stmt] -> [String]
+oaStmts = concatMap oaStmt
+
+oaStmt :: Stmt -> [String]
+oaStmt (StmtIf e ss1 ss2) = oaExp e ++ oaStmts ss1 ++ oaStmts (fromMaybe [] ss2)
+oaStmt (StmtWhile e ss) = oaExp e ++ oaStmts ss
+oaStmt (StmtField _ _ e _) = oaExp e
+oaStmt (StmtFunCall f) = oaFunCall f
+oaStmt (StmtReturn (Just e) _) = oaExp e
+oaStmt _ = []
+
+oaVarDecl :: VarDecl -> [String]
+oaVarDecl (VarDecl _ _ e) = oaExp e
+
+oaExp :: Exp -> [String]
+oaExp (Exp t o e1 e2 _) = (if o `elem` [Equals, Neq] then let Just (TypeID _ s) = t in [s] else []) ++ oaExp e1 ++ oaExp e2
+oaExp (ExpOp1 _ e _) = oaExp e
+oaExp (ExpTuple (e1, e2) _) = oaExp e1 ++ oaExp e2
+oaExp (ExpBrackets e _) = oaExp e
+oaExp (ExpFunCall f _) = oaFunCall f
+oaExp _ = []
+
+oaFunCall :: FunCall -> [String]
+oaFunCall (FunCall (Just t) _ es _) = [s | TypeID _ s <- funTypeToList t] ++ concatMap oaExp es
 
 tiStmts :: TypeEnv -> [Stmt] -> TI (Subst, [Stmt])
 tiStmts _ [] = return (nullSubst, [])

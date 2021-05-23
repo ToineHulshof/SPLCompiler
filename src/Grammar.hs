@@ -51,7 +51,7 @@ data VarDecl
   deriving (Show)
 
 data FunDecl
-  = FunDecl [Int] String [String] (Maybe Type) [VarDecl] [Stmt] P
+  = FunDecl [String] String [String] (Maybe Type) [VarDecl] [Stmt] P
   deriving (Show)
 
 data Condition = Eq | Ord deriving (Eq, Ord, Show)

@@ -183,7 +183,7 @@ genCodeLLVM f main spl = do
 
 genSPL :: FunDecl -> SPL -> CG [Instruction]
 genSPL main ds = do
-    let vardecls = [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
+    let vardecls = trace (show ds) [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
     (i1, m) <- genGlobalVars 1 vardecls
     setGlobalMap m
     i2 <- genFunDecl main
