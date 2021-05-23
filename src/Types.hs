@@ -6,8 +6,8 @@ import Control.Monad.Except ( zipWithM, runExceptT, MonadError(throwError), Exce
 import Control.Monad.Reader ( ReaderT(runReaderT) )
 import Control.Monad.State
 import Control.Monad.Writer hiding ( Product, First )
-import Data.Maybe ( fromMaybe, listToMaybe, isJust, isNothing )
-import Data.List ( group, sort )
+import Data.Maybe ( fromMaybe, listToMaybe, isJust, isNothing, mapMaybe )
+import Data.List ( group, sort, elemIndex )
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Grammar
@@ -354,12 +354,13 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl _ n args Nothing vars stmts p) = case M.
         let vars'' = map (updateTypeVarDecl cs1) vars'
         let stmts'' = updateTypeStmts cs1 stmts'
         let oa = concatMap oaVarDecl vars'' ++ oaStmts stmts''
-        return (cs1, t, apply cs1 env5, FunDecl oa n args (Just t) vars'' stmts'' p)
+        let argTypes = funTypeToList t
+        return (cs1, t, apply cs1 env5, FunDecl (mapMaybe (`elemIndex` argTypes) oa) n args (Just t) vars'' stmts'' p)
 
-oaStmts :: [Stmt] -> [String]
+oaStmts :: [Stmt] -> [Type]
 oaStmts = concatMap oaStmt
 
-oaStmt :: Stmt -> [String]
+oaStmt :: Stmt -> [Type]
 oaStmt (StmtIf e ss1 ss2) = oaExp e ++ oaStmts ss1 ++ oaStmts (fromMaybe [] ss2)
 oaStmt (StmtWhile e ss) = oaExp e ++ oaStmts ss
 oaStmt (StmtField _ _ e _) = oaExp e
@@ -367,19 +368,19 @@ oaStmt (StmtFunCall f) = oaFunCall f
 oaStmt (StmtReturn (Just e) _) = oaExp e
 oaStmt _ = []
 
-oaVarDecl :: VarDecl -> [String]
+oaVarDecl :: VarDecl -> [Type]
 oaVarDecl (VarDecl _ _ e) = oaExp e
 
-oaExp :: Exp -> [String]
-oaExp (Exp t o e1 e2 _) = (if o `elem` [Equals, Neq] then let Just (TypeID _ s) = t in [s] else []) ++ oaExp e1 ++ oaExp e2
+oaExp :: Exp -> [Type]
+oaExp (Exp t o e1 e2 _) = (if o `elem` [Equals, Neq] then let Just t'@(TypeID _ s) = t in [t'] else []) ++ oaExp e1 ++ oaExp e2
 oaExp (ExpOp1 _ e _) = oaExp e
 oaExp (ExpTuple (e1, e2) _) = oaExp e1 ++ oaExp e2
 oaExp (ExpBrackets e _) = oaExp e
 oaExp (ExpFunCall f _) = oaFunCall f
 oaExp _ = []
 
-oaFunCall :: FunCall -> [String]
-oaFunCall (FunCall (Just t) _ es _) = [s | TypeID _ s <- funTypeToList t] ++ concatMap oaExp es
+oaFunCall :: FunCall -> [Type]
+oaFunCall (FunCall (Just t) _ es _) = [t' | t'@(TypeID _ s) <- funTypeToList t] ++ concatMap oaExp es
 
 tiStmts :: TypeEnv -> [Stmt] -> TI (Subst, [Stmt])
 tiStmts _ [] = return (nullSubst, [])

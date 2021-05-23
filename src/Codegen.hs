@@ -5,7 +5,6 @@ import Control.Monad.State hiding (join)
 import Data.Char
 import qualified Data.Map as M
 import Data.Maybe
-import Data.List ( elemIndex )
 import Debug.Trace (trace)
 import Errors
 import Extension
@@ -183,7 +182,7 @@ genCodeLLVM f main spl = do
 
 genSPL :: FunDecl -> SPL -> CG [Instruction]
 genSPL main ds = do
-    let vardecls = trace (show ds) [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
+    let vardecls = [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
     (i1, m) <- genGlobalVars 1 vardecls
     setGlobalMap m
     i2 <- genFunDecl main
@@ -281,21 +280,20 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do
 genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
 genFunCall (FunCall (Just t') n args _) = do
     ds <- gets spl
-    let f@(FunDecl _ _ _ (Just t) _ _ _) = fromJust $ findFunction ds n
-    case isOverLoaded f of
-        Nothing -> genFunDecl f
-        Just x -> do
-            let name = funLabel n t'
-            labels <- gets labels
-            when (name `notElem` labels) $ genPolyFunDecl f t' name
-            funCallInstructions name args
+    let f@(FunDecl oa _ _ (Just t) _ _ _) = fromJust $ findFunction ds n
+    let argTypes = funTypeToList t'
+    let oas = map (argTypes !!) oa
+    let name = funLabel n oas
+    labels <- gets labels
+    when (name `notElem` labels) $ genFunCall' (null oa) f t' name
+    funCallInstructions name args
 
 isOverLoaded :: FunDecl -> Maybe [Int]
 isOverLoaded f = Nothing
 
 -- Could also be a hash function
-funLabel :: String -> Type -> String
-funLabel n t = n ++ join "-" (map typeName (init (funTypeToList t)))
+funLabel :: String -> [Type] -> String
+funLabel n t = n ++ join "-" (map typeName t)
 
 monoStmts :: Subst -> [Stmt] -> [Stmt]
 monoStmts s = map $ monoStmt s
@@ -322,12 +320,16 @@ monoExp s (ExpBrackets e p) = ExpBrackets (monoExp s e) p
 monoExp s (ExpFunCall f p) = ExpFunCall (monoFunCall s f) p
 monoExp _ e = e
 
-genPolyFunDecl :: FunDecl -> Type -> String -> CG ()
-genPolyFunDecl f@(FunDecl o n args (Just ft) vars stmts p) t l = do
+genFunCall' :: Bool -> FunDecl -> Type -> String -> CG ()
+genFunCall' False f@(FunDecl o n args (Just ft) vars stmts p) t l = do
   let s = subst ft t
   addLabel l
   let f' = FunDecl o l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p
   is <- genFunDecl f'
+  addFunction is
+genFunCall' True f t l = do
+  addLabel l
+  is <- genFunDecl f
   addFunction is
 
 funCallInstructions :: String -> [Exp] -> CG [Instruction]
