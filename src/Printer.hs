@@ -37,7 +37,7 @@ ppVarDecl (VarDecl Nothing n e) = printf "var %s = %s;" n (ppExp e)
 ppVarDecl (VarDecl (Just t) n e) = printf "%s %s = %s;" (ppType t) n (ppExp e)
 
 ppFunDecl :: Depth -> FunDecl -> String
-ppFunDecl d (FunDecl n a t v s _) = printf "%s%s(%s) %s{\n%s%s%s%s}" (tab d) n (join ", " a) (ppFunType t) (unlines $ map (printf "%s%s" (tab (d + 1)) . ppVarDecl) v) (if null v then "" else "\n") (unlines $ map (ppStmt (d + 1)) s) (tab d)
+ppFunDecl d (FunDecl _ n a t v s _) = printf "%s%s(%s) %s{\n%s%s%s%s}" (tab d) n (join ", " a) (ppFunType t) (unlines $ map (printf "%s%s" (tab (d + 1)) . ppVarDecl) v) (if null v then "" else "\n") (unlines $ map (ppStmt (d + 1)) s) (tab d)
 
 ppFunType :: Maybe Type -> String
 ppFunType Nothing = ""

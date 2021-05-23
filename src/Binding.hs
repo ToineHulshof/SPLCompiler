@@ -23,7 +23,7 @@ components ds = map ((\(a, _, _) -> a) <$>) $ stronglyConnCompR $ map (\d -> let
 
 ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
 ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)
-ctDecl (DeclFunDecl (FunDecl n args _ vars stmts _)) = ((Fun, n), ctStmts args stmts ++ concatMap (\(VarDecl _ _ e) -> ctExp args e) vars)
+ctDecl (DeclFunDecl (FunDecl _ n args _ vars stmts _)) = ((Fun, n), ctStmts args stmts ++ concatMap (\(VarDecl _ _ e) -> ctExp args e) vars)
 
 ctStmts :: [String] -> [Stmt] -> [(Kind, String)]
 ctStmts args = concatMap (ctStmt args)
@@ -72,7 +72,7 @@ btVarDecl (VarDecl Nothing s _) = TypeEnv . M.singleton (Var, s) . Scheme [] <$>
 btVarDecl (VarDecl (Just t) s _) = return $ TypeEnv $ M.singleton (Var, s) (Scheme [] t)
 
 btFunDecl :: TypeEnv -> FunDecl -> TI TypeEnv
-btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _ p) = do
+btFunDecl (TypeEnv env) (FunDecl o s args Nothing _ _ p) = do
   case M.lookup (Fun, s) env of
     Nothing -> do
       nvars <- mapM (newTyVar Nothing) args
@@ -80,7 +80,7 @@ btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _ p) = do
       let t = foldr1 TypeFun $ nvars ++ [ret]
       return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
     Just _ -> tell [Error TypeError (nes $ "Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
-btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _ p) = do
+btFunDecl (TypeEnv env) (FunDecl o s _ (Just t) _ _ p) = do
   case M.lookup (Fun, s) env of
     Nothing -> return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
     Just _ -> tell [Error TypeError (nes $ "Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
@@ -143,7 +143,7 @@ tiResult llvm s f spl e = do
 
 getMain :: SPL -> Maybe FunDecl
 getMain [] = Nothing
-getMain (DeclFunDecl f@(FunDecl n _ _ _ _ _) : ds)
+getMain (DeclFunDecl f@(FunDecl _ n _ _ _ _ _) : ds)
   | n == "main" = Just f
   | otherwise = getMain ds
 

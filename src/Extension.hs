@@ -38,7 +38,7 @@ genDeclLLVM (DeclVarDecl vd) = return []
 genDeclLLVM (DeclFunDecl fd) = genFunDeclLLVM fd
 
 genFunDeclLLVM :: FunDecl -> CGLL [String]
-genFunDeclLLVM (FunDecl n args (Just t) vars stmts _) = do
+genFunDeclLLVM (FunDecl _ n args (Just t) vars stmts _) = do
   let i = 0
   let retType = getRetFromFunType t
   setReturnType retType

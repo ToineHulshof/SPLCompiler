@@ -129,7 +129,7 @@ declFunDeclP :: Parser Decl
 declFunDeclP = DeclFunDecl <$> funDeclP
 
 funDeclP :: Parser FunDecl
-funDeclP = (\(a, f) b c d e -> FunDecl a b c d e f) <$> pp' idP <*> (c '(' *> sepBy (optP ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
+funDeclP = (\(a, f) b c d e -> FunDecl [] a b c d e f) <$> pp' idP <*> (c '(' *> sepBy (optP ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
 
 adjustPosition :: Position -> Char -> Position
 adjustPosition p '\n' = p
@@ -401,7 +401,7 @@ extractErrors = concatMap erDecl
 
 erDecl :: Decl -> [Error]
 erDecl (DeclVarDecl (VarDecl _ _ e)) = erExp e
-erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts _)) = concatMap (erDecl . DeclVarDecl) vs ++ erStmts stmts
+erDecl (DeclFunDecl (FunDecl _ _ _ _ vs stmts _)) = concatMap (erDecl . DeclVarDecl) vs ++ erStmts stmts
 erDecl (DeclError s) = [Error ParseError (nes "Unknown declaration") (Just s)]
 
 erExp :: Exp -> [Error]

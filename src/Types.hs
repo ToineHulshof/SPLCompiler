@@ -320,19 +320,19 @@ updateTypeFunCall :: Subst -> FunCall -> FunCall
 updateTypeFunCall s (FunCall t n es p) = FunCall (apply s t) n (map (updateTypeExp s) es) p
 
 tiFunDecl :: TypeEnv -> FunDecl -> TI (Subst, Type, TypeEnv, FunDecl)
-tiFunDecl env f@(FunDecl n args (Just t) vars stmts p)
+tiFunDecl env f@(FunDecl o n args (Just t) vars stmts p)
     | l1 /= l2 = tell [Error TypeError (nes $ "\x1b[33m" ++ n ++ "\x1b[0m\x1b[1m got " ++ show l1  ++ " arguments, but expected " ++ show l2 ++ " arguments") (Just p)] >> return (nullSubst, t, env, f)
     | otherwise = do
-        (s1, t1, env1, FunDecl _ _ _ vars' stmts' _) <- tiFunDecl env (FunDecl n args Nothing vars stmts p)
+        (s1, t1, env1, FunDecl o _ _ _ vars' stmts' _) <- tiFunDecl env (FunDecl o n args Nothing vars stmts p)
         s2 <- mgu Nothing p t1 t
         let t2 = apply s2 t
         let env2 = remove env1 Fun n
         let env3 = env2 `combine` TypeEnv (M.singleton (Fun, n) (generalize env2 t2))
-        return (s2 `composeSubst` s1, t2, env3, FunDecl n args (Just t2) vars' stmts' p)
+        return (s2 `composeSubst` s1, t2, env3, FunDecl o n args (Just t2) vars' stmts' p)
     where
         l1 = length (funTypeToList t) - 1
         l2 = length args
-tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lookup (Fun, n) envt of
+tiFunDecl env@(TypeEnv envt) f@(FunDecl _ n args Nothing vars stmts p) = case M.lookup (Fun, n) envt of
     Nothing -> tell [Error TypeError (nes $ "function " ++ n ++ " was not found in the environment, while it should be present.") (Just p)] >> return (nullSubst, Void, env, f)
     Just s -> do
         funT <- instantiate s
@@ -351,7 +351,7 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl n args Nothing vars stmts p) = case M.lo
         if isJust returnType && not (correctReturn stmts) then tell [Error TypeError (nes "Not every path has a return statment") (Just p)] >> return (cs1, Void, env4, f) else do
         let t = foldr1 TypeFun $ apply cs1 (tvs ++ [fromMaybe Void returnType])
         let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (generalize env1 t))
-        return (cs1, t, apply cs1 env5, FunDecl n args (Just t) (map (updateTypeVarDecl cs1) vars') (updateTypeStmts cs1 stmts') p)
+        return (cs1, t, apply cs1 env5, FunDecl [] n args (Just t) (map (updateTypeVarDecl cs1) vars') (updateTypeStmts cs1 stmts') p)
 
 tiStmts :: TypeEnv -> [Stmt] -> TI (Subst, [Stmt])
 tiStmts _ [] = return (nullSubst, [])

@@ -5,6 +5,7 @@ import Control.Monad.State hiding (join)
 import Data.Char
 import qualified Data.Map as M
 import Data.Maybe
+import Data.List ( elemIndex )
 import Debug.Trace (trace)
 import Errors
 import Extension
@@ -197,7 +198,7 @@ genGlobalVars i ((VarDecl _ n e) : xs) = do
   return (i1 ++ i2, M.singleton n i `M.union` m)
 
 genFunDecl :: FunDecl -> CG [Instruction]
-genFunDecl (FunDecl n args (Just t) vars stmts _) = do
+genFunDecl (FunDecl _ n args (Just t) vars stmts _) = do
   m <- argsMap (-1 - length args) args
   setLocalMap m
   i1 <- genLocalVars 1 args vars
@@ -280,11 +281,17 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do
 genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
 genFunCall (FunCall (Just t') n args _) = do
     ds <- gets spl
-    let f@(FunDecl _ _ (Just t) _ _ _) = fromJust $ findFunction ds n
-    let name = funLabel n t'
-    labels <- gets labels
-    when (name `notElem` labels) $ genPolyFunDecl f t' name
-    funCallInstructions name args
+    let f@(FunDecl _ _ _ (Just t) _ _ _) = fromJust $ findFunction ds n
+    case isOverLoaded f of
+        Nothing -> genFunDecl f
+        Just x -> do
+            let name = funLabel n t'
+            labels <- gets labels
+            when (name `notElem` labels) $ genPolyFunDecl f t' name
+            funCallInstructions name args
+
+isOverLoaded :: FunDecl -> Maybe [Int]
+isOverLoaded f = Nothing
 
 -- Could also be a hash function
 funLabel :: String -> Type -> String
@@ -316,10 +323,10 @@ monoExp s (ExpFunCall f p) = ExpFunCall (monoFunCall s f) p
 monoExp _ e = e
 
 genPolyFunDecl :: FunDecl -> Type -> String -> CG ()
-genPolyFunDecl f@(FunDecl n args (Just ft) vars stmts p) t l = do
+genPolyFunDecl f@(FunDecl o n args (Just ft) vars stmts p) t l = do
   let s = subst ft t
   addLabel l
-  let f' = FunDecl l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p
+  let f' = FunDecl o l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p
   is <- genFunDecl f'
   addFunction is
 
@@ -328,7 +335,7 @@ funCallInstructions n args = (++ [BranchSubroutine n, AdjustStack (- length args
 
 findFunction :: [Decl] -> String -> Maybe FunDecl
 findFunction [] _ = Nothing
-findFunction ((DeclFunDecl f@(FunDecl n _ _ _ _ _)) : ds) s
+findFunction ((DeclFunDecl f@(FunDecl _ n _ _ _ _ _)) : ds) s
   | n == s = Just f
   | otherwise = findFunction ds s
 findFunction (d : ds) s = findFunction ds s
