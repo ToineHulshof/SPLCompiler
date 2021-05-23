@@ -12,11 +12,10 @@ main() {
     // Bool x = 'a';
     // print(x([3, 4]));
     // print(equals([10], [x]));
-    // print(hoi);
-    print(equals([3], [1]));
+    print("a");
+    // print(equals([3, 2, 1], [3, 2, 1]));
 }
 
-// substitutions applyen op annotated AST
-// Errors verbeteren -> in expression dit in funcall dit
-// Runtime errors
 // Functions overloading checken en goede labels fixen
+// Errors verbeteren -> in expression dit in funcall dit (mss in state monad, maar wss via function arg)
+// Runtime errors

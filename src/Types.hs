@@ -140,14 +140,14 @@ instance Types Scheme where
   ftv (Scheme vars t) = ftv t `S.difference` S.fromList vars
   apply s (Scheme vars t) = Scheme vars (apply (foldr M.delete s vars) t)
 
-data TIState = TIState { tiSupply :: Int, tiSubst :: Subst, rType :: Maybe Type }
+data TIState = TIState { tiSupply :: Int, tiSubst :: Subst, rType :: Maybe Type, info :: [String] }
 
 type TI a = WriterT [Error] (StateT TIState IO) a
 
 runTI :: TI a -> IO ((a, [Error]), TIState)
 runTI t = runStateT (runWriterT t) initTIState
     where 
-        initTIState = TIState { tiSupply = 1, tiSubst = M.empty, rType = Nothing }
+        initTIState = TIState { tiSupply = 1, tiSubst = M.empty, rType = Nothing, info = [] }
 
 updateReturnType :: Type -> P -> Maybe Exp -> TI Subst
 updateReturnType t p e = do
@@ -171,6 +171,16 @@ instantiate (Scheme vars t) = do
 generalize :: TypeEnv -> Type -> Scheme
 generalize env t = Scheme vars t
     where vars = S.toList (ftv t `S.difference` ftv env)
+
+addInfo :: String -> TI ()
+addInfo s = do
+    t <- get
+    put t { info = s : info t }
+
+resetInfo :: TI ()
+resetInfo = do
+    t <- get
+    put t { info = [] }
 
 mgu :: Maybe Exp -> P -> Type -> Type -> TI Subst
 mgu e p t1 t2 = mgu' e p t1 t2 (nes (p, t1)) (nes t2)
@@ -198,7 +208,9 @@ mgu' e _ Void Void ot1 ot2 = return nullSubst
 mgu' e p t1 t2 ot1 ot2 = typeError ot1 ot2
 
 typeError :: RecError -> NonEmpty Type -> TI Subst
-typeError ((p@(_, a), h1) :| t1) (h2 :| t2) = tell [Error TypeError (("\x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2 ) (Just p)] >> return nullSubst
+typeError ((p@(_, a), h1) :| t1) (h2 :| t2) = do
+    info <- gets info
+    tell [Error TypeError (("\x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2 ++ info ) (Just p)] >> return nullSubst
     where 
         extraError :: (P, Type) -> Type -> String
         extraError ((_, a), t1) t2 = "\x1b[1m-> Couldn't match expected type " ++ showType True (varsMap t2) t2 ++ "\x1b[0m\x1b[1m with actual type " ++ showType True (varsMap t1) t1 ++ "\x1b[1m in the expression \x1b[0m\x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m"
@@ -263,6 +275,7 @@ tiDecls :: TypeEnv -> [Decl] -> TI (Subst, TypeEnv, [Decl])
 tiDecls env [] = return (nullSubst, env, [])
 tiDecls env (d:ds) = do
     (s1, env1, d1) <- tiDecl env d
+    resetInfo
     (s2, env2, d2) <- tiDecls env1 ds
     return (s2 `composeSubst` s1, env2, d1:d2)
 
@@ -344,6 +357,7 @@ tiStmts :: TypeEnv -> [Stmt] -> TI (Subst, [Stmt])
 tiStmts _ [] = return (nullSubst, [])
 tiStmts env (s:ss) = do
     (s1, st1) <- tiStmt env s
+    resetInfo
     (s2, st2) <- tiStmts (apply s1 env) ss
     return (s2 `composeSubst` s1, st1:st2)
 

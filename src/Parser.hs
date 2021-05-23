@@ -262,7 +262,13 @@ expBoolP :: Parser Exp
 expBoolP = pp $ ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
 
 expCharP :: Parser Exp
-expCharP = pp $ ExpChar <$> (charP '\'' *> satisfy (const True) True <* charP '\'')
+expCharP = pp $ ExpChar <$> (charP '\'' *> (escapedCharP <|> anyCharP) <* charP '\'')
+
+escapedCharP :: Parser Char
+escapedCharP = charP '\\' *> anyCharP
+
+anyCharP :: Parser Char
+anyCharP = satisfy (const True) True
 
 expTupleP :: Parser Exp
 expTupleP = pp $ curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c' ')'
@@ -271,7 +277,7 @@ expBracketsP :: Parser Exp
 expBracketsP = pp $ ExpBrackets <$> (c '(' *> expP <* c' ')')
 
 expStringP :: Parser Exp
-expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> spanP (/='"') <* c' '"')
+expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> many (escapedCharP <|> satisfy (/='"') True) <* c' '"')
 
 expListP :: Parser Exp
 expListP = (\(es, p) -> let ps = map expToP es in foldr foldCons (ExpEmptyList (fromMaybe p (listToMaybe ps))) (zipWith posE ps es)) <$> pp' (c '[' *> sepBy (c ',') exp'P <* c' ']')
