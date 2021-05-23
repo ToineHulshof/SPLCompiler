@@ -198,12 +198,16 @@ mgu' (Just (ExpTuple (e1, e2) _)) p (TypeTuple l1 r1) (TypeTuple l2 r2) ot1 ot2 
     s1 <- let p' = expToP e1 in mgu' (Just e1) p' l1 l2 ((p', l1) `cons` ot1) (l2 `cons` ot2)
     s2 <- let p' = expToP e2 in mgu' (Just e2) p' (apply s1 r1) (apply s1 r2) ((p', r1) `cons` ot1) (r2 `cons` ot2)
     return $ s2 `composeSubst` s1
+mgu' e p (TypeTuple l1 r1) (TypeTuple l2 r2) ot1 ot2 = do
+    s1 <- mgu' e p l1 l2 ((p, l1) `cons` ot1) (l2 `cons` ot2)
+    s2 <- mgu' e p (apply s1 r1) (apply s1 r2) ((p, r1) `cons` ot1) (r2 `cons` ot2)
+    return $ s2 `composeSubst` s1
 mgu' e _ (TypeID c1 u1) (TypeID c2 u2) ot1 ot2 = return $ M.singleton u1 (TypeID (composeConditions c1 c2) u2)
 mgu' e p (TypeID c u) t ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p t (TypeID c u) ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p l@(TypeBasic t1) r@(TypeBasic t2) ot1 ot2
     | t1 == t2 = return nullSubst
-    | otherwise = typeError ot1 ot2
+    | otherwise = trace "1" typeError ot1 ot2
 mgu' e _ Void Void ot1 ot2 = return nullSubst
 mgu' e p t1 t2 ot1 ot2 = typeError ot1 ot2
 
@@ -235,7 +239,7 @@ varBind p _ u (Just Ord) t ot1 ot2
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
 varBind p@(_, a) e u c t ot1 ot2
-    | u `S.member` ftv t = typeError ot1 ot2
+    | u `S.member` ftv t = trace "3" typeError ot1 ot2
     | otherwise = return $ M.singleton u t
 
 -- Helper function for replacing the types in a polymorphic function.
