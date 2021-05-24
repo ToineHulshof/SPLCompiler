@@ -11,6 +11,8 @@ import Extension
 import Grammar
 import Types (Subst, apply, funTypeToList, subst)
 
+type C = [Instruction]
+
 data Instruction
   = LoadConstant Int
   | BranchAlways String
@@ -180,24 +182,24 @@ genCodeLLVM f main spl = do
   (llvmcode, _) <- runStateT (genSPLLLVM spl) (GenEnvLLVM {uniqueInt = 0, llvmlocalmap = M.empty, retType = Void})
   writeFile (changeSuffix True [] f) (unlines llvmcode)
 
-genSPL :: FunDecl -> SPL -> CG [Instruction]
+genSPL :: FunDecl -> SPL -> CG C
 genSPL main ds = do
     let vardecls = [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
-    (i1, m) <- genGlobalVars 1 vardecls
+    (i1, m) <- genGlobalVars [] 1 vardecls
     setGlobalMap m
-    i2 <- genFunDecl main
+    i2 <- genFunDecl [] main
     functions <- gets functions
     return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i2 ++ concat functions
 
-genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
-genGlobalVars _ [] = return ([], M.empty)
-genGlobalVars i ((VarDecl _ n e) : xs) = do
-  i1 <- genExp e
-  (i2, m) <- genGlobalVars (i + 1) xs
+genGlobalVars :: C -> Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
+genGlobalVars c _ [] = return (c, M.empty)
+genGlobalVars c i ((VarDecl _ n e) : xs) = do
+  (i1, c1) <- genExp c e
+  (i2, m) <- genGlobalVars i1 (i + 1) xs
   return (i1 ++ i2, M.singleton n i `M.union` m)
 
-genFunDecl :: FunDecl -> CG [Instruction]
-genFunDecl (FunDecl _ n args (Just t) vars stmts _) = do
+genFunDecl :: C -> FunDecl -> CG C
+genFunDecl c (FunDecl _ n args (Just t) vars stmts _) = do
   localMapTemp <- gets localMap
   m <- argsMap (-1 - length args) args
   setLocalMap m
@@ -213,7 +215,7 @@ argsMap i (x : xs) = do
   m <- argsMap (i + 1) xs
   return $ m `M.union` M.singleton x i
 
-genLocalVars :: Int -> [String] -> [VarDecl] -> CG [Instruction]
+genLocalVars :: Int -> [String] -> [VarDecl] -> CG C
 genLocalVars _ args [] = return []
 genLocalVars i args ((VarDecl _ n e) : vs) = do
   i1 <- genExp e
@@ -222,10 +224,10 @@ genLocalVars i args ((VarDecl _ n e) : vs) = do
   i2 <- genLocalVars (i + 1) args vs
   return $ i1 ++ [StoreLocal i] ++ i2
 
-genStmts :: [Stmt] -> CG [Instruction]
+genStmts :: [Stmt] -> CG C
 genStmts ss = concat <$> mapM genStmt ss
 
-genStmt :: Stmt -> CG [Instruction]
+genStmt :: Stmt -> CG C
 genStmt (StmtFunCall f) = genFunCall f
 genStmt (StmtIf e ss1 ss2) = do
   i1 <- genExp e
@@ -273,7 +275,7 @@ genField (Second _) = 0
 genField (Head _) = 0
 genField (Tail _) = -1
 
-genFunCall :: FunCall -> CG [Instruction]
+genFunCall :: FunCall -> CG C
 genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do
   i1 <- genExp arg
   i2 <- genPrint t
@@ -328,7 +330,7 @@ genFunCall' b f@(FunDecl o n args (Just ft) vars stmts p) t l = do
   is <- genFunDecl f'
   addFunction is
 
-funCallInstructions :: String -> [Exp] -> CG [Instruction]
+funCallInstructions :: String -> [Exp] -> CG C
 funCallInstructions n args = (++ [BranchSubroutine n, AdjustStack (- length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
 findFunction :: [Decl] -> String -> Maybe FunDecl
@@ -341,7 +343,7 @@ findFunction (d : ds) s = findFunction ds s
 printString :: String -> [Instruction]
 printString = concatMap (\c -> [LoadConstant (ord c), Trap Char])
 
-genPrint :: Type -> CG [Instruction]
+genPrint :: Type -> CG C
 genPrint (TypeBasic IntType) = return [Trap Int]
 genPrint (TypeBasic CharType) = return $ printString "'" ++ [Trap Char] ++ printString "'"
 genPrint (TypeID _ _) = return []
@@ -383,7 +385,7 @@ typeName (TypeTuple t1 t2) = "Tuple" ++ typeName t1 ++ typeName t2
 typeName (TypeList t) = "List" ++ typeName t
 typeName _ = "Int"
 
-genEq :: Type -> CG [Instruction]
+genEq :: Type -> CG C
 genEq (TypeBasic _) = return [EqualsI]
 genEq t = do
   let name = "equal" ++ typeName t
@@ -405,8 +407,8 @@ genEq' name (TypeList t) = do
   addFunction f
   addLabel name
 
-genExp :: Exp -> CG [Instruction]
-genExp (Exp (Just t) o e1 e2 _) = do
+genExp :: C -> Exp -> CG C
+genExp c (Exp (Just t) o e1 e2 _) = do
   i1 <- genExp e1
   i2 <- genExp e2
   let i3 = genOp2 o
@@ -418,12 +420,12 @@ genExp (Exp (Just t) o e1 e2 _) = do
           i4 <- genEq t
           return $ i1 ++ i2 ++ i4 ++ [NotI | o /= Equals]
         else return $ i1 ++ i2 ++ [i3]
-genExp (ExpOp1 o e _) = do
+genExp c (ExpOp1 o e _) = do
   i <- genExp e
   return $ i ++ [genOp1 o]
-genExp (ExpBrackets e _) = genExp e
-genExp (ExpFunCall f _) = genFunCall f
-genExp (ExpField n fs _) = do
+genExp c (ExpBrackets e _) = genExp e
+genExp c (ExpFunCall f _) = genFunCall f
+genExp c (ExpField n fs _) = do
     let i1 = map (LoadHeap . genField) fs
     lm <- gets localMap
     gm <- gets globalMap
@@ -434,14 +436,14 @@ genExp (ExpField n fs _) = do
                 trace (f ++ ", " ++ n ++ " " ++ show lm) (error "")
             Just i -> return $ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i1
         Just i -> return $ LoadLocal i : i1
-genExp (ExpInt i _) = return [LoadConstant $ fromInteger i]
-genExp (ExpBool b _) = return [LoadConstant $ if b then 1 else 0]
-genExp (ExpChar c _) = return [LoadConstant $ ord c]
-genExp (ExpTuple (e1, e2) _) = do
-  i1 <- genExp e1
-  i2 <- genExp e2
+genExp c (ExpInt i _) = return [LoadConstant $ fromInteger i]
+genExp c (ExpBool b _) = return [LoadConstant $ if b then 1 else 0]
+genExp c (ExpChar ch _) = return [LoadConstant $ ord ch]
+genExp c (ExpTuple (e1, e2) _) = do
+  i1 <- genExp c e1
+  i2 <- genExp i1 e2
   return $ i1 ++ i2 ++ [StoreMultipleHeap 2]
-genExp ExpEmptyList {} = return [LoadConstant 0]
+genExp c ExpEmptyList {} = return [LoadConstant 0]
 
 genOp2 :: Op2 -> Instruction
 genOp2 Plus = Add
