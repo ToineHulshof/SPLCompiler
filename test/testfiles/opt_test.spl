@@ -1,3 +1,13 @@
+plus(a, x) {
+    if ((x > 0) && (a > 3 - x)) {
+
+    }
+    if ((x < 0) && (a < 3 - x)) {
+
+    }
+    return x + a;
+}
+
 main() {
-    print(1/0);
+    plus(2, 4);
 }

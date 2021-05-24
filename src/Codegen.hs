@@ -11,7 +11,7 @@ import Extension
 import Grammar
 import Types (Subst, apply, funTypeToList, subst)
 
-data RuntimeIssue = RuntimeError | RuntimeWarning
+data RuntimeIssue = RuntimeError | RuntimeWarning deriving Eq
 
 instance Show RuntimeIssue where
   show RuntimeError = "\x1b[1m\x1b[31mRuntime error:\x1b[0m"
@@ -211,7 +211,7 @@ genFunDecl (FunDecl _ n args (Just t) vars stmts _) = do
   setFunName n
   i2 <- genStmts stmts
   setLocalMap localMapTemp
-  return $ Label n : Link (length vars) : i1 ++ i2 ++ [Label $ n ++ "-End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
+  return $ Label n : Link (length vars) : i1 ++ i2 ++ [Label $ n ++ "-End", Unlink] ++ [if n == "main" then Halt else Return]
 
 argsMap :: Int -> [String] -> CG (M.Map String Int)
 argsMap _ [] = return M.empty
@@ -290,7 +290,7 @@ genField (Tail _) = do
   return [BranchSubroutine "empty-Tail", LoadRegister ReturnRegister]
 
 runtimeIssue :: RuntimeIssue -> String -> [Instruction]
-runtimeIssue i e = printString (show i ++ "\x1b[1m " ++ e ++ "\x1b[0m\n") ++ [Halt]
+runtimeIssue i e = printString (show i ++ "\x1b[1m " ++ e ++ "\x1b[0m\n") ++ [Halt | i == RuntimeError]
 
 genRuntimeError :: String -> [Instruction] -> CG ()
 genRuntimeError l i = do
@@ -385,18 +385,18 @@ genPrint' _ (TypeBasic BoolType) = do
 genPrint' name (TypeTuple t1 t2) = do
   i1 <- genPrint t1
   i2 <- genPrint t2
-  let f = [Label name, Link 0, LoadLocal (-2)] ++ (printString "(" ++ [LoadStack 0, LoadHeap (-1)] ++ i1 ++ printString ", " ++ [LoadHeap 0] ++ i2 ++ printString ")") ++ [Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 0, LoadLocal (-2)] ++ (printString "(" ++ [LoadStack 0, LoadHeap (-1)] ++ i1 ++ printString ", " ++ [LoadHeap 0] ++ i2 ++ printString ")") ++ [Unlink, Return]
   addFunction f
   addLabel name
 genPrint' name (TypeList (TypeBasic CharType)) = do
   i <- show <$> new
-  let f = [Label name, Link 0] ++ printString "\x1b[31m\"" ++ [Label $ "while-" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "endWhile-" ++ i, LoadLocal (-2), LoadHeap 0, Trap Char, LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "then-" ++ i, BranchAlways $ "endIf-" ++ i, Label $ "then-" ++ i] ++ [Label $ "endIf-" ++ i, BranchAlways $ "while-" ++ i, Label $ "endWhile-" ++ i] ++ printString "\"\x1b[0m" ++ [Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 0] ++ printString "\x1b[31m\"" ++ [Label $ "while-" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "endWhile-" ++ i, LoadLocal (-2), LoadHeap 0, Trap Char, LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "then-" ++ i, BranchAlways $ "endIf-" ++ i, Label $ "then-" ++ i] ++ [Label $ "endIf-" ++ i, BranchAlways $ "while-" ++ i, Label $ "endWhile-" ++ i] ++ printString "\"\x1b[0m" ++ [Unlink, Return]
   addFunction f
   addLabel name
 genPrint' name (TypeList t) = do
   i1 <- genPrint t
   i <- show <$> new
-  let f = [Label name, Link 0] ++ printString "[" ++ [Label $ "while-" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "endWhile-" ++ i, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "then-" ++ i, BranchAlways $ "endIf-" ++ i, Label $ "then-" ++ i] ++ printString ", " ++ [Label $ "endIf-" ++ i, BranchAlways $ "while-" ++ i, Label $ "endWhile-" ++ i] ++ printString "]" ++ [Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 0] ++ printString "[" ++ [Label $ "while-" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "endWhile-" ++ i, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "then-" ++ i, BranchAlways $ "endIf-" ++ i, Label $ "then-" ++ i] ++ printString ", " ++ [Label $ "endIf-" ++ i, BranchAlways $ "while-" ++ i, Label $ "endWhile-" ++ i] ++ printString "]" ++ [Unlink, Return]
   addFunction f
   addLabel name
 genPrint' _ t = undefined
@@ -421,13 +421,13 @@ genEq' :: String -> Type -> CG ()
 genEq' name (TypeTuple t1 t2) = do
   i1 <- genEq t1
   i2 <- genEq t2
-  let f = [Label name, Link 0, LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1)] ++ i1 ++ [LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i2 ++ [AndI, StoreRegister ReturnRegister, Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 0, LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1)] ++ i1 ++ [LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i2 ++ [AndI, StoreRegister ReturnRegister, Unlink, Return]
   addFunction f
   addLabel name
 genEq' name (TypeList t) = do
   i1 <- genEq t
   i <- show <$> new
-  let f = [Label name, Link 2, LoadLocal (-3), LoadConstant 0, EqualsI, StoreLocal 1, LoadLocal (-2), LoadConstant 0, EqualsI, StoreLocal 2, LoadLocal 1, LoadLocal 2, OrI, BranchTrue ("then-" ++ i), BranchAlways ("endIf-" ++ i), Label ("then-" ++ i), LoadLocal 1, LoadLocal 2, AndI, StoreRegister ReturnRegister, BranchAlways $ name ++ "-End", Label $ "endIf-" ++ i, LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1), BranchSubroutine name, AdjustStack (-1), LoadRegister ReturnRegister, AndI, StoreRegister ReturnRegister, Label $ name ++ "-End", Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 2, LoadLocal (-3), LoadConstant 0, EqualsI, StoreLocal 1, LoadLocal (-2), LoadConstant 0, EqualsI, StoreLocal 2, LoadLocal 1, LoadLocal 2, OrI, BranchTrue ("then-" ++ i), BranchAlways ("endIf-" ++ i), Label ("then-" ++ i), LoadLocal 1, LoadLocal 2, AndI, StoreRegister ReturnRegister, BranchAlways $ name ++ "-End", Label $ "endIf-" ++ i, LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1), BranchSubroutine name, AdjustStack (-1), LoadRegister ReturnRegister, AndI, StoreRegister ReturnRegister, Label $ name ++ "-End", Unlink, Return]
   addFunction f
   addLabel name
 
@@ -469,14 +469,32 @@ genExp (ExpTuple (e1, e2) _) = do
   return $ i1 ++ i2 ++ [StoreMultipleHeap 2]
 genExp ExpEmptyList {} = return [LoadConstant 0]
 
+maxInt :: Int
+maxInt = 2147483647
+
+minInt :: Int
+minInt = -2147483648
+
+-- genFlowErrors :: CG ()
+-- genFlowErrors = do
+--   labels <- gets labels
+--   when ("overflow-warning" `notElem` labels) $ do
+--     addFunction $ Label "overflow-warning" : runtimeIssue RuntimeWarning "integer overflow"
+--     addFunction $ Label "underflow-warning" : runtimeIssue RuntimeWarning "integer underflow"
+--     addLabel "overflow-warning"
+--     addLabel "underflow-warning"
+
 genOp2 :: Op2 -> CG [Instruction]
 genOp2 Plus = do
-  genRuntimeError "add-fun" ([Link 0, LoadLocal (-3), LoadLocal (-2), Add, StoreRegister ReturnRegister, Unlink, Return] ++ runtimeIssue RuntimeWarning "integer overflow")
+  -- genFlowErrors
+  genRuntimeError "add-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, GreaterI, LoadLocal (-3), LoadConstant maxInt, LoadLocal (-2), Subtract, GreaterI, AndI, BranchFalse "add-fun-if"] ++ runtimeIssue RuntimeWarning "integer overflow caused by +")
   return [BranchSubroutine "add-fun", LoadRegister ReturnRegister]
 genOp2 Minus = do
+  -- genFlowErrors
   genRuntimeError "sub-fun" ([Link 0, LoadLocal (-3), LoadLocal (-2), Subtract, StoreRegister ReturnRegister, Unlink, Return] ++ runtimeIssue RuntimeWarning "integer underflow")
   return [BranchSubroutine "sub-fun", LoadRegister ReturnRegister]
 genOp2 Product = do
+  -- genFlowErrors
   genRuntimeError "mul-fun" ([Link 0, LoadLocal (-3), LoadLocal (-2), Multiply, StoreRegister ReturnRegister, Unlink, Return] ++ runtimeIssue RuntimeWarning "integer overflow")
   return [BranchSubroutine "mul-fun", LoadRegister ReturnRegister]
 genOp2 Division = do
