@@ -14,8 +14,8 @@ import Types (Subst, apply, funTypeToList, subst)
 data RuntimeIssue = RuntimeError | RuntimeWarning
 
 instance Show RuntimeIssue where
-  show RuntimeError = "\x1b[1m\x1b[31merror:\x1b[0m"
-  show RuntimeWarning = "\x1b[1m\x1b[33mwarning:\x1b[0m"
+  show RuntimeError = "\x1b[1m\x1b[31mRuntime error:\x1b[0m"
+  show RuntimeWarning = "\x1b[1m\x1b[33mWarning:\x1b[0m"
 
 data Instruction
   = LoadConstant Int
@@ -238,12 +238,12 @@ genStmt (StmtIf e ss1 ss2) = do
   i2 <- genStmts (fromMaybe [] ss2)
   i3 <- genStmts ss1
   i <- show <$> new
-  return $ i1 ++ [BranchTrue $ "Then-" ++ i] ++ i2 ++ [BranchAlways $ "EndIf-" ++ i, Label $ "Then-" ++ i] ++ i3 ++ [Label $ "EndIf-" ++ i]
+  return $ i1 ++ [BranchTrue $ "then-" ++ i] ++ i2 ++ [BranchAlways $ "endIf-" ++ i, Label $ "then-" ++ i] ++ i3 ++ [Label $ "endIf-" ++ i]
 genStmt (StmtWhile e ss) = do
   i1 <- genExp e
   i2 <- genStmts ss
   i <- show <$> new
-  return $ Label ("While-" ++ i) : i1 ++ [BranchFalse $ "EndWhile-" ++ i] ++ i2 ++ [BranchAlways $ "While-" ++ i, Label $ "EndWhile-" ++ i]
+  return $ Label ("while-" ++ i) : i1 ++ [BranchFalse $ "endWhile-" ++ i] ++ i2 ++ [BranchAlways $ "while-" ++ i, Label $ "endWhile-" ++ i]
 genStmt (StmtField n [] e _) = do
   lm <- gets localMap
   gm <- gets globalMap
@@ -258,7 +258,7 @@ genStmt (StmtField n fs e _) = do
   lm <- gets localMap
   gm <- gets globalMap
   i1 <- genExp e
-  i2 <- mapM genField fs
+  i2 <- concat <$> mapM genField fs
   case M.lookup n lm of
     Nothing -> case M.lookup n gm of
       Nothing -> error ""
@@ -279,15 +279,15 @@ fieldToInt (Second _) = 0
 fieldToInt (Head _) = 0
 fieldToInt (Tail _) = -1
 
-genField :: Field -> CG Instruction
-genField (First _) = return $ LoadHeap (-1)
-genField (Second _) = return $ LoadHeap 0
+genField :: Field -> CG [Instruction]
+genField (First _) = return [LoadHeap (-1)]
+genField (Second _) = return [LoadHeap 0]
 genField (Head _) = do
-  genRuntimeError "empty-Head" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeError "Cannot take head of empty list")
-  return (BranchSubroutine "empty-Head")
+  genRuntimeError "empty-Head" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "empty-Head-if", LoadLocal (-2), LoadHeap 0, StoreRegister ReturnRegister, Unlink, Return, Label "empty-Head-if"] ++ runtimeIssue RuntimeError "Cannot take head of empty list")
+  return [BranchSubroutine "empty-Head", LoadRegister ReturnRegister]
 genField (Tail _) = do
-  genRuntimeError "empty-Tail" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeError "Cannot take tail of empty list")
-  return (BranchSubroutine "empty-Tail")
+  genRuntimeError "empty-Tail" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "empty-Tail-if", LoadLocal (-2), LoadHeap 1, StoreRegister ReturnRegister, Unlink, Return, Label "empty-Tail-if"]  ++ runtimeIssue RuntimeError "Cannot take tail of empty list")
+  return [BranchSubroutine "empty-Tail", LoadRegister ReturnRegister]
 
 runtimeIssue :: RuntimeIssue -> String -> [Instruction]
 runtimeIssue i e = printString (show i ++ "\x1b[1m " ++ e ++ "\x1b[0m\n") ++ [Halt]
@@ -390,13 +390,13 @@ genPrint' name (TypeTuple t1 t2) = do
   addLabel name
 genPrint' name (TypeList (TypeBasic CharType)) = do
   i <- show <$> new
-  let f = [Label name, Link 0] ++ printString "\x1b[31m\"" ++ [Label $ "While-" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile-" ++ i, LoadLocal (-2), LoadHeap 0, Trap Char, LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then-" ++ i, BranchAlways $ "EndIf-" ++ i, Label $ "Then-" ++ i] ++ [Label $ "EndIf-" ++ i, BranchAlways $ "While-" ++ i, Label $ "EndWhile-" ++ i] ++ printString "\"\x1b[0m" ++ [Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 0] ++ printString "\x1b[31m\"" ++ [Label $ "while-" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "endWhile-" ++ i, LoadLocal (-2), LoadHeap 0, Trap Char, LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "then-" ++ i, BranchAlways $ "endIf-" ++ i, Label $ "then-" ++ i] ++ [Label $ "endIf-" ++ i, BranchAlways $ "while-" ++ i, Label $ "endWhile-" ++ i] ++ printString "\"\x1b[0m" ++ [Unlink, StoreStack (-1), Return]
   addFunction f
   addLabel name
 genPrint' name (TypeList t) = do
   i1 <- genPrint t
   i <- show <$> new
-  let f = [Label name, Link 0] ++ printString "[" ++ [Label $ "While-" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile-" ++ i, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then-" ++ i, BranchAlways $ "EndIf-" ++ i, Label $ "Then-" ++ i] ++ printString ", " ++ [Label $ "EndIf-" ++ i, BranchAlways $ "While-" ++ i, Label $ "EndWhile-" ++ i] ++ printString "]" ++ [Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 0] ++ printString "[" ++ [Label $ "while-" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "endWhile-" ++ i, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "then-" ++ i, BranchAlways $ "endIf-" ++ i, Label $ "then-" ++ i] ++ printString ", " ++ [Label $ "endIf-" ++ i, BranchAlways $ "while-" ++ i, Label $ "endWhile-" ++ i] ++ printString "]" ++ [Unlink, StoreStack (-1), Return]
   addFunction f
   addLabel name
 genPrint' _ t = undefined
@@ -427,7 +427,7 @@ genEq' name (TypeTuple t1 t2) = do
 genEq' name (TypeList t) = do
   i1 <- genEq t
   i <- show <$> new
-  let f = [Label name, Link 2, LoadLocal (-3), LoadConstant 0, EqualsI, StoreLocal 1, LoadLocal (-2), LoadConstant 0, EqualsI, StoreLocal 2, LoadLocal 1, LoadLocal 2, OrI, BranchTrue ("Then-" ++ i), BranchAlways ("EndIf-" ++ i), Label ("Then-" ++ i), LoadLocal 1, LoadLocal 2, AndI, StoreRegister ReturnRegister, BranchAlways $ name ++ "-End", Label $ "EndIf-" ++ i, LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1), BranchSubroutine name, AdjustStack (-1), LoadRegister ReturnRegister, AndI, StoreRegister ReturnRegister, Label $ name ++ "-End", Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 2, LoadLocal (-3), LoadConstant 0, EqualsI, StoreLocal 1, LoadLocal (-2), LoadConstant 0, EqualsI, StoreLocal 2, LoadLocal 1, LoadLocal 2, OrI, BranchTrue ("then-" ++ i), BranchAlways ("endIf-" ++ i), Label ("then-" ++ i), LoadLocal 1, LoadLocal 2, AndI, StoreRegister ReturnRegister, BranchAlways $ name ++ "-End", Label $ "endIf-" ++ i, LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1), BranchSubroutine name, AdjustStack (-1), LoadRegister ReturnRegister, AndI, StoreRegister ReturnRegister, Label $ name ++ "-End", Unlink, StoreStack (-1), Return]
   addFunction f
   addLabel name
 
@@ -437,20 +437,20 @@ genExp (Exp (Just t) o e1 e2 _) = do
   i2 <- genExp e2
   i3 <- genOp2 o
   if o == Cons
-    then return $ i2 ++ i1 ++ [i3]
+    then return $ i2 ++ i1 ++ i3
     else
       if o `elem` [Equals, Neq]
         then do
           i4 <- genEq t
           return $ i1 ++ i2 ++ i4 ++ [NotI | o /= Equals]
-        else return $ i1 ++ i2 ++ [i3]
+        else return $ i1 ++ i2 ++ i3
 genExp (ExpOp1 o e _) = do
   i <- genExp e
   return $ i ++ [genOp1 o]
 genExp (ExpBrackets e _) = genExp e
 genExp (ExpFunCall f _) = genFunCall f
 genExp (ExpField n fs _) = do
-    i1 <- mapM genField fs
+    i1 <- concat <$> mapM genField fs
     lm <- gets localMap
     gm <- gets globalMap
     case M.lookup n lm of
@@ -469,29 +469,29 @@ genExp (ExpTuple (e1, e2) _) = do
   return $ i1 ++ i2 ++ [StoreMultipleHeap 2]
 genExp ExpEmptyList {} = return [LoadConstant 0]
 
-genOp2 :: Op2 -> CG Instruction
+genOp2 :: Op2 -> CG [Instruction]
 genOp2 Plus = do
-  genRuntimeError "add-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeWarning "integer overflow")
-  return (BranchSubroutine "add-fun")
+  genRuntimeError "add-fun" ([Link 0, LoadLocal (-3), LoadLocal (-2), Add, StoreRegister ReturnRegister, Unlink, Return] ++ runtimeIssue RuntimeWarning "integer overflow")
+  return [BranchSubroutine "add-fun", LoadRegister ReturnRegister]
 genOp2 Minus = do
-  genRuntimeError "sub-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeWarning "integer underflow")
-  return (BranchSubroutine "sub-fun")
+  genRuntimeError "sub-fun" ([Link 0, LoadLocal (-3), LoadLocal (-2), Subtract, StoreRegister ReturnRegister, Unlink, Return] ++ runtimeIssue RuntimeWarning "integer underflow")
+  return [BranchSubroutine "sub-fun", LoadRegister ReturnRegister]
 genOp2 Product = do
-  genRuntimeError "mul-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeWarning "integer overflow")
-  return (BranchSubroutine "mul-fun")
+  genRuntimeError "mul-fun" ([Link 0, LoadLocal (-3), LoadLocal (-2), Multiply, StoreRegister ReturnRegister, Unlink, Return] ++ runtimeIssue RuntimeWarning "integer overflow")
+  return [BranchSubroutine "mul-fun", LoadRegister ReturnRegister]
 genOp2 Division = do
-  genRuntimeError "div-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeError "divide by 0")
-  return (BranchSubroutine "div-fun")
-genOp2 Modulo = return Mod
-genOp2 Equals = return EqualsI
-genOp2 Smaller = return Less
-genOp2 Greater = return GreaterI
-genOp2 Leq = return LessEqual
-genOp2 Geq = return GreaterEqual
-genOp2 Neq = return NotEquals
-genOp2 And = return AndI
-genOp2 Or = return OrI
-genOp2 Cons = return $ StoreMultipleHeap 2
+  genRuntimeError "div-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "div-fun-if", LoadLocal (-3), LoadLocal (-2), Divide, StoreRegister ReturnRegister, Unlink, Return, Label "div-fun-if"] ++ runtimeIssue RuntimeError "Divide by 0")
+  return [BranchSubroutine "div-fun", LoadRegister ReturnRegister]
+genOp2 Modulo = return [Mod]
+genOp2 Equals = return [EqualsI]
+genOp2 Smaller = return [Less]
+genOp2 Greater = return [GreaterI]
+genOp2 Leq = return [LessEqual]
+genOp2 Geq = return [GreaterEqual]
+genOp2 Neq = return [NotEquals]
+genOp2 And = return [AndI]
+genOp2 Or = return [OrI]
+genOp2 Cons = return [StoreMultipleHeap 2]
 
 genOp1 :: Op1 -> Instruction
 genOp1 Min = Negation
