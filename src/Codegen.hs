@@ -62,7 +62,7 @@ data TrapCode
   | Char
 
 instance Show TrapCode where
-  show Int = "0"
+  show Codegen.Int = "0"
   show Char = "1"
 
 data Register
@@ -177,7 +177,7 @@ genCodeSSM f main spl = do
 
 genCodeLLVM :: FilePath -> FunDecl -> SPL -> IO ()
 genCodeLLVM f main spl = do
-  (llvmcode, _) <- runStateT (genSPLLLVM spl) (GenEnvLLVM {uniqueInt = 0, llvmlocalmap = M.empty, retType = Void})
+  (llvmcode, _) <- runStateT (genSPLLLVM spl) (GenEnvLLVM {uniqueInt = 0, regCount = 0, regMap = M.empty, llvmlocalmap = M.empty, retType = Void})
   writeFile (changeSuffix True [] f) (unlines llvmcode)
 
 genSPL :: FunDecl -> SPL -> CG [Instruction]
@@ -373,7 +373,7 @@ genPrint' name (TypeList t) = do
   let f = [Label name, Link 0] ++ printString "[" ++ [Label $ "While" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile" ++ i, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then" ++ i, BranchAlways $ "EndIf" ++ i, Label $ "Then" ++ i] ++ printString ", " ++ [Label $ "EndIf" ++ i, BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i] ++ printString "]" ++ [Unlink, StoreStack (-1), Return]
   addFunction f
   addLabel name
-genPrint' _ t = trace (show t) undefined
+genPrint' _ t = undefined
 
 typeName :: Type -> String
 typeName (TypeBasic IntType) = "Int"
@@ -423,17 +423,17 @@ genExp (ExpOp1 o e _) = do
   return $ i ++ [genOp1 o]
 genExp (ExpBrackets e _) = genExp e
 genExp (ExpFunCall f _) = genFunCall f
-genExp (ExpField n fs _) = do
-    let i1 = map (LoadHeap . genField) fs
-    lm <- gets localMap
-    gm <- gets globalMap
-    case M.lookup n lm of
-        Nothing -> case M.lookup n gm of
-            Nothing -> do
-                f <- gets funName
-                trace (f ++ ", " ++ n ++ " " ++ show lm) (error "")
-            Just i -> return $ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i1
-        Just i -> return $ LoadLocal i : i1
+genExp (ExpField _ n fs _) = do
+  let i1 = map (LoadHeap . genField) fs
+  lm <- gets localMap
+  gm <- gets globalMap
+  case M.lookup n lm of
+    Nothing -> case M.lookup n gm of
+      Nothing -> do
+        f <- gets funName
+        error ""
+      Just i -> return $ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i1
+    Just i -> return $ LoadLocal i : i1
 genExp (ExpInt i _) = return [LoadConstant $ fromInteger i]
 genExp (ExpBool b _) = return [LoadConstant $ if b then 1 else 0]
 genExp (ExpChar c _) = return [LoadConstant $ ord c]
