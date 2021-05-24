@@ -283,10 +283,11 @@ genField :: Field -> CG Instruction
 genField (First _) = return $ LoadHeap (-1)
 genField (Second _) = return $ LoadHeap 0
 genField (Head _) = do
-  genRuntimeError "empty" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeError "Cannot take head of empty list")
-  return (BranchSubroutine "empty")
--- genField (Head _) = runtimeIssue RuntimeError "empty" "Cannot take head of empty list" >> return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "empty", LoadHeap 0]
--- genField (Tail _) = runtimeIssue RuntimeError "empty" "Cannot take tail of empty list" >> return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "empty", LoadHeap (-1)]
+  genRuntimeError "empty-Head" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeError "Cannot take head of empty list")
+  return (BranchSubroutine "empty-Head")
+genField (Tail _) = do
+  genRuntimeError "empty-Tail" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeError "Cannot take tail of empty list")
+  return (BranchSubroutine "empty-Tail")
 
 runtimeIssue :: RuntimeIssue -> String -> [Instruction]
 runtimeIssue i e = printString (show i ++ "\x1b[1m " ++ e ++ "\x1b[0m\n") ++ [Halt]
@@ -469,14 +470,18 @@ genExp (ExpTuple (e1, e2) _) = do
 genExp ExpEmptyList {} = return [LoadConstant 0]
 
 genOp2 :: Op2 -> CG Instruction
-genOp2 Plus = runtimeIssue RuntimeWarning "overflowAdd" "integer overflow" >> return [Add]
-genOp2 Minus = runtimeIssue RuntimeWarning "underflow" "integer underflow" >> return [Subtract]
-genOp2 Product = runtimeIssue RuntimeWarning "overflowMult" "integer underflow" >> return [Multiply]
-genOp2 Division = runtimeIssue RuntimeError "divide0" "divide by 0" >> return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "divide0", Divide]
--- genOp2 Plus = runtimeIssue RuntimeWarning "overflowAdd" "integer overflow" >> return [Add]
--- genOp2 Minus = runtimeIssue RuntimeWarning "underflow" "integer underflow" >> return [Subtract]
--- genOp2 Product = runtimeIssue RuntimeWarning "overflowMult" "integer underflow" >> return [Multiply]
--- genOp2 Division = runtimeIssue RuntimeError "divide0" "divide by 0" >> return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "divide0", Divide]
+genOp2 Plus = do
+  genRuntimeError "add-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeWarning "integer overflow")
+  return (BranchSubroutine "add-fun")
+genOp2 Minus = do
+  genRuntimeError "sub-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeWarning "integer underflow")
+  return (BranchSubroutine "sub-fun")
+genOp2 Product = do
+  genRuntimeError "mul-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeWarning "integer overflow")
+  return (BranchSubroutine "mul-fun")
+genOp2 Division = do
+  genRuntimeError "div-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI] ++ runtimeIssue RuntimeError "divide by 0")
+  return (BranchSubroutine "div-fun")
 genOp2 Modulo = return Mod
 genOp2 Equals = return EqualsI
 genOp2 Smaller = return Less
