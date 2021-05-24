@@ -77,6 +77,7 @@ data Register
   | GlobalTemp
   | StackPointer
   | HeapTemp
+  | HeapPointer
 
 instance Show Register where
   show ReturnRegister = "RR"
@@ -84,6 +85,7 @@ instance Show Register where
   show StackPointer = "R1"
   show GlobalTemp = "R6"
   show HeapTemp = "R7"
+  show HeapPointer = "R3"
 
 instance Show Instruction where
   show (LoadConstant i) = "ldc " ++ show i
@@ -192,7 +194,7 @@ genSPL main ds = do
     i1 <- genGlobalVars 1 vardecls
     i2 <- genFunDecl main
     functions <- gets functions
-    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i2 ++ concat functions
+    return $ LoadRegisterFromRegister GlobalOffset StackPointer : LoadConstant 4096 : StoreRegister HeapPointer : i1 ++ [BranchAlways "main"] ++ i2 ++ concat functions
 
 genGlobalVars :: Int -> [VarDecl] -> CG [Instruction]
 genGlobalVars _ [] = return []
@@ -263,7 +265,7 @@ genStmt (StmtField n fs e _) = do
     Nothing -> case M.lookup n gm of
       Nothing -> error ""
       Just i -> do
-        return $ i1 ++ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i2 ++ [StoreAddress $ fieldToInt (last fs)]
+        return $ i1 ++ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ init i2 ++ [StoreAddress $ fieldToInt (last fs)]
     Just i -> return $ i1 ++ [LoadLocal i] ++ init i2 ++ [StoreAddress $ fieldToInt (last fs)]
 genStmt (StmtReturn Nothing _) = do
   funName <- gets funName
@@ -284,10 +286,10 @@ genField (First _) = return [LoadHeap (-1)]
 genField (Second _) = return [LoadHeap 0]
 genField (Head _) = do
   genRuntimeError "empty-Head" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "empty-Head-if", LoadLocal (-2), LoadHeap 0, StoreRegister ReturnRegister, Unlink, Return, Label "empty-Head-if"] ++ runtimeIssue RuntimeError "Cannot take head of empty list")
-  return [BranchSubroutine "empty-Head", LoadRegister ReturnRegister]
+  return [BranchSubroutine "empty-Head", AdjustStack (-1), LoadRegister ReturnRegister]
 genField (Tail _) = do
-  genRuntimeError "empty-Tail" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "empty-Tail-if", LoadLocal (-2), LoadHeap 1, StoreRegister ReturnRegister, Unlink, Return, Label "empty-Tail-if"]  ++ runtimeIssue RuntimeError "Cannot take tail of empty list")
-  return [BranchSubroutine "empty-Tail", LoadRegister ReturnRegister]
+  genRuntimeError "empty-Tail" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "empty-Tail-if", LoadLocal (-2), LoadHeap (-1), StoreRegister ReturnRegister, Unlink, Return, Label "empty-Tail-if"]  ++ runtimeIssue RuntimeError "Cannot take tail of empty list")
+  return [BranchSubroutine "empty-Tail", AdjustStack (-1), LoadRegister ReturnRegister]
 
 runtimeIssue :: RuntimeIssue -> String -> [Instruction]
 runtimeIssue i e = printString (show i ++ "\x1b[1m " ++ e ++ "\x1b[0m\n") ++ [Halt | i == RuntimeError]
@@ -318,9 +320,8 @@ genFunCall (FunCall (Just t') n args _) = do
 isOverLoaded :: FunDecl -> Maybe [Int]
 isOverLoaded f = Nothing
 
--- Could also be a hash function
 funLabel :: String -> [Type] -> String
-funLabel n t = n ++ join "-" (map typeName t)
+funLabel n t = n ++ concatMap (("-" ++) . typeName) t
 
 monoStmts :: Subst -> [Stmt] -> [Stmt]
 monoStmts s = map $ monoStmt s
@@ -355,7 +356,7 @@ genFunCall' b f@(FunDecl o n args (Just ft) vars stmts p) t l = do
   addFunction is
 
 funCallInstructions :: String -> [Exp] -> CG [Instruction]
-funCallInstructions n args = (++ [BranchSubroutine n, AdjustStack (- length args + 1), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
+funCallInstructions n args = (++ [BranchSubroutine n, AdjustStack (- length args), LoadRegister ReturnRegister]) . concat <$> mapM genExp args
 
 findFunction :: [Decl] -> String -> Maybe FunDecl
 findFunction [] _ = Nothing
@@ -372,7 +373,7 @@ genPrint (TypeBasic IntType) = return $ printString "\x1b[36m" ++ [Trap IntT] ++
 genPrint (TypeBasic CharType) = return $ printString "\x1b[35m'" ++ [Trap Char] ++ printString "'\x1b[0m"
 genPrint (TypeID _ _) = return []
 genPrint t = do
-  let name = "print" ++ typeName t
+  let name = "print-" ++ typeName t
   labels <- gets labels
   when (name `notElem` labels) $ genPrint' name t
   return [BranchSubroutine name]
@@ -477,17 +478,21 @@ minInt = -2147483648
 
 genOp2 :: Op2 -> CG [Instruction]
 genOp2 Plus = do
-  genRuntimeError "add-fun" $ [Link 0, LoadLocal (-2), LoadConstant 0, GreaterI, LoadLocal (-3), LoadConstant maxInt, LoadLocal (-2), Subtract, GreaterI, AndI, BranchFalse "add-fun-if-1"] ++ runtimeIssue RuntimeWarning "integer overflow caused by + operation" ++ [Label "add-fun-if-1", LoadLocal (-2), LoadConstant 0, Less, LoadLocal (-3), LoadConstant minInt, LoadLocal (-2), Subtract, Less, AndI, BranchFalse "add-fun-if-2"] ++ runtimeIssue RuntimeWarning "integer underflow caused by + operation" ++ [Label "add-fun-if-2", LoadLocal (-2), LoadLocal (-3), Add, StoreRegister ReturnRegister, Unlink, Return]
-  return [BranchSubroutine "add-fun", LoadRegister ReturnRegister]
+  -- genRuntimeError "add-fun" $ [Link 0, LoadLocal (-2), LoadConstant 0, GreaterI, LoadLocal (-3), LoadConstant maxInt, LoadLocal (-2), Subtract, GreaterI, AndI, BranchFalse "add-fun-if-1"] ++ runtimeIssue RuntimeWarning "integer overflow caused by + operation" ++ [Label "add-fun-if-1", LoadLocal (-2), LoadConstant 0, Less, LoadLocal (-3), LoadConstant minInt, LoadLocal (-2), Subtract, Less, AndI, BranchFalse "add-fun-if-2"] ++ runtimeIssue RuntimeWarning "integer underflow caused by + operation" ++ [Label "add-fun-if-2", LoadLocal (-2), LoadLocal (-3), Add, StoreRegister ReturnRegister, Unlink, Return]
+  -- return [BranchSubroutine "add-fun", AdjustStack (-2), LoadRegister ReturnRegister]
+  return [Add]
 genOp2 Minus = do
-  genRuntimeError "sub-fun" $ [Link 0, LoadLocal (-2), LoadConstant 0, Less, LoadLocal (-3), LoadConstant maxInt, LoadLocal (-2), Add, GreaterI, AndI, BranchFalse "sub-fun-if-1"] ++ runtimeIssue RuntimeWarning "integer overflow caused by - operation" ++ [Label "sub-fun-if-1", LoadLocal (-2), LoadConstant 0, GreaterI, LoadLocal (-3), LoadConstant minInt, LoadLocal (-2), Add, Less, AndI, BranchFalse "sub-fun-if-2"] ++ runtimeIssue RuntimeWarning "integer underflow caused by - operation" ++ [Label "add-fun-if-2", LoadLocal (-2), LoadLocal (-3), Subtract, StoreRegister ReturnRegister, Unlink, Return]
-  return [BranchSubroutine "sub-fun", LoadRegister ReturnRegister]
+  -- genRuntimeError "sub-fun" $ [Link 0, LoadLocal (-2), LoadConstant 0, Less, LoadLocal (-3), LoadConstant maxInt, LoadLocal (-2), Add, GreaterI, AndI, BranchFalse "sub-fun-if-1"] ++ runtimeIssue RuntimeWarning "integer overflow caused by - operation" ++ [Label "sub-fun-if-1", LoadLocal (-2), LoadConstant 0, GreaterI, LoadLocal (-3), LoadConstant minInt, LoadLocal (-2), Add, Less, AndI, BranchFalse "sub-fun-if-2"] ++ runtimeIssue RuntimeWarning "integer underflow caused by - operation" ++ [Label "sub-fun-if-2", LoadLocal (-3), LoadLocal (-2), Subtract, StoreRegister ReturnRegister, Unlink, Return]
+  -- return [BranchSubroutine "sub-fun", AdjustStack (-2), LoadRegister ReturnRegister]
+  return [Subtract]
 genOp2 Product = do
-  genRuntimeError "mul-fun" $ [Link 1, LoadLocal (-3), LoadLocal (-2), Multiply, StoreLocal 1, LoadLocal (-3), LoadConstant 0, EqualsI, NotI, LoadLocal 1, LoadLocal (-3), Divide, LoadLocal (-2), EqualsI, NotI, AndI, BranchFalse "mul-fun-if"] ++ runtimeIssue RuntimeWarning "integer overflow caused by * operation" ++ [Label "mul-fun-if", LoadLocal 1, StoreRegister ReturnRegister, Unlink, Return]
-  return [BranchSubroutine "mul-fun", LoadRegister ReturnRegister]
+  -- genRuntimeError "mul-fun" $ [Link 1, LoadLocal (-3), LoadLocal (-2), Multiply, StoreLocal 1, LoadLocal (-3), LoadConstant 0, EqualsI, NotI, LoadLocal 1, LoadLocal (-3), Divide, LoadLocal (-2), EqualsI, NotI, AndI, BranchFalse "mul-fun-if"] ++ runtimeIssue RuntimeWarning "integer overflow caused by * operation" ++ [Label "mul-fun-if", LoadLocal 1, StoreRegister ReturnRegister, Unlink, Return]
+  -- return [BranchSubroutine "mul-fun", AdjustStack (-2), LoadRegister ReturnRegister]
+  return [Multiply]
 genOp2 Division = do
-  genRuntimeError "div-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "div-fun-if", LoadLocal (-3), LoadLocal (-2), Divide, StoreRegister ReturnRegister, Unlink, Return, Label "div-fun-if"] ++ runtimeIssue RuntimeError "Divide by 0")
-  return [BranchSubroutine "div-fun", LoadRegister ReturnRegister]
+  -- genRuntimeError "div-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "div-fun-if", LoadLocal (-3), LoadLocal (-2), Divide, StoreRegister ReturnRegister, Unlink, Return, Label "div-fun-if"] ++ runtimeIssue RuntimeError "Divide by 0")
+  -- return [BranchSubroutine "div-fun", AdjustStack (-2), LoadRegister ReturnRegister]
+  return [Divide]
 genOp2 Modulo = return [Mod]
 genOp2 Equals = return [EqualsI]
 genOp2 Smaller = return [Less]
