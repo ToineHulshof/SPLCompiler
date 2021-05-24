@@ -57,7 +57,7 @@ instance Show Errors where
   show (Errors file lines errors) = join "\n\n" $ map showError (sort errors) where
     showError (Error k e Nothing) = "\x1b[1m" ++ removePath file ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ showErrorStrings e
     showError (Error k e (Just ((li, co), c'))) = let c = removeSpace c' in
-      trace (show c') "\x1b[1m" ++ removePath file ++ ":" ++ show li ++ ":" ++ show co ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ showErrorStrings e ++ "\n" ++
+      "\x1b[1m" ++ removePath file ++ ":" ++ show li ++ ":" ++ show co ++ ": \x1b[31merror:\x1b[0m\x1b[1m " ++ show k ++ showErrorStrings e ++ "\n" ++
       replicate leftLength ' ' ++ "\x1b[34m|\n" ++ show li ++ " |\x1b[0m " ++
       let (l, r) = splitAt (co - 1) (lines ! li) in (l ++ "\x1b[31m\x1b[1m" ++ c ++ "\x1b[0m" ++ drop (length c) r) ++ "\n" ++
       replicate leftLength ' ' ++ "\x1b[34m\x1b[1m|\x1b[0m" ++ replicate co ' ' ++ "\x1b[31m\x1b[1m" ++ replicate (length c) '^' ++ "\x1b[0m" where

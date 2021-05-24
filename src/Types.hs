@@ -233,7 +233,7 @@ varBind :: P -> Maybe Exp -> String -> Maybe Condition -> Type -> RecError -> No
 varBind _ _ u (Just Eq) t ot1 ot2 = return $ M.singleton u t
 varBind p _ u (Just Ord) t ot1 ot2
     | isOrd t = return $ M.singleton u t
-    | otherwise = tell [Error TypeError (nes $ showType True (varsMap t) t ++ "\x1b[1m is not Ord") (Just p)] >> return nullSubst
+    | otherwise = tell [Error TypeError (nes $ "\x1b[1mno instance \x1b[33mOrd\x1b[0m\x1b[1m for " ++ showType True (varsMap t) t) (Just p)] >> return nullSubst
     where
         isOrd (TypeBasic IntType) = True
         isOrd (TypeBasic CharType) = True

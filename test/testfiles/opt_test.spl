@@ -1,8 +1,7 @@
-f(n) {
-    return n;
-    var n = 3;
+f(x, y) {
+    return x <= y;
 }
 
 main() {
-    print(f(5));
+    print(f([4], [4]));
 }
