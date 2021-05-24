@@ -64,11 +64,11 @@ data Instruction
   | Halt
 
 data TrapCode
-  = Int
+  = IntT
   | Char
 
 instance Show TrapCode where
-  show Int = "0"
+  show IntT = "0"
   show Char = "1"
 
 data Register
@@ -183,7 +183,7 @@ genCodeSSM f main spl = do
 
 genCodeLLVM :: FilePath -> FunDecl -> SPL -> IO ()
 genCodeLLVM f main spl = do
-  (llvmcode, _) <- runStateT (genSPLLLVM spl) (GenEnvLLVM {uniqueInt = 0, llvmlocalmap = M.empty, retType = Void})
+  (llvmcode, _) <- runStateT (genSPLLLVM spl) (GenEnvLLVM {uniqueInt = 0, regCount = 0, regMap = M.empty, llvmlocalmap = M.empty, retType = Void})
   writeFile (changeSuffix True [] f) (unlines llvmcode)
 
 genSPL :: FunDecl -> SPL -> CG [Instruction]
@@ -361,7 +361,7 @@ printString :: String -> [Instruction]
 printString = concatMap (\c -> [LoadConstant (fromEnum c), Trap Char])
 
 genPrint :: Type -> CG [Instruction]
-genPrint (TypeBasic IntType) = return $ printString "\x1b[36m" ++ [Trap Int] ++ printString "\x1b[0m"
+genPrint (TypeBasic IntType) = return $ printString "\x1b[36m" ++ [Trap IntT] ++ printString "\x1b[0m"
 genPrint (TypeBasic CharType) = return $ printString "\x1b[35m'" ++ [Trap Char] ++ printString "'\x1b[0m"
 genPrint (TypeID _ _) = return []
 genPrint t = do
@@ -392,7 +392,7 @@ genPrint' name (TypeList t) = do
   let f = [Label name, Link 0] ++ printString "[" ++ [Label $ "While" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile" ++ i, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then" ++ i, BranchAlways $ "EndIf" ++ i, Label $ "Then" ++ i] ++ printString ", " ++ [Label $ "EndIf" ++ i, BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i] ++ printString "]" ++ [Unlink, StoreStack (-1), Return]
   addFunction f
   addLabel name
-genPrint' _ t = trace (show t) undefined
+genPrint' _ t = undefined
 
 typeName :: Type -> String
 typeName (TypeBasic IntType) = "Int"
