@@ -23,7 +23,7 @@ components ds = map ((\(a, _, _) -> a) <$>) $ stronglyConnCompR $ map (\d -> let
 
 ctDecl :: Decl -> ((Kind, String), [(Kind, String)])
 ctDecl (DeclVarDecl (VarDecl _ n e)) = ((Var, n), ctExp [] e)
-ctDecl (DeclFunDecl (FunDecl n args _ vars stmts _)) = ((Fun, n), ctStmts args stmts ++ concatMap (\(VarDecl _ _ e) -> ctExp args e) vars)
+ctDecl (DeclFunDecl (FunDecl _ n args _ vars stmts _)) = ((Fun, n), ctStmts args stmts ++ concatMap (\(VarDecl _ _ e) -> ctExp args e) vars)
 
 ctStmts :: [String] -> [Stmt] -> [(Kind, String)]
 ctStmts args = concatMap (ctStmt args)
@@ -43,9 +43,9 @@ ctExp args (Exp _ _ e1 e2 _) = ctExp args e1 ++ ctExp args e2
 ctExp args (ExpOp1 _ e _) = ctExp args e
 ctExp args (ExpTuple (e1, e2) _) = ctExp args e1 ++ ctExp args e2
 ctExp args (ExpBrackets e _) = ctExp args e
-ctExp args (ExpField _ n _ _)
-  | n `elem` args = []
-  | otherwise = [(Var, n)]
+ctExp args (ExpField n _ _)
+    | n `elem` args = []
+    | otherwise = [(Var, n)]
 ctExp args (ExpFunCall (FunCall _ n es _) _) = (Fun, n) : concatMap (ctExp args) es
 ctExp _ _ = []
 
@@ -72,7 +72,7 @@ btVarDecl (VarDecl Nothing s _) = TypeEnv . M.singleton (Var, s) . Scheme [] <$>
 btVarDecl (VarDecl (Just t) s _) = return $ TypeEnv $ M.singleton (Var, s) (Scheme [] t)
 
 btFunDecl :: TypeEnv -> FunDecl -> TI TypeEnv
-btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _ p) = do
+btFunDecl (TypeEnv env) (FunDecl o s args Nothing _ _ p) = do
   case M.lookup (Fun, s) env of
     Nothing -> do
       nvars <- mapM (newTyVar Nothing) args
@@ -80,7 +80,7 @@ btFunDecl (TypeEnv env) (FunDecl s args Nothing _ _ p) = do
       let t = foldr1 TypeFun $ nvars ++ [ret]
       return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
     Just _ -> tell [Error TypeError (nes $ "Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
-btFunDecl (TypeEnv env) (FunDecl s _ (Just t) _ _ p) = do
+btFunDecl (TypeEnv env) (FunDecl o s _ (Just t) _ _ p) = do
   case M.lookup (Fun, s) env of
     Nothing -> return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
     Just _ -> tell [Error TypeError (nes $ "Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
@@ -126,26 +126,27 @@ ti' spl e = do
 
 tiResult :: Bool -> String -> Maybe FilePath -> SPL -> TypeEnv -> IO ()
 tiResult llvm s f spl e = do
-  (((env, spl'), e), _) <- runTI $ ti' spl e
-  if null e
-    then case f of
-      Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
-      Just filePath -> case getMain spl' of
-        Just main -> putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n" >> genCode llvm filePath main spl'
-        Nothing -> do
-          print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError (nes "\x1b[31mNo main function\x1b[0m\n") Nothing]
-          putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n"
-          putStr $ show env
-          exitFailure
-    else print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) (removeDuplicates e)) >> exitFailure
-  where
-    l = lines s
+    (((env, spl'), e), _) <- runTI $ ti' spl e
+    if null e
+        then case f of
+            Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+            Just filePath -> case getMain spl' of
+                Just main -> putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n" >> genCode llvm filePath main spl'
+                Nothing -> do
+                    print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError (nes "\x1b[31mNo main function\x1b[0m\n") Nothing]
+                    putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n"
+                    putStr $ show env
+                    exitFailure
+        else print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) (removeDuplicates e)) >> exitFailure
+    where
+        l = lines s
 
 getMain :: SPL -> Maybe FunDecl
 getMain [] = Nothing
-getMain (DeclFunDecl f@(FunDecl n _ _ _ _ _) : ds)
+getMain (DeclFunDecl f@(FunDecl _ n _ _ _ _ _) : ds)
   | n == "main" = Just f
   | otherwise = getMain ds
+getMain (DeclVarDecl _ : ds) = getMain ds
 
 replaceTab :: Char -> String
 replaceTab '\t' = "    "

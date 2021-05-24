@@ -1,15 +1,56 @@
-var x = 1;
-var y = 2;
+var tuple = (0, 1);
+var list = 3 : 7 : 11 : [];
 
+var value1 = 4 + value2;
+var value2 = 4;
+
+isPrime(n) {
+    var i = 2;
+    if(n == 2) {
+        return True;
+    }
+    if(n < 2) {
+        return False;
+    }
+    while(i < n) {
+        if(n % i == 0) {
+            return False;
+        }
+        i = i + 1;
+    }
+    return True;
+}
+
+polySix(x) {
+    return 6;
+}
+
+monomorphic(x, y) {
+    return x == y;
+}
+
+// Should print 012345678
 main() {
-    var cond = True;
-    while(cond) {
-        x = x + 1;
-        cond = False;
+    var i = 0;
+    print(tuple.fst); // 0
+    print(tuple.snd); // 1
+    while(i < 2) {
+        i = i + 1;
+        tuple.fst = tuple.fst + tuple.snd;
     }
-    if(!cond) {
-        var z = x - y;
+    print(tuple.fst); // 2
+    print(list.hd); // 3
+    list = list.tl;
+    print(list.hd / 2 + 1); // 4
+    list = list.tl;
+    if(isPrime(list.hd)) {
+        print(list.hd / 2); // 5
     } else {
-        var z = x + y;
+        print(0);
     }
+    print(polySix(True)); // 6
+    if(monomorphic(3, 3)) {
+        print(7); // 7
+    }
+    print(value1); // 8
 }

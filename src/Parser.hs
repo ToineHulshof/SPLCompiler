@@ -61,7 +61,7 @@ posE p (Exp t o e1 e2 _) = Exp t o e1 e2 p
 posE p (ExpOp1 o e _) = ExpOp1 o e p
 posE p (ExpTuple e _) = ExpTuple e p
 posE p (ExpBrackets e _) = ExpBrackets e p
-posE p (ExpField t s fs _) = ExpField t s fs p
+posE p (ExpField s fs _) = ExpField s fs p
 posE p (ExpInt i _) = ExpInt i p
 posE p (ExpChar c _) = ExpChar c p
 posE p (ExpBool b _) = ExpBool b p
@@ -129,7 +129,7 @@ declFunDeclP :: Parser Decl
 declFunDeclP = DeclFunDecl <$> funDeclP
 
 funDeclP :: Parser FunDecl
-funDeclP = (\(a, f) b c d e -> FunDecl a b c d e f) <$> pp' idP <*> (c '(' *> sepBy (optP ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
+funDeclP = (\(a, f) b c d e -> FunDecl [] a b c d e f) <$> pp' idP <*> (c '(' *> sepBy (optP ',') idP <* c' ')') <*> funTypeP <*> (c '{' *> many (w varDeclP)) <*> (some (w stmtP) <* c' '}')
 
 adjustPosition :: Position -> Char -> Position
 adjustPosition p '\n' = p
@@ -216,7 +216,7 @@ expNOp2P :: Parser Exp
 expNOp2P = expNOp2P' <|> (ExpError <$> errorP (`elem` "\n;") False)
 
 expNOp2P' :: Parser Exp 
-expNOp2P' = ppE expListP <|> ppE expStringP <|> pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField Nothing <$> idP <*> fieldP) <|> expCharP
+expNOp2P' = ppE expListP <|> ppE expStringP <|> pp (ExpInt <$> intP) <|> expBoolP <|> pp (ExpOp1 <$> op1P <*> expP) <|> pp (ExpFunCall <$> funCallP) <|> pp (ExpField <$> idP <*> fieldP) <|> expCharP
 
 expOp2P :: Bool -> Parser Exp
 expOp2P b = ppE (Parser $ expBP b 0)
@@ -262,7 +262,13 @@ expBoolP :: Parser Exp
 expBoolP = pp $ ExpBool True <$ stringP "True" <|> ExpBool False <$ stringP "False"
 
 expCharP :: Parser Exp
-expCharP = pp $ ExpChar <$> (charP '\'' *> satisfy (const True) True <* charP '\'')
+expCharP = pp $ ExpChar <$> (charP '\'' *> (escapedCharP <|> anyCharP) <* charP '\'')
+
+escapedCharP :: Parser Char
+escapedCharP = charP '\\' *> anyCharP
+
+anyCharP :: Parser Char
+anyCharP = satisfy (const True) True
 
 expTupleP :: Parser Exp
 expTupleP = pp $ curry ExpTuple <$> (c '(' *> expP <* c ',') <*> expP <* c' ')'
@@ -271,14 +277,10 @@ expBracketsP :: Parser Exp
 expBracketsP = pp $ ExpBrackets <$> (c '(' *> expP <* c' ')')
 
 expStringP :: Parser Exp
-expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> spanP (/='"') <* c' '"')
-
-cycleList :: [a] -> [a]
-cycleList [] = []
-cycleList l = last l : tail l
+expStringP = (\p -> foldr (foldCons . (`ExpChar` p)) (ExpEmptyList p)) <$> pP <*> (c '"' *> many (escapedCharP <|> satisfy (/='"') True) <* c' '"')
 
 expListP :: Parser Exp
-expListP = (\(es, p) -> let ps = map expToP es in foldr foldCons (ExpEmptyList p) (zipWith posE (cycleList ps) es)) <$> pp' (c '[' *> sepBy (c ',') exp'P <* c' ']')
+expListP = (\(es, p) -> let ps = map expToP es in foldr foldCons (ExpEmptyList (fromMaybe p (listToMaybe ps))) (zipWith posE ps es)) <$> pp' (c '[' *> sepBy (c ',') exp'P <* c' ']')
 
 foldCons :: Exp -> Exp -> Exp 
 foldCons e1 e2 = Exp Nothing Cons e1 e2 (expToP e1)
@@ -288,7 +290,7 @@ expToP (Exp _ _ _ _ p) = p
 expToP (ExpOp1 _ _ p) = p
 expToP (ExpTuple _ p) = p
 expToP (ExpBrackets _ p) = p
-expToP (ExpField _ _ _ p) = p
+expToP (ExpField _ _ p) = p
 expToP (ExpInt _ p) = p
 expToP (ExpChar _ p) = p
 expToP (ExpBool _ p) = p
@@ -399,7 +401,7 @@ extractErrors = concatMap erDecl
 
 erDecl :: Decl -> [Error]
 erDecl (DeclVarDecl (VarDecl _ _ e)) = erExp e
-erDecl (DeclFunDecl (FunDecl _ _ _ vs stmts _)) = concatMap (erDecl . DeclVarDecl) vs ++ erStmts stmts
+erDecl (DeclFunDecl (FunDecl _ _ _ _ vs stmts _)) = concatMap (erDecl . DeclVarDecl) vs ++ erStmts stmts
 erDecl (DeclError s) = [Error ParseError (nes "Unknown declaration") (Just s)]
 
 erExp :: Exp -> [Error]

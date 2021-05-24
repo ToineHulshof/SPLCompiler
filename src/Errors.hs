@@ -3,6 +3,7 @@ module Errors where
 import Data.Array
 import Data.List.NonEmpty ( NonEmpty ((:|)) )
 import Data.List ( sort )
+import Debug.Trace ( trace )
 
 type Position = (Int, Int)
 type Positioned a = (Position, a)
@@ -43,6 +44,7 @@ removePath f = reverse $ takeWhile (/= '/') (reverse f)
 
 removeSpace :: String -> String
 removeSpace [] = []
+removeSpace "\n" = []
 removeSpace ('\n' : s) = removeSpace (' ' : s)
 removeSpace ('\t' : s) = removeSpace (' ' : s)
 removeSpace (' ' : ' ' : s) = removeSpace (' ' : s)

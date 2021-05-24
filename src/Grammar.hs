@@ -51,7 +51,7 @@ data VarDecl
   deriving (Show)
 
 data FunDecl
-  = FunDecl String [String] (Maybe Type) [VarDecl] [Stmt] P
+  = FunDecl [Int] String [String] (Maybe Type) [VarDecl] [Stmt] P
   deriving (Show)
 
 data Condition = Eq | Ord deriving (Eq, Ord, Show)
@@ -65,12 +65,7 @@ data Type
   | Void
 
 instance Eq Type where
-  TypeBasic b1 == TypeBasic b2 = b1 == b2
-  TypeTuple l1 r1 == TypeTuple l2 r2 = l1 == l2 && r1 == r2
-  TypeList t1 == TypeList t2 = t1 == t2
-  TypeID {} == TypeID {} = True
-  TypeFun l1 r1 == TypeFun l2 r2 = l1 == l2 && r1 == r2
-  Void == Void = True
+  TypeID _ a == TypeID _ b = a == b
   _ == _ = False
 
 instance Show Type where
@@ -109,7 +104,7 @@ data Exp
   | ExpOp1 Op1 Exp P
   | ExpTuple (Exp, Exp) P
   | ExpBrackets Exp P
-  | ExpField (Maybe Type) String [Field] P
+  | ExpField String [Field] P
   | ExpInt Integer P
   | ExpChar Char P
   | ExpBool Bool P

@@ -141,10 +141,10 @@ setFunName n = do
   e <- get
   put e {funName = n}
 
-setGlobalMap :: M.Map String Int -> CG ()
-setGlobalMap m = do
+addGlobal :: String -> Int -> CG ()
+addGlobal s i = do
   e <- get
-  put e {globalMap = m}
+  put e {globalMap = M.insert s i (globalMap e)}
 
 setLocalMap :: M.Map String Int -> CG ()
 setLocalMap m = do
@@ -182,28 +182,29 @@ genCodeLLVM f main spl = do
 
 genSPL :: FunDecl -> SPL -> CG [Instruction]
 genSPL main ds = do
-  let vardecls = [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
-  (i1, m) <- genGlobalVars 1 vardecls
-  setGlobalMap m
-  i2 <- genFunDecl main
-  functions <- gets functions
-  return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i2 ++ concat functions
+    let vardecls = [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
+    i1 <- genGlobalVars 1 vardecls
+    i2 <- genFunDecl main
+    functions <- gets functions
+    return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i2 ++ concat functions
 
-genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
-genGlobalVars _ [] = return ([], M.empty)
+genGlobalVars :: Int -> [VarDecl] -> CG [Instruction]
+genGlobalVars _ [] = return []
 genGlobalVars i ((VarDecl _ n e) : xs) = do
+  addGlobal n i
   i1 <- genExp e
-  (i2, m) <- genGlobalVars (i + 1) xs
-  return (i1 ++ i2, M.singleton n i `M.union` m)
+  i2 <- genGlobalVars (i + 1) xs
+  return (i1 ++ i2)
 
 genFunDecl :: FunDecl -> CG [Instruction]
-genFunDecl (FunDecl n args (Just t) vars stmts _) = do
+genFunDecl (FunDecl _ n args (Just t) vars stmts _) = do
+  localMapTemp <- gets localMap
   m <- argsMap (-1 - length args) args
   setLocalMap m
   i1 <- genLocalVars 1 args vars
   setFunName n
   i2 <- genStmts stmts
-  setLocalMap M.empty
+  setLocalMap localMapTemp
   return $ Label n : Link (length vars) : i1 ++ i2 ++ [Label $ n ++ "End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
 
 argsMap :: Int -> [String] -> CG (M.Map String Int)
@@ -245,7 +246,7 @@ genStmt (StmtField n [] e _) = do
     Nothing -> case M.lookup n gm of
       Nothing -> error ""
       Just i -> do
-        return $ i1 ++ [LoadConstant i, StoreAddress 0]
+        return $ i1 ++ [LoadRegister GlobalOffset, StoreAddress i]
     Just i -> return $ i1 ++ [StoreLocal i]
 genStmt (StmtField n fs e _) = do
   lm <- gets localMap
@@ -279,16 +280,21 @@ genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do
   return $ i1 ++ i2 ++ printString "\n"
 genFunCall (FunCall (Just (TypeFun (TypeList _) _)) "isEmpty" [arg] _) = (++ [LoadConstant 0, EqualsI]) <$> genExp arg
 genFunCall (FunCall (Just t') n args _) = do
-  ds <- gets spl
-  let f@(FunDecl _ _ (Just t) _ _ _) = fromJust $ findFunction ds n
-  let name = n ++ join "-" (map typeName (init (funTypeToList t')))
-  labels <- gets labels
-  when (name `notElem` labels) $ genPolyFunDecl f t' name
-  funCallInstructions name args
+    ds <- gets spl
+    let f@(FunDecl oa _ _ (Just t) _ _ _) = fromJust $ findFunction ds n
+    let argTypes = funTypeToList t'
+    let oas = map (argTypes !!) oa
+    let name = funLabel n oas
+    labels <- gets labels
+    when (name `notElem` labels) $ genFunCall' (null oa) f t' name
+    funCallInstructions name args
+
+isOverLoaded :: FunDecl -> Maybe [Int]
+isOverLoaded f = Nothing
 
 -- Could also be a hash function
-funLabel :: String -> Type -> String
-funLabel = undefined
+funLabel :: String -> [Type] -> String
+funLabel n t = n ++ join "-" (map typeName t)
 
 monoStmts :: Subst -> [Stmt] -> [Stmt]
 monoStmts s = map $ monoStmt s
@@ -312,15 +318,13 @@ monoExp s (Exp t o e1 e2 p) = Exp (apply s t) o (monoExp s e1) (monoExp s e2) p
 monoExp s (ExpOp1 o e p) = ExpOp1 o (monoExp s e) p
 monoExp s (ExpTuple (e1, e2) p) = ExpTuple (monoExp s e1, monoExp s e2) p
 monoExp s (ExpBrackets e p) = ExpBrackets (monoExp s e) p
-monoExp s (ExpField t n fs p) = ExpField (apply s t) n fs p
 monoExp s (ExpFunCall f p) = ExpFunCall (monoFunCall s f) p
 monoExp _ e = e
 
-genPolyFunDecl :: FunDecl -> Type -> String -> CG ()
-genPolyFunDecl f@(FunDecl n args (Just ft) vars stmts p) t l = do
-  let s = subst ft t
+genFunCall' :: Bool -> FunDecl -> Type -> String -> CG ()
+genFunCall' b f@(FunDecl o n args (Just ft) vars stmts p) t l = do
   addLabel l
-  let f' = FunDecl l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p
+  let f' = if b then f else let s = subst ft t in FunDecl o l args (Just t) (map (monoVarDecl s) vars) (monoStmts s stmts) p
   is <- genFunDecl f'
   addFunction is
 
@@ -329,17 +333,17 @@ funCallInstructions n args = (++ [BranchSubroutine n, AdjustStack (- length args
 
 findFunction :: [Decl] -> String -> Maybe FunDecl
 findFunction [] _ = Nothing
-findFunction ((DeclFunDecl f@(FunDecl n _ _ _ _ _)) : ds) s
+findFunction ((DeclFunDecl f@(FunDecl _ n _ _ _ _ _)) : ds) s
   | n == s = Just f
   | otherwise = findFunction ds s
 findFunction (d : ds) s = findFunction ds s
 
 printString :: String -> [Instruction]
-printString = concatMap (\c -> [LoadConstant (ord c), Trap Char])
+printString = concatMap (\c -> [LoadConstant (fromEnum c), Trap Char])
 
 genPrint :: Type -> CG [Instruction]
-genPrint (TypeBasic IntType) = return [Trap Codegen.Int]
-genPrint (TypeBasic CharType) = return $ printString "'" ++ [Trap Char] ++ printString "'"
+genPrint (TypeBasic IntType) = return $ printString "\x1b[36m" ++ [Trap Int] ++ printString "\x1b[0m"
+genPrint (TypeBasic CharType) = return $ printString "\x1b[35m'" ++ [Trap Char] ++ printString "'\x1b[0m"
 genPrint (TypeID _ _) = return []
 genPrint t = do
   let name = "print" ++ typeName t
@@ -349,7 +353,7 @@ genPrint t = do
 
 genPrint' :: String -> Type -> CG ()
 genPrint' _ (TypeBasic BoolType) = do
-  let f = [Label "printBool", Link 0, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "False" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "True" ++ [Label "printEnd", Unlink, Return]
+  let f = [Label "printBool", Link 0, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "\x1b[34mFalse\x1b[0m" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "\x1b[34mTrue\x1b[0m" ++ [Label "printEnd", Unlink, Return]
   addFunction f
   addLabel "printBool"
 genPrint' name (TypeTuple t1 t2) = do
@@ -360,7 +364,7 @@ genPrint' name (TypeTuple t1 t2) = do
   addLabel name
 genPrint' name (TypeList (TypeBasic CharType)) = do
   i <- show <$> new
-  let f = [Label name, Link 0] ++ printString "\"" ++ [Label $ "While" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile" ++ i, LoadLocal (-2), LoadHeap 0, Trap Char, LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then" ++ i, BranchAlways $ "EndIf" ++ i, Label $ "Then" ++ i] ++ [Label $ "EndIf" ++ i, BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i] ++ printString "\"" ++ [Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 0] ++ printString "\x1b[31m\"" ++ [Label $ "While" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile" ++ i, LoadLocal (-2), LoadHeap 0, Trap Char, LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then" ++ i, BranchAlways $ "EndIf" ++ i, Label $ "Then" ++ i] ++ [Label $ "EndIf" ++ i, BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i] ++ printString "\"\x1b[0m" ++ [Unlink, StoreStack (-1), Return]
   addFunction f
   addLabel name
 genPrint' name (TypeList t) = do
@@ -380,8 +384,7 @@ typeName (TypeList t) = "List" ++ typeName t
 typeName _ = "Int"
 
 genEq :: Type -> CG [Instruction]
-genEq (TypeBasic _) = return []
-genEq (TypeID _ _) = return [EqualsI]
+genEq (TypeBasic _) = return [EqualsI]
 genEq t = do
   let name = "equal" ++ typeName t
   labels <- gets labels
@@ -406,15 +409,15 @@ genExp :: Exp -> CG [Instruction]
 genExp (Exp (Just t) o e1 e2 _) = do
   i1 <- genExp e1
   i2 <- genExp e2
-  let i3 = genOp2 o
+  i3 <- genOp2 o
   if o == Cons
-    then return $ i2 ++ i1 ++ [i3]
+    then return $ i2 ++ i1 ++ i3
     else
       if o `elem` [Equals, Neq]
         then do
           i4 <- genEq t
           return $ i1 ++ i2 ++ i4 ++ [NotI | o /= Equals]
-        else return $ i1 ++ i2 ++ [i3]
+        else return $ i1 ++ i2 ++ i3
 genExp (ExpOp1 o e _) = do
   i <- genExp e
   return $ i ++ [genOp1 o]
@@ -440,21 +443,26 @@ genExp (ExpTuple (e1, e2) _) = do
   return $ i1 ++ i2 ++ [StoreMultipleHeap 2]
 genExp ExpEmptyList {} = return [LoadConstant 0]
 
-genOp2 :: Op2 -> Instruction
-genOp2 Plus = Add
-genOp2 Minus = Subtract
-genOp2 Product = Multiply
-genOp2 Division = Divide
-genOp2 Modulo = Mod
-genOp2 Equals = EqualsI
-genOp2 Smaller = Less
-genOp2 Greater = GreaterI
-genOp2 Leq = LessEqual
-genOp2 Geq = GreaterEqual
-genOp2 Neq = NotEquals
-genOp2 And = AndI
-genOp2 Or = OrI
-genOp2 Cons = StoreMultipleHeap 2
+genOp2 :: Op2 -> CG [Instruction]
+genOp2 Plus = return [Add]
+genOp2 Minus = return [Subtract]
+genOp2 Product = return [Multiply]
+genOp2 Division = do
+  labels <- gets labels
+  when ("divide0" `notElem` labels) $ do
+    addFunction $ [Label "divide0"] ++ printString "\x1b[1m\x1b[31merror:\x1b[0m\x1b[1m divide by 0\x1b[0m\n" ++ [Halt]
+    addLabel "divide0"
+  return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "divide0", Divide]
+genOp2 Modulo = return [Mod]
+genOp2 Equals = return [EqualsI]
+genOp2 Smaller = return [Less]
+genOp2 Greater = return [GreaterI]
+genOp2 Leq = return [LessEqual]
+genOp2 Geq = return [GreaterEqual]
+genOp2 Neq = return [NotEquals]
+genOp2 And = return [AndI]
+genOp2 Or = return [OrI]
+genOp2 Cons = return [StoreMultipleHeap 2]
 
 genOp1 :: Op1 -> Instruction
 genOp1 Min = Negation
