@@ -452,7 +452,7 @@ genOp2 Division = do
   when ("divide0" `notElem` labels) $ do
     addFunction $ [Label "divide0"] ++ printString "\x1b[1m\x1b[31merror:\x1b[0m\x1b[1m divide by 0\x1b[0m\n" ++ [Halt]
     addLabel "divide0"
-  return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "divide0", AdjustStack (-1), Divide]
+  return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "divide0", Divide]
 genOp2 Modulo = return [Mod]
 genOp2 Equals = return [EqualsI]
 genOp2 Smaller = return [Less]
