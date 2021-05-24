@@ -214,10 +214,10 @@ mgu' e p t1 t2 ot1 ot2 = typeError ot1 ot2
 typeError :: RecError -> NonEmpty Type -> TI Subst
 typeError ((p@(_, a), h1) :| t1) (h2 :| t2) = do
     info <- gets info
-    tell [Error TypeError (("\x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2 ++ info ) (Just p)] >> return nullSubst
+    tell [Error TypeError (("\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m has type " ++ showType True (varsMap h1) h1 ++ "\x1b[1m, but is expected to have type " ++ showType True (varsMap h2) h2 ++ "\x1b[1m") :| zipWith extraError t1 t2 ++ info ) (Just p)] >> return nullSubst
     where 
         extraError :: (P, Type) -> Type -> String
-        extraError ((_, a), t1) t2 = "\x1b[1m-> Couldn't match expected type " ++ showType True (varsMap t2) t2 ++ "\x1b[0m\x1b[1m with actual type " ++ showType True (varsMap t1) t1 ++ "\x1b[1m in the expression \x1b[0m\x1b[1m\x1b[33m" ++ removeSpace a ++ "\x1b[0m\x1b[1m"
+        extraError ((_, a), t1) t2 = "\x1b[1m-> Couldn't match expected type " ++ showType True (varsMap t2) t2 ++ "\x1b[0m\x1b[1m with actual type " ++ showType True (varsMap t1) t1 ++ "\x1b[1m in the expression \x1b[0m\x1b[1m\x1b[33m" ++ a ++ "\x1b[0m\x1b[1m"
 
 condition :: Type -> String -> (Maybe Condition, Bool)
 condition (TypeID c n) s = (c, n == s)
