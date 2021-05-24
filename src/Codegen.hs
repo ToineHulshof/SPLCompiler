@@ -11,6 +11,12 @@ import Extension
 import Grammar
 import Types (Subst, apply, funTypeToList, subst)
 
+data RuntimeIssue = RuntimeError | RuntimeWarning
+
+instance Show RuntimeIssue where
+  show RuntimeError = "\x1b[1m\x1b[31merror:\x1b[0m"
+  show RuntimeWarning = "\x1b[1m\x1b[33mwarning:\x1b[0m"
+
 data Instruction
   = LoadConstant Int
   | BranchAlways String
@@ -252,13 +258,13 @@ genStmt (StmtField n fs e _) = do
   lm <- gets localMap
   gm <- gets globalMap
   i1 <- genExp e
-  let i2 = map (LoadHeap . genField) (init fs)
+  i2 <- concat <$> mapM genField fs
   case M.lookup n lm of
     Nothing -> case M.lookup n gm of
       Nothing -> error ""
       Just i -> do
-        return $ i1 ++ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i2 ++ [StoreAddress $ genField (last fs)]
-    Just i -> return $ i1 ++ [LoadLocal i] ++ i2 ++ [StoreAddress $ genField (last fs)]
+        return $ i1 ++ [LoadRegister GlobalOffset, LoadAddress (Left i)] ++ i2 ++ [StoreAddress $ fieldToInt (last fs)]
+    Just i -> return $ i1 ++ [LoadLocal i] ++ init i2 ++ [StoreAddress $ fieldToInt (last fs)]
 genStmt (StmtReturn Nothing _) = do
   funName <- gets funName
   return [BranchAlways $ funName ++ "End"]
@@ -267,11 +273,24 @@ genStmt (StmtReturn (Just e) _) = do
   funName <- gets funName
   return $ i1 ++ [StoreRegister ReturnRegister, BranchAlways $ funName ++ "End"]
 
-genField :: Field -> Int
-genField (First _) = -1
-genField (Second _) = 0
-genField (Head _) = 0
-genField (Tail _) = -1
+fieldToInt :: Field -> Int
+fieldToInt (First _) = -1
+fieldToInt (Second _) = 0
+fieldToInt (Head _) = 0
+fieldToInt (Tail _) = -1
+
+genField :: Field -> CG [Instruction]
+genField (First _) = return [LoadHeap (-1)]
+genField (Second _) = return [LoadHeap 0]
+genField (Head _) = runtimeIssue RuntimeError "empty" "Cannot take head of empty list" >> return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "empty", LoadHeap 0]
+genField (Tail _) = runtimeIssue RuntimeError "empty" "Cannot take tail of empty list" >> return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "empty", LoadHeap (-1)]
+
+runtimeIssue :: RuntimeIssue -> String -> String -> CG ()
+runtimeIssue i l e = do
+  labels <- gets labels
+  when (l `notElem` labels) $ do
+    addFunction $ [Label l] ++ printString (show i ++ "\x1b[1m " ++ e ++ "\x1b[0m\n") ++ [Halt]
+    addLabel l
 
 genFunCall :: FunCall -> CG [Instruction]
 genFunCall (FunCall (Just (TypeFun t Void)) "print" [arg] _) = do
@@ -424,7 +443,7 @@ genExp (ExpOp1 o e _) = do
 genExp (ExpBrackets e _) = genExp e
 genExp (ExpFunCall f _) = genFunCall f
 genExp (ExpField n fs _) = do
-    let i1 = map (LoadHeap . genField) fs
+    i1 <- concat <$> mapM genField fs
     lm <- gets localMap
     gm <- gets globalMap
     case M.lookup n lm of
@@ -444,15 +463,10 @@ genExp (ExpTuple (e1, e2) _) = do
 genExp ExpEmptyList {} = return [LoadConstant 0]
 
 genOp2 :: Op2 -> CG [Instruction]
-genOp2 Plus = return [Add]
-genOp2 Minus = return [Subtract]
-genOp2 Product = return [Multiply]
-genOp2 Division = do
-  labels <- gets labels
-  when ("divide0" `notElem` labels) $ do
-    addFunction $ [Label "divide0"] ++ printString "\x1b[1m\x1b[31merror:\x1b[0m\x1b[1m divide by 0\x1b[0m\n" ++ [Halt]
-    addLabel "divide0"
-  return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "divide0", Divide]
+genOp2 Plus = runtimeIssue RuntimeWarning "overflowAdd" "integer overflow" >>  return [Add]
+genOp2 Minus = runtimeIssue RuntimeWarning "underflow" "integer underflow" >> return [Subtract]
+genOp2 Product = runtimeIssue RuntimeWarning "overflowMult" "integer underflow" >> return [Multiply]
+genOp2 Division = runtimeIssue RuntimeError "divide0" "divide by 0" >> return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "divide0", Divide]
 genOp2 Modulo = return [Mod]
 genOp2 Equals = return [EqualsI]
 genOp2 Smaller = return [Less]
