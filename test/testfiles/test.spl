@@ -3,8 +3,6 @@ f (x, y) :: Bool Char -> Int {
 }
 
 main () {
-    var x = 2;
-    var y = 'a';
-    var z = True;
+    var x = f(True, 'a');
     return;
 }

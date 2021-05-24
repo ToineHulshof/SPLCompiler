@@ -8,8 +8,9 @@ import Grammar
 import Types (Subst, apply, funTypeToList, subst)
 
 data RegType = Pointer | Value
+  deriving (Show)
 
-data GenEnvLLVM = GenEnvLLVM {uniqueInt :: Int, regCount :: Int, regMap :: M.Map Int RegType, llvmlocalmap :: M.Map String Int, retType :: Type}
+data GenEnvLLVM = GenEnvLLVM {uniqueInt :: Int, regCount :: Int, regMap :: M.Map Int (RegType, Type), llvmlocalmap :: M.Map String Int, retType :: Type}
 
 type CGLL a = StateT GenEnvLLVM IO a
 
@@ -33,16 +34,16 @@ setRegCount i = do
   e <- get
   put e {regCount = i}
 
-setRegMap :: M.Map Int RegType -> CGLL ()
+setRegMap :: M.Map Int (RegType, Type) -> CGLL ()
 setRegMap m = do
   e <- get
   put e {regMap = m}
 
-insertRegMap :: Int -> RegType -> CGLL ()
-insertRegMap i rt = do
+insertRegMap :: Int -> RegType -> Type -> CGLL ()
+insertRegMap i rt t = do
   e <- get
   let m = regMap e
-  put e {regMap = M.insert i rt m}
+  put e {regMap = M.insert i (rt, t) m}
 
 setllvmlocalmap :: M.Map String Int -> CGLL ()
 setllvmlocalmap m = do
@@ -60,8 +61,11 @@ setReturnType t = do
   e <- get
   put e {retType = t}
 
-genStoreInst :: String -> String -> Int -> String -- where val can be either a value of an address
-genStoreInst t val toBeStored = "store " ++ t ++ " " ++ val ++ ", " ++ t ++ "* %" ++ show toBeStored
+genStoreValueInst :: String -> String -> Int -> String
+genStoreValueInst t val toBeStored = "store " ++ t ++ " " ++ val ++ ", " ++ t ++ "* %" ++ show toBeStored
+
+genStoreAddrInst :: String -> Int -> Int -> String
+genStoreAddrInst t addr toBeStored = "store " ++ t ++ " %" ++ show addr ++ ", " ++ t ++ "* %" ++ show toBeStored
 
 genLoadInst :: String -> Int -> Int -> String
 genLoadInst t loadedFrom loadedTo = "%" ++ show loadedTo ++ " = load " ++ t ++ ", " ++ t ++ "* %" ++ show loadedFrom
@@ -111,7 +115,7 @@ putArgsInMap [] _ = return ()
 putArgsInMap (x : xs) (t : ts) = do
   i <- newReg
   insertllvmlocalmap x i
-  insertRegMap i Value
+  insertRegMap i Value t
   putArgsInMap xs ts
   return ()
 
@@ -126,6 +130,13 @@ typeToStr (TypeBasic BoolType) = "i1"
 typeToStr Void = "void"
 typeToStr _ = ""
 
+strToType :: String -> Type
+strToType "i32" = TypeBasic IntType
+strToType "i8" = TypeBasic CharType
+strToType "i1" = TypeBasic BoolType
+strToType "Void" = Void
+strToType _ = undefined
+
 putCommas :: [String] -> String
 putCommas [] = ""
 putCommas [x] = x
@@ -139,31 +150,57 @@ strFunName name t =
       args = putCommas argNames
    in "define " ++ retName ++ " @" ++ name ++ "(" ++ args ++ ") {"
 
-allocateBasic :: String -> String -> CGLL ([String], Int) -- lines of code, the int address where it is stored
-allocateBasic val typestr = do
+allocateBasicValue :: String -> String -> CGLL ([String], Int) -- lines of code, the int address where it is stored
+allocateBasicValue val typestr = do
   i <- newReg
   let code =
         [ genAllocaInst typestr i,
-          genStoreInst typestr val i
+          genStoreValueInst typestr val i
         ]
-  insertRegMap i Pointer
+  insertRegMap i Pointer (strToType typestr)
   return (code, i)
 
-allocateComplex :: [String] -> String -> String -> CGLL ([String], Int)
-allocateComplex lines addr typestr = do
+allocateAddr :: Int -> String -> CGLL ([String], Int) -- lines of code, the int address where it is stored
+allocateAddr addr typestr = do
+  i <- newReg
+  let code =
+        [ genAllocaInst typestr i,
+          genStoreAddrInst typestr addr i
+        ]
+  insertRegMap i Pointer (strToType typestr)
+  return (code, i)
+
+allocateLines :: [String] -> Int -> String -> CGLL ([String], Int)
+allocateLines lines addr typestr = do
   i <- newReg
   let code =
         lines
           ++ [ genAllocaInst typestr i,
-               genStoreInst typestr addr i
+               genStoreAddrInst typestr addr i
              ]
-  insertRegMap i Pointer
+  insertRegMap i Pointer (strToType typestr)
   return (code, i)
 
--- String is the type, int is the fresh address
+-- String is the type, int is here the value is stored
 allocateExp :: ExpRet -> String -> CGLL ([String], Int)
-allocateExp (Basic val) = allocateBasic val
-allocateExp (Lines cmds addr) = allocateComplex cmds addr
+allocateExp (BasicValue val) = allocateBasicValue val
+allocateExp (Addr addr) = allocateAddr addr
+allocateExp (Lines cmds addr) = allocateLines cmds addr
+
+-- Gets the register to transform and returns the code and the new register
+codeAddrToValue :: Int -> CGLL ([String], Int)
+codeAddrToValue reg = do
+  rmap <- gets regMap
+  let (rt, t) = case M.lookup reg rmap of
+        (Just (rt, t)) -> (rt, t)
+        Nothing -> error ""
+  (code, addr) <- case rt of
+    Pointer -> do
+      i <- newReg
+      let inst = genLoadInst (typeToStr t) reg i
+      return (inst, i)
+    Value -> return ("", reg)
+  return ([code], addr)
 
 genLocalVarsLLVM :: [VarDecl] -> CGLL [String]
 genLocalVarsLLVM [] = return []
@@ -176,7 +213,8 @@ genLocalVarsLLVM ((VarDecl (Just t) name exp) : xs) = do
   others <- genLocalVarsLLVM xs
   return (code ++ others)
 
-data ExpRet = Basic String | Lines [String] String
+data ExpRet = BasicValue String | Addr Int | Lines [String] Int
+  deriving (Show)
 
 genStmtsLLVM :: [Stmt] -> CGLL [String]
 genStmtsLLVM [] = return []
@@ -192,10 +230,14 @@ genStmtLLVM (StmtReturn me _) =
     (Just e) -> do
       expStr <- genExpLLVM e
       retType <- gets retType
-      let code = case expStr of
-            (Basic str) -> ["ret " ++ typeToStr retType ++ " " ++ str]
-            (Lines strs str) -> strs ++ ["ret " ++ typeToStr retType ++ " " ++ str]
-      return code
+      case expStr of
+        (BasicValue val) -> return ["ret " ++ typeToStr retType ++ " " ++ val]
+        (Addr addr) -> do
+          (cd, reg) <- codeAddrToValue addr
+          return $ cd ++ ["ret " ++ typeToStr retType ++ " %" ++ show reg]
+        (Lines strs addr) -> do
+          (cd, reg) <- codeAddrToValue addr
+          return $ strs ++ cd ++ ["ret " ++ typeToStr retType ++ " %" ++ show reg]
     Nothing -> return ["ret void"]
 genStmtLLVM _ = undefined
 
@@ -210,36 +252,44 @@ genExpLLVM :: Exp -> CGLL ExpRet
 --         )
 --   return (Lines code (show (head addr)), newi)
 -- genExpLLVM (ExpField (Just t) name fs _) c = undefined
-genExpLLVM (ExpInt i _) = return (Basic (show i))
-genExpLLVM (ExpChar char _) = return (Basic (show (ord char)))
-genExpLLVM (ExpBool b _) = return (Basic bool) where bool = if b then "true" else "false"
--- genExpLLVM (ExpFunCall fc _) c = do
---   (code, newi) <- genFunCallLLVM fc c
---   return (Lines code (show (newi -1)), newi)
+genExpLLVM (ExpInt i _) = return (BasicValue (show i))
+genExpLLVM (ExpChar char _) = return (BasicValue (show (ord char)))
+genExpLLVM (ExpBool b _) = return (BasicValue bool) where bool = if b then "true" else "false"
+genExpLLVM (ExpFunCall fc _) = do
+  (code, addr) <- genFunCallLLVM fc
+  return $ Lines code addr
 genExpLLVM _ = undefined
 
--- [String] is the complete code, [Int] are the addresses for the exps, Int is the new fresh int
--- genExpsLLVM :: [Exp] -> [Type] -> Int -> CGLL ([String], [String], Int)
--- genExpsLLVM [] [] i = return ([], [], i)
--- genExpsLLVM (e : es) (t : ts) i = do
---   (expstr, newi) <- genExpLLVM e i
---   let (code, addr, newi') = allocateExp expstr (typeToStr t) newi
---   (otherCode, otherAddr, newi) <- genExpsLLVM es ts newi'
---   return (code ++ otherCode, show addr : otherAddr, newi)
+-- Generates all necessary evaluation of expressions for the function call
+-- [String] is the complete code, [Int] are the addresses for the exps
+genExpsLLVM :: [Exp] -> [Type] -> CGLL ([String], [Int])
+genExpsLLVM [] [] = return ([], [])
+genExpsLLVM (e : es) (t : ts) = do
+  expstr <- genExpLLVM e
+  (code, addr) <- allocateExp expstr (typeToStr t)
+  (otherCode, otherAddr) <- genExpsLLVM es ts
+  return (code ++ otherCode, addr : otherAddr)
 
--- generateLoadCode :: [String] -> [Type] -> Int -> ([String], [Int], Int)
--- generateLoadCode [] [] i = ([], [], i)
--- generateLoadCode (addr : addrs) (t : ts) i =
---   let code = ["%" ++ show i ++ " = load " ++ typeToStr t ++ ", " ++ typeToStr t ++ "* %" ++ addr]
---       (othercode, newpnts, newi) = generateLoadCode addrs ts (i + 1)
---    in (code ++ othercode, i : newpnts, newi)
+-- Generates all necessary load instructions for a function call
+generateLoadCode :: [Int] -> CGLL ([String], [Int])
+generateLoadCode [] = return ([], [])
+generateLoadCode (addr : addrs) = do
+  i <- newReg
+  rmap <- gets regMap
+  let (rt, t) = case M.lookup addr rmap of
+        (Just (rt, t)) -> (rt, t)
+        Nothing -> error ""
+  let code = trace (show rmap) genLoadInst (typeToStr t) addr i
+  (othercode, newpnts) <- generateLoadCode addrs
+  return (code : othercode, i : newpnts)
 
--- genFunCallLLVM :: FunCall -> Int -> CGLL ([String], Int)
--- genFunCallLLVM (FunCall (Just t) name exps _) i = do
---   let retType = getRetFromFunType t
---   let argTypes = init (funTypeToList t)
---   (argcode, addrs, newi) <- genExpsLLVM exps argTypes i
---   let (loadcode, pnts, newi') = generateLoadCode addrs argTypes newi
---   let code =
---         argcode ++ loadcode ++ ["%" ++ show newi' ++ " = call " ++ typeToStr retType ++ " @" ++ name ++ "(" ++ putCommas (zipWith (\t p -> typeToStr t ++ " %" ++ show p) argTypes pnts) ++ ")"]
---   return (code, newi' + 1)
+genFunCallLLVM :: FunCall -> CGLL ([String], Int) -- Int is the place where the result is stored
+genFunCallLLVM (FunCall (Just t) name exps _) = do
+  let retType = getRetFromFunType t
+  let argTypes = init (funTypeToList t)
+  (argcode, addrs) <- genExpsLLVM exps argTypes
+  (loadcode, pnts) <- generateLoadCode addrs
+  i <- newReg
+  let code =
+        argcode ++ loadcode ++ ["%" ++ show i ++ " = call " ++ typeToStr retType ++ " @" ++ name ++ "(" ++ putCommas (zipWith (\t p -> typeToStr t ++ " %" ++ show p) argTypes pnts) ++ ")"]
+  return (code, i)
