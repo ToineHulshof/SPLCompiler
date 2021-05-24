@@ -1,3 +1,10 @@
+div(x, y) {
+    if (y == 0) {
+        
+    }
+    return x / y;
+}
+
 fac(n) {
     if (n <= 1) {
         return n;
@@ -6,9 +13,10 @@ fac(n) {
 }
 
 main() {
-    var x = 0;
-    while(x < 20) {
-        print(fac(x));
-        x = x + 1;
-    }
+    div(8, 0);
+    // var x = 0;
+    // while (x < 20) {
+    //     print(fac(x));
+    //     x = x + 1;
+    // }
 }
