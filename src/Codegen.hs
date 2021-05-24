@@ -141,10 +141,10 @@ setFunName n = do
   e <- get
   put e {funName = n}
 
-setGlobalMap :: M.Map String Int -> CG ()
-setGlobalMap m = do
+addGlobal :: String -> Int -> CG ()
+addGlobal s i = do
   e <- get
-  put e {globalMap = m}
+  put e {globalMap = M.insert s i (globalMap e)}
 
 setLocalMap :: M.Map String Int -> CG ()
 setLocalMap m = do
@@ -183,18 +183,18 @@ genCodeLLVM f main spl = do
 genSPL :: FunDecl -> SPL -> CG [Instruction]
 genSPL main ds = do
     let vardecls = [(\(DeclVarDecl v) -> v) x | x@DeclVarDecl {} <- ds]
-    (i1, m) <- genGlobalVars 1 vardecls
-    setGlobalMap m
+    i1 <- genGlobalVars 1 vardecls
     i2 <- genFunDecl main
     functions <- gets functions
     return $ LoadRegisterFromRegister GlobalOffset StackPointer : i1 ++ [BranchAlways "main"] ++ i2 ++ concat functions
 
-genGlobalVars :: Int -> [VarDecl] -> CG ([Instruction], M.Map String Int)
-genGlobalVars _ [] = return ([], M.empty)
+genGlobalVars :: Int -> [VarDecl] -> CG [Instruction]
+genGlobalVars _ [] = return []
 genGlobalVars i ((VarDecl _ n e) : xs) = do
+  addGlobal n i
   i1 <- genExp e
-  (i2, m) <- genGlobalVars (i + 1) xs
-  return (i1 ++ i2, M.singleton n i `M.union` m)
+  i2 <- genGlobalVars (i + 1) xs
+  return (i1 ++ i2)
 
 genFunDecl :: FunDecl -> CG [Instruction]
 genFunDecl (FunDecl _ n args (Just t) vars stmts _) = do
@@ -246,7 +246,7 @@ genStmt (StmtField n [] e _) = do
     Nothing -> case M.lookup n gm of
       Nothing -> error ""
       Just i -> do
-        return $ i1 ++ [LoadConstant i, StoreAddress 0]
+        return $ i1 ++ [LoadRegister GlobalOffset, StoreAddress i]
     Just i -> return $ i1 ++ [StoreLocal i]
 genStmt (StmtField n fs e _) = do
   lm <- gets localMap
@@ -339,11 +339,11 @@ findFunction ((DeclFunDecl f@(FunDecl _ n _ _ _ _ _)) : ds) s
 findFunction (d : ds) s = findFunction ds s
 
 printString :: String -> [Instruction]
-printString = concatMap (\c -> [LoadConstant (ord c), Trap Char])
+printString = concatMap (\c -> [LoadConstant (fromEnum c), Trap Char])
 
 genPrint :: Type -> CG [Instruction]
-genPrint (TypeBasic IntType) = return [Trap Int]
-genPrint (TypeBasic CharType) = return $ printString "'" ++ [Trap Char] ++ printString "'"
+genPrint (TypeBasic IntType) = return $ printString "\x1b[36m" ++ [Trap Int] ++ printString "\x1b[0m"
+genPrint (TypeBasic CharType) = return $ printString "\x1b[35m'" ++ [Trap Char] ++ printString "'\x1b[0m"
 genPrint (TypeID _ _) = return []
 genPrint t = do
   let name = "print" ++ typeName t
@@ -353,7 +353,7 @@ genPrint t = do
 
 genPrint' :: String -> Type -> CG ()
 genPrint' _ (TypeBasic BoolType) = do
-  let f = [Label "printBool", Link 0, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "False" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "True" ++ [Label "printEnd", Unlink, Return]
+  let f = [Label "printBool", Link 0, LoadLocal (-2), BranchTrue "printTrue"] ++ printString "\x1b[34mFalse\x1b[0m" ++ [BranchAlways "printEnd", Label "printTrue"] ++ printString "\x1b[34mTrue\x1b[0m" ++ [Label "printEnd", Unlink, Return]
   addFunction f
   addLabel "printBool"
 genPrint' name (TypeTuple t1 t2) = do
@@ -364,7 +364,7 @@ genPrint' name (TypeTuple t1 t2) = do
   addLabel name
 genPrint' name (TypeList (TypeBasic CharType)) = do
   i <- show <$> new
-  let f = [Label name, Link 0] ++ printString "\"" ++ [Label $ "While" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile" ++ i, LoadLocal (-2), LoadHeap 0, Trap Char, LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then" ++ i, BranchAlways $ "EndIf" ++ i, Label $ "Then" ++ i] ++ [Label $ "EndIf" ++ i, BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i] ++ printString "\"" ++ [Unlink, StoreStack (-1), Return]
+  let f = [Label name, Link 0] ++ printString "\x1b[31m\"" ++ [Label $ "While" ++ i, LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchFalse $ "EndWhile" ++ i, LoadLocal (-2), LoadHeap 0, Trap Char, LoadLocal (-2), LoadHeap (-1), StoreLocal (-2), LoadLocal (-2), LoadConstant 0, EqualsI, NotI, BranchTrue $ "Then" ++ i, BranchAlways $ "EndIf" ++ i, Label $ "Then" ++ i] ++ [Label $ "EndIf" ++ i, BranchAlways $ "While" ++ i, Label $ "EndWhile" ++ i] ++ printString "\"\x1b[0m" ++ [Unlink, StoreStack (-1), Return]
   addFunction f
   addLabel name
 genPrint' name (TypeList t) = do

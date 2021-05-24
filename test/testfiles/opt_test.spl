@@ -1,7 +1,5 @@
-f(x, y) {
-    return x <= y;
-}
+var list = [3, 5];
 
 main() {
-    print(f([4], [4]));
+    list = list.tl;
 }
