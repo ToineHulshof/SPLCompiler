@@ -198,12 +198,13 @@ genGlobalVars i ((VarDecl _ n e) : xs) = do
 
 genFunDecl :: FunDecl -> CG [Instruction]
 genFunDecl (FunDecl _ n args (Just t) vars stmts _) = do
+  localMapTemp <- gets localMap
   m <- argsMap (-1 - length args) args
   setLocalMap m
   i1 <- genLocalVars 1 args vars
   setFunName n
   i2 <- genStmts stmts
-  setLocalMap M.empty
+  setLocalMap localMapTemp
   return $ Label n : Link (length vars) : i1 ++ i2 ++ [Label $ n ++ "End", Unlink, StoreStack (-1)] ++ [if n == "main" then Halt else Return]
 
 argsMap :: Int -> [String] -> CG (M.Map String Int)

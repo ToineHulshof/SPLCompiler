@@ -1,34 +1,29 @@
-// equals(x, y) {
-//     print(x);
-//     return x == y;
-// }
-
-// x(x) {
-//     var y = x.hd;
-//     return y + 1;
-// }
-
-f(a, b, c, d) {
-    var e = b == c;
-    print(d);
-    return a;
+/*
+    Three ways to implement the factorial function in SPL.
+    First the recursive version.
+*/
+facR ( n ) {
+    if ( n < 2 ) {
+        return 1;
+    } else {
+        return n * facR ( n - 1 );
+    }
 }
 
-id(x) {
-    // print(x);
-    return x;
+// A main function to check the results
+// It takes no arguments, so the type looks like this:
+main ( ) {
+    var n = 0;
+    // var facN = 1;
+    // var ok = True;
+    while ( n < 20 ) {
+        print(facR(n));
+        // facN = facR ( n );
+        // if ( facN != facI ( n ) || facN != facL ( n )) {
+        //     print ( n : facN : facI ( n ) : facL ( n ) : [] );
+        //     ok = False;
+        // }
+        n = n + 1;
+    }
+    // print ( ok );
 }
-
-main() {
-    // Bool x = 'a';
-    // print(x([3, 4]));
-    // print(equals([10], [x]));
-    // print("a");
-    // print(f([True], 2, 2, False));
-    print(id([2,3]));
-    // print(equals([3, 2, 1], [3, 2, 1]));
-}
-
-// Functions overloading checken en goede labels fixen
-// Errors verbeteren -> in expression dit in funcall dit (mss in state monad, maar wss via function arg)
-// Runtime errors
