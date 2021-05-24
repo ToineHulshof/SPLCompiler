@@ -207,7 +207,7 @@ mgu' e p (TypeID c u) t ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p t (TypeID c u) ot1 ot2 = varBind p e u c t ot1 ot2
 mgu' e p l@(TypeBasic t1) r@(TypeBasic t2) ot1 ot2
     | t1 == t2 = return nullSubst
-    | otherwise = trace "1" typeError ot1 ot2
+    | otherwise = typeError ot1 ot2
 mgu' e _ Void Void ot1 ot2 = return nullSubst
 mgu' e p t1 t2 ot1 ot2 = typeError ot1 ot2
 
@@ -239,7 +239,7 @@ varBind p _ u (Just Ord) t ot1 ot2
         isOrd (TypeBasic CharType) = True
         isOrd _ = False
 varBind p@(_, a) e u c t ot1 ot2
-    | u `S.member` ftv t = trace "3" typeError ot1 ot2
+    | u `S.member` ftv t = typeError ot1 ot2
     | otherwise = return $ M.singleton u t
 
 -- Helper function for replacing the types in a polymorphic function.
@@ -376,7 +376,9 @@ oaVarDecl :: VarDecl -> [Type]
 oaVarDecl (VarDecl _ _ e) = oaExp e
 
 oaExp :: Exp -> [Type]
-oaExp (Exp t o e1 e2 _) = (if o `elem` [Equals, Neq] then let Just t'@(TypeID _ s) = t in [t'] else []) ++ oaExp e1 ++ oaExp e2
+oaExp (Exp (Just t@TypeID {}) Equals e1 e2 p) = [t] ++ oaExp e1 ++ oaExp e2
+oaExp (Exp (Just t@TypeID {}) Neq e1 e2 p) = [t] ++ oaExp e1 ++ oaExp e2
+oaExp (Exp _ _ e1 e2 _) = oaExp e1 ++ oaExp e2
 oaExp (ExpOp1 _ e _) = oaExp e
 oaExp (ExpTuple (e1, e2) _) = oaExp e1 ++ oaExp e2
 oaExp (ExpBrackets e _) = oaExp e

@@ -146,6 +146,7 @@ getMain [] = Nothing
 getMain (DeclFunDecl f@(FunDecl _ n _ _ _ _ _) : ds)
   | n == "main" = Just f
   | otherwise = getMain ds
+getMain (DeclVarDecl _ : ds) = getMain ds
 
 replaceTab :: Char -> String
 replaceTab '\t' = "    "
