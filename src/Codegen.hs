@@ -409,15 +409,15 @@ genExp :: Exp -> CG [Instruction]
 genExp (Exp (Just t) o e1 e2 _) = do
   i1 <- genExp e1
   i2 <- genExp e2
-  let i3 = genOp2 o
+  i3 <- genOp2 o
   if o == Cons
-    then return $ i2 ++ i1 ++ [i3]
+    then return $ i2 ++ i1 ++ i3
     else
       if o `elem` [Equals, Neq]
         then do
           i4 <- genEq t
           return $ i1 ++ i2 ++ i4 ++ [NotI | o /= Equals]
-        else return $ i1 ++ i2 ++ [i3]
+        else return $ i1 ++ i2 ++ i3
 genExp (ExpOp1 o e _) = do
   i <- genExp e
   return $ i ++ [genOp1 o]
@@ -443,21 +443,26 @@ genExp (ExpTuple (e1, e2) _) = do
   return $ i1 ++ i2 ++ [StoreMultipleHeap 2]
 genExp ExpEmptyList {} = return [LoadConstant 0]
 
-genOp2 :: Op2 -> Instruction
-genOp2 Plus = Add
-genOp2 Minus = Subtract
-genOp2 Product = Multiply
-genOp2 Division = Divide
-genOp2 Modulo = Mod
-genOp2 Equals = EqualsI
-genOp2 Smaller = Less
-genOp2 Greater = GreaterI
-genOp2 Leq = LessEqual
-genOp2 Geq = GreaterEqual
-genOp2 Neq = NotEquals
-genOp2 And = AndI
-genOp2 Or = OrI
-genOp2 Cons = StoreMultipleHeap 2
+genOp2 :: Op2 -> CG [Instruction]
+genOp2 Plus = return [Add]
+genOp2 Minus = return [Subtract]
+genOp2 Product = return [Multiply]
+genOp2 Division = do
+  labels <- gets labels
+  when ("divide0" `notElem` labels) $ do
+    addFunction $ [Label "divide0"] ++ printString "\x1b[1m\x1b[31merror:\x1b[0m\x1b[1m divide by 0\x1b[0m\n" ++ [Halt]
+    addLabel "divide0"
+  return [LoadStack 0, LoadConstant 0, EqualsI, BranchTrue "divide0", AdjustStack (-1), Divide]
+genOp2 Modulo = return [Mod]
+genOp2 Equals = return [EqualsI]
+genOp2 Smaller = return [Less]
+genOp2 Greater = return [GreaterI]
+genOp2 Leq = return [LessEqual]
+genOp2 Geq = return [GreaterEqual]
+genOp2 Neq = return [NotEquals]
+genOp2 And = return [AndI]
+genOp2 Or = return [OrI]
+genOp2 Cons = return [StoreMultipleHeap 2]
 
 genOp1 :: Op1 -> Instruction
 genOp1 Min = Negation
