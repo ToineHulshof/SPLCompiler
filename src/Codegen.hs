@@ -14,8 +14,8 @@ import Types (Subst, apply, funTypeToList, subst)
 data RuntimeIssue = RuntimeError | RuntimeWarning deriving Eq
 
 instance Show RuntimeIssue where
-  show RuntimeError = "\x1b[1m\x1b[31mRuntime error:\x1b[0m"
-  show RuntimeWarning = "\x1b[1m\x1b[33mWarning:\x1b[0m"
+  show RuntimeError = "\x1b[1m\x1b[31m❌ Runtime error:\x1b[0m"
+  show RuntimeWarning = "\x1b[1m\x1b[33m🟡 Warning:\x1b[0m"
 
 data Instruction
   = LoadConstant Int

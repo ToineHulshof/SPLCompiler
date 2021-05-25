@@ -129,12 +129,12 @@ tiResult llvm s f spl e = do
     (((env, spl'), e), _) <- runTI $ ti' spl e
     if null e
         then case f of
-            Nothing -> putStr $ "\x1b[32mProgram is correctly typed\x1b[0m\n" ++ show env ++ "\n"
+            Nothing -> putStr $ "\x1b[32m✅ Program is correctly typed\x1b[0m\n" ++ show env ++ "\n"
             Just filePath -> case getMain spl' of
-                Just main -> putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n" >> genCode llvm filePath main spl'
+                Just main -> putStrLn "\x1b[32m✅ Program is correctly typed\x1b[0m\n" >> genCode llvm filePath main spl'
                 Nothing -> do
                     print $ Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) [Error CodegenError (nes "\x1b[31mNo main function\x1b[0m\n") Nothing]
-                    putStrLn "\x1b[32mProgram is correctly typed\x1b[0m\n"
+                    putStrLn "\x1b[32m✅ Program is correctly typed\x1b[0m\n"
                     putStr $ show env
                     exitFailure
         else print (Errors (fromMaybe "<interactive>" f) (listArray (1, length l) l) (removeDuplicates e)) >> exitFailure
