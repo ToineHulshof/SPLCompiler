@@ -79,11 +79,11 @@ btFunDecl (TypeEnv env) (FunDecl o s args Nothing _ _ p) = do
       ret <- newTyVar Nothing "r"
       let t = foldr1 TypeFun $ nvars ++ [ret]
       return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-    Just _ -> tell [Error TypeError (nes $ "Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
+    Just _ -> tell [Error TypeError (nes $ "Function \x1b[33m" ++ s ++ "\x1b[0m\x1b[1m is already defined.") (Just p)] >> return (TypeEnv env)
 btFunDecl (TypeEnv env) (FunDecl o s _ (Just t) _ _ p) = do
   case M.lookup (Fun, s) env of
     Nothing -> return $ TypeEnv $ M.singleton (Fun, s) (Scheme [] t)
-    Just _ -> tell [Error TypeError (nes $ "Function " ++ s ++ " is already defined.") (Just p)] >> return (TypeEnv env)
+    Just _ -> tell [Error TypeError (nes $ "Function \x1b[33m" ++ s ++ "\x1b[0m\x1b[1m is already defined.") (Just p)] >> return (TypeEnv env)
 
 hasEffect :: (String, Type) -> Bool
 hasEffect (s, TypeID _ n) = n /= s

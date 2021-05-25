@@ -478,21 +478,17 @@ minInt = -2147483648
 
 genOp2 :: Op2 -> CG [Instruction]
 genOp2 Plus = do
-  -- genRuntimeError "add-fun" $ [Link 0, LoadLocal (-2), LoadConstant 0, GreaterI, LoadLocal (-3), LoadConstant maxInt, LoadLocal (-2), Subtract, GreaterI, AndI, BranchFalse "add-fun-if-1"] ++ runtimeIssue RuntimeWarning "integer overflow caused by + operation" ++ [Label "add-fun-if-1", LoadLocal (-2), LoadConstant 0, Less, LoadLocal (-3), LoadConstant minInt, LoadLocal (-2), Subtract, Less, AndI, BranchFalse "add-fun-if-2"] ++ runtimeIssue RuntimeWarning "integer underflow caused by + operation" ++ [Label "add-fun-if-2", LoadLocal (-2), LoadLocal (-3), Add, StoreRegister ReturnRegister, Unlink, Return]
-  -- return [BranchSubroutine "add-fun", AdjustStack (-2), LoadRegister ReturnRegister]
-  return [Add]
+  genRuntimeError "add-fun" $ [Link 0, LoadLocal (-2), LoadConstant 0, GreaterI, LoadLocal (-3), LoadConstant maxInt, LoadLocal (-2), Subtract, GreaterI, AndI, BranchFalse "add-fun-if-1"] ++ runtimeIssue RuntimeWarning "integer overflow caused by + operation" ++ [Label "add-fun-if-1", LoadLocal (-2), LoadConstant 0, Less, LoadLocal (-3), LoadConstant minInt, LoadLocal (-2), Subtract, Less, AndI, BranchFalse "add-fun-if-2"] ++ runtimeIssue RuntimeWarning "integer underflow caused by + operation" ++ [Label "add-fun-if-2", LoadLocal (-2), LoadLocal (-3), Add, StoreRegister ReturnRegister, Unlink, Return]
+  return [BranchSubroutine "add-fun", AdjustStack (-2), LoadRegister ReturnRegister]
 genOp2 Minus = do
-  -- genRuntimeError "sub-fun" $ [Link 0, LoadLocal (-2), LoadConstant 0, Less, LoadLocal (-3), LoadConstant maxInt, LoadLocal (-2), Add, GreaterI, AndI, BranchFalse "sub-fun-if-1"] ++ runtimeIssue RuntimeWarning "integer overflow caused by - operation" ++ [Label "sub-fun-if-1", LoadLocal (-2), LoadConstant 0, GreaterI, LoadLocal (-3), LoadConstant minInt, LoadLocal (-2), Add, Less, AndI, BranchFalse "sub-fun-if-2"] ++ runtimeIssue RuntimeWarning "integer underflow caused by - operation" ++ [Label "sub-fun-if-2", LoadLocal (-3), LoadLocal (-2), Subtract, StoreRegister ReturnRegister, Unlink, Return]
-  -- return [BranchSubroutine "sub-fun", AdjustStack (-2), LoadRegister ReturnRegister]
-  return [Subtract]
+  genRuntimeError "sub-fun" $ [Link 0, LoadLocal (-2), LoadConstant 0, Less, LoadLocal (-3), LoadConstant maxInt, LoadLocal (-2), Add, GreaterI, AndI, BranchFalse "sub-fun-if-1"] ++ runtimeIssue RuntimeWarning "integer overflow caused by - operation" ++ [Label "sub-fun-if-1", LoadLocal (-2), LoadConstant 0, GreaterI, LoadLocal (-3), LoadConstant minInt, LoadLocal (-2), Add, Less, AndI, BranchFalse "sub-fun-if-2"] ++ runtimeIssue RuntimeWarning "integer underflow caused by - operation" ++ [Label "sub-fun-if-2", LoadLocal (-3), LoadLocal (-2), Subtract, StoreRegister ReturnRegister, Unlink, Return]
+  return [BranchSubroutine "sub-fun", AdjustStack (-2), LoadRegister ReturnRegister]
 genOp2 Product = do
-  -- genRuntimeError "mul-fun" $ [Link 1, LoadLocal (-3), LoadLocal (-2), Multiply, StoreLocal 1, LoadLocal (-3), LoadConstant 0, EqualsI, NotI, LoadLocal 1, LoadLocal (-3), Divide, LoadLocal (-2), EqualsI, NotI, AndI, BranchFalse "mul-fun-if"] ++ runtimeIssue RuntimeWarning "integer overflow caused by * operation" ++ [Label "mul-fun-if", LoadLocal 1, StoreRegister ReturnRegister, Unlink, Return]
-  -- return [BranchSubroutine "mul-fun", AdjustStack (-2), LoadRegister ReturnRegister]
-  return [Multiply]
+  genRuntimeError "mul-fun" $ [Link 1, LoadLocal (-3), LoadLocal (-2), Multiply, StoreLocal 1, LoadLocal (-3), LoadConstant 0, EqualsI, NotI, LoadLocal 1, LoadLocal (-3), Divide, LoadLocal (-2), EqualsI, NotI, AndI, BranchFalse "mul-fun-if"] ++ runtimeIssue RuntimeWarning "integer overflow caused by * operation" ++ [Label "mul-fun-if", LoadLocal 1, StoreRegister ReturnRegister, Unlink, Return]
+  return [BranchSubroutine "mul-fun", AdjustStack (-2), LoadRegister ReturnRegister]
 genOp2 Division = do
-  -- genRuntimeError "div-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "div-fun-if", LoadLocal (-3), LoadLocal (-2), Divide, StoreRegister ReturnRegister, Unlink, Return, Label "div-fun-if"] ++ runtimeIssue RuntimeError "Divide by 0")
-  -- return [BranchSubroutine "div-fun", AdjustStack (-2), LoadRegister ReturnRegister]
-  return [Divide]
+  genRuntimeError "div-fun" ([Link 0, LoadLocal (-2), LoadConstant 0, EqualsI, BranchTrue "div-fun-if", LoadLocal (-3), LoadLocal (-2), Divide, StoreRegister ReturnRegister, Unlink, Return, Label "div-fun-if"] ++ runtimeIssue RuntimeError "Divide by 0")
+  return [BranchSubroutine "div-fun", AdjustStack (-2), LoadRegister ReturnRegister]
 genOp2 Modulo = return [Mod]
 genOp2 Equals = return [EqualsI]
 genOp2 Smaller = return [Less]
