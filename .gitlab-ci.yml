@@ -1,4 +1,4 @@
-image: haskell:8.6.5
+image: haskell:latest
 
 test:
   script:
