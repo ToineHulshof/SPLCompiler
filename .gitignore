@@ -1,4 +1,5 @@
 .stack-work/
+builds
 src/.out
 src/Main
 src/HELP.md

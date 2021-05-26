@@ -32,6 +32,13 @@ packages:
       sha256: e17dfafde2f226674cffd56b1f445c332b6e5855860f79dedd9de0b6916e7ff0
   original:
     hackage: array-0.5.4.0
+- completed:
+    hackage: process-1.6.9.0@sha256:372de796fea9d40e6d02269d5df466c9b8d641f145fad3c1add59db7baeea19e,2576
+    pantry-tree:
+      size: 1211
+      sha256: 9d21df864535dcc65e11fd108c4678fdadf2d53bb9ffd1fda142369c797f31c1
+  original:
+    hackage: process-1.6.9.0
 snapshots:
 - completed:
     size: 565712

@@ -44,6 +44,7 @@ extra-deps:
 - containers-0.6.2.1
 - transformers-0.5.6.2
 - array-0.5.4.0
+- process-1.6.9.0
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
