@@ -2,4 +2,4 @@ image: haskell:8.6.5
 
 test:
   script:
-    - cd src #&& ghc Main.hs && ./Main && cd ..
+    - stack test

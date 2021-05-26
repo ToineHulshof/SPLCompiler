@@ -355,13 +355,13 @@ tiFunDecl env@(TypeEnv envt) f@(FunDecl _ n args Nothing vars stmts p) = case M.
         let cs1 = s2 `composeSubst` s1
         returnType <- gets rType
         if isJust returnType && not (correctReturn stmts) then tell [Error TypeError (nes "Not every path has a return statment") (Just p)] >> return (cs1, Void, env4, f) else do
-        let t = foldr1 TypeFun $ apply cs1 (tvs ++ [fromMaybe Void returnType])
-        let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (generalize env1 t))
-        let vars'' = map (updateTypeVarDecl cs1) vars'
-        let stmts'' = updateTypeStmts cs1 stmts'
-        let oa = concatMap oaVarDecl vars'' ++ oaStmts stmts''
-        let argTypes = funTypeToList t
-        return (cs1, t, apply cs1 env5, FunDecl (mapMaybe (`elemIndex` argTypes) oa) n args (Just t) vars'' stmts'' p)
+          let t = foldr1 TypeFun $ apply cs1 (tvs ++ [fromMaybe Void returnType])
+          let env5 = env1 `combine` TypeEnv (M.singleton (Fun, n) (generalize env1 t))
+          let vars'' = map (updateTypeVarDecl cs1) vars'
+          let stmts'' = updateTypeStmts cs1 stmts'
+          let oa = concatMap oaVarDecl vars'' ++ oaStmts stmts''
+          let argTypes = funTypeToList t
+          return (cs1, t, apply cs1 env5, FunDecl (mapMaybe (`elemIndex` argTypes) oa) n args (Just t) vars'' stmts'' p)
 
 oaStmts :: [Stmt] -> [Type]
 oaStmts = concatMap oaStmt
