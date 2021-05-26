@@ -412,6 +412,7 @@ typeName _ = "Int"
 
 genEq :: Type -> CG [Instruction]
 genEq (TypeBasic _) = return [EqualsI]
+genEq (TypeID _ _) = return [EqualsI]
 genEq t = do
   let name = "equal" ++ typeName t
   labels <- gets labels
@@ -428,7 +429,7 @@ genEq' name (TypeTuple t1 t2) = do
 genEq' name (TypeList t) = do
   i1 <- genEq t
   i <- show <$> new
-  let f = [Label name, Link 2, LoadLocal (-3), LoadConstant 0, EqualsI, StoreLocal 1, LoadLocal (-2), LoadConstant 0, EqualsI, StoreLocal 2, LoadLocal 1, LoadLocal 2, OrI, BranchTrue ("then-" ++ i), BranchAlways ("endIf-" ++ i), Label ("then-" ++ i), LoadLocal 1, LoadLocal 2, AndI, StoreRegister ReturnRegister, BranchAlways $ name ++ "-End", Label $ "endIf-" ++ i, LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1), BranchSubroutine name, AdjustStack (-1), LoadRegister ReturnRegister, AndI, StoreRegister ReturnRegister, Label $ name ++ "-End", Unlink, Return]
+  let f = [Label name, Link 2, LoadLocal (-3), LoadConstant 0, EqualsI, StoreLocal 1, LoadLocal (-2), LoadConstant 0, EqualsI, StoreLocal 2, LoadLocal 1, LoadLocal 2, OrI, BranchTrue ("then-" ++ i), BranchAlways ("endIf-" ++ i), Label ("then-" ++ i), LoadLocal 1, LoadLocal 2, AndI, StoreRegister ReturnRegister, BranchAlways $ name ++ "-End", Label $ "endIf-" ++ i, LoadLocal (-3), LoadHeap 0, LoadLocal (-2), LoadHeap 0] ++ i1 ++ [LoadLocal (-3), LoadHeap (-1), LoadLocal (-2), LoadHeap (-1), BranchSubroutine name, AdjustStack (-2), LoadRegister ReturnRegister, AndI, StoreRegister ReturnRegister, Label $ name ++ "-End", Unlink, Return]
   addFunction f
   addLabel name
 
