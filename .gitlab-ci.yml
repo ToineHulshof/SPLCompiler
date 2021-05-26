@@ -2,4 +2,4 @@ image: haskell:latest
 
 test:
   script:
-    - stack upgrade && stack test
+    - stack test
