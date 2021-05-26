@@ -24,7 +24,6 @@ dependencies:
 - containers
 - transformers
 - array
-- process
 
 library:
   source-dirs: src
