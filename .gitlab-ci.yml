@@ -2,4 +2,4 @@ image: haskell:8:10:4
 
 test:
   script:
-    - stack test
+    - echo "Tests are not active in Gitlab. Please run stack test locally to run all tests."
