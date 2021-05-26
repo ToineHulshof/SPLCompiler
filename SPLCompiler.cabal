@@ -48,6 +48,14 @@ library
 executable SPLCompiler-exe
   main-is: Main.hs
   other-modules:
+      Binding
+      Codegen
+      Errors
+      Extension
+      Grammar
+      Parser
+      Printer
+      Types
       Paths_SPLCompiler
   hs-source-dirs:
       src
