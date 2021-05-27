@@ -1,3 +1,9 @@
+f(x) {
+    print(x);
+    return x;
+}
+
 main() {
-    print("" == "1");
+    f(3);
+    f(["hoi"]);
 }
